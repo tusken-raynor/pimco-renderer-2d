@@ -500,7 +500,8 @@ Implement no-effect (basic) and shadow effect pipelines.
 
 ---
 
-### [ ] Step: Engraving and Hotstamp Effects
+### [x] Step: Engraving and Hotstamp Effects
+<!-- chat-id: 9b172df3-6514-4e57-ab9d-e06a6493b29a -->
 
 Implement engraving and hotstamp effect pipelines.
 

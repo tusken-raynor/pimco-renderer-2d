@@ -20,8 +20,12 @@ src/
     ├── index.ts                 # Effects module entry point (primitives)
     ├── no-effect.ts             # No-effect pipeline implementation
     ├── shadow.ts                # Shadow effect pipeline implementation
+    ├── engraving.ts             # Engraving effect pipeline implementation
+    ├── hotstamp.ts              # Hotstamp effect pipeline implementation
     ├── no-effect.test.ts        # Unit tests for no-effect
     ├── shadow.test.ts           # Unit tests for shadow effect
+    ├── engraving.test.ts        # Unit tests for engraving effect
+    ├── hotstamp.test.ts         # Unit tests for hotstamp effect
     └── docs.md                  # This documentation
 ```
 
@@ -246,21 +250,113 @@ const result = applyShadowEffect({
 - `applyMultiPassAlpha(targetCtx, source, alpha, offsetX?, offsetY?)`: Draw with multiple passes for intensity
 - `createShadow(mask, color, spread, blur, alpha)`: Create standalone shadow
 
+### Engraving (`engraving.ts`)
+
+Creates an engraved/carved appearance for text layers, simulating etched text.
+
+**Pipeline:**
+1. Calculate color-distance-based opacity (bezier curve formula from color distance to white)
+2. Fill with engraving color (brown/orange tint based on distance)
+3. Create emboss shadow canvas (inverted emboss matrix) - only for text height > 43.5px
+4. Apply emboss highlight with blur (subtle raised effect)
+5. Apply mask (destination-in composite)
+
+**Effect Parameters:**
+- `eindex`: Optional pre-computed opacity value (overrides color-based calculation)
+
+**Color-Distance Formula:**
+```typescript
+// Calculate distance from white (0-1)
+dist = sqrt((r2-r1)^2 + (g2-g1)^2 + (b2-b1)^2) / 441.67
+
+// Bezier curve for opacity
+eindex = ((pow(dist * 2.4422495703 - 1, 3) + 1) / 4) * 0.382 + 0.051
+
+// Engraving fill color (68, 34, 0 base tinted by distance)
+fillColor = rgba(68 * (1-dist), 34 * (1-dist), 0, eindex)
+```
+
+**Usage:**
+```typescript
+import { applyEngravingEffect, colorDistance, calculateEindex } from '@/js/effects/engraving';
+
+// Apply engraving effect pipeline
+const result = applyEngravingEffect({
+  width: 1024,
+  height: 1024,
+  color: '#333333',
+  alpha: 1.0,
+  mask: textMask,
+  textHeight: 50, // Height of text for emboss threshold
+  eindex: 0.25, // Optional: override calculated opacity
+});
+
+// Result contains { canvas, ctx }
+```
+
+**Key Functions:**
+- `applyEngravingEffect(params)`: Main pipeline function
+- `processEngravingEffectLayer(layer, width, height, mask, textHeight)`: Convenience wrapper for TextLayerDescriptor
+- `colorDistance(color1, color2)`: Calculate normalized distance between two RGB colors
+- `calculateEindex(distFromWhite)`: Calculate opacity from color distance using bezier curve
+- `distanceFromEindex(eindex)`: Inverse calculation (approximate)
+- `createEngravingEmboss(mask, width, height)`: Create emboss canvas for engraving
+- `extractEngravingParams(maskData)`: Extract eindex from effectparams
+- `getEngravingFillColor(color, eindex?)`: Get computed fill color for debugging/preview
+
+### Hotstamp (`hotstamp.ts`)
+
+Creates a hot-stamped/foil-pressed appearance for text layers. Similar to engraving but with dual emboss (both raised and pressed effects) for a more pronounced 3D appearance.
+
+**Pipeline:**
+1. Calculate color-distance-based opacity (same bezier curve as engraving)
+2. Fill with hotstamp color (warmer orange/brown tint than engraving)
+3. Create dual emboss canvases (highlight + shadow) - only for text height > 43.5px
+4. Apply highlight emboss (inverted matrix, creates raised highlight)
+5. Apply shadow emboss (standard matrix, lighter blend mode)
+6. Apply mask (destination-in composite)
+
+**Effect Parameters:**
+- `eindex`: Optional pre-computed opacity value (overrides color-based calculation)
+
+**Hotstamp vs Engraving:**
+| Aspect | Engraving | Hotstamp |
+|--------|-----------|----------|
+| Fill Color | `rgba(68*f, 34*f, 0, ...)` | `rgba(35*f, 22*f, 0, ...)` |
+| Emboss | Single (inverted) | Dual (both matrices) |
+| Highlight Alpha | 0.07 | 0.2 |
+| Shadow Alpha | N/A | 0.2 |
+| Blur | 1px | None |
+
+**Usage:**
+```typescript
+import { applyHotstampEffect, createHotstampEmboss } from '@/js/effects/hotstamp';
+
+// Apply hotstamp effect pipeline
+const result = applyHotstampEffect({
+  width: 1024,
+  height: 1024,
+  color: '#333333',
+  alpha: 1.0,
+  mask: textMask,
+  textHeight: 50, // Height of text for emboss threshold
+  eindex: 0.25, // Optional: override calculated opacity
+});
+
+// Result contains { canvas, ctx }
+```
+
+**Key Functions:**
+- `applyHotstampEffect(params)`: Main pipeline function
+- `processHotstampEffectLayer(layer, width, height, mask, textHeight)`: Convenience wrapper for TextLayerDescriptor
+- `createHotstampEmboss(mask, width, height)`: Create dual emboss result with highlight and shadow canvases
+- `extractHotstampParams(maskData)`: Extract eindex from effectparams
+- `getHotstampFillColor(color, eindex?)`: Get computed fill color for debugging/preview
+- Also re-exports: `colorDistance`, `calculateEindex`, `distanceFromEindex` from engraving
+
 ## Future Effect Pipelines
 
 The following pipelines are planned for future implementation:
-
-### Engraving
-1. Emboss (shadow)
-2. Color-distance opacity
-3. Multiply
-4. Apply mask
-
-### Hotstamp
-1. Dual emboss
-2. Color-distance opacity
-3. Multiply
-4. Apply mask
 
 ### Embroidery
 1. Alpha erode
@@ -310,6 +406,8 @@ The following pipelines are planned for future implementation:
 Unit tests for effect pipelines are located alongside the modules:
 - `no-effect.test.ts`: Tests for no-effect pipeline
 - `shadow.test.ts`: Tests for shadow effect pipeline
+- `engraving.test.ts`: Tests for engraving effect pipeline
+- `hotstamp.test.ts`: Tests for hotstamp effect pipeline
 
 Tests are structured in two categories:
 1. **Pure function tests** - Test parameter extraction, scaling, and helper functions (run in Node.js)
