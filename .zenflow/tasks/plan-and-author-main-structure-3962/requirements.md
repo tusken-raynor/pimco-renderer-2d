@@ -332,3 +332,198 @@ From the legacy codebase (`old-src-ref/`):
 3. Asset URLs are valid and accessible (CORS configured appropriately)
 4. Font files are available in formats supported by FontFace API
 5. Mesh files are valid .obj format with positions, normals, and UVs
+
+---
+
+## Project Standards (from spec.md)
+
+This project must comply with the project specification defined in `/spec.md` and `/AGENT_RULES.md`.
+
+### Project Structure
+
+All TypeScript modules reside in `src/js/` with dedicated folders:
+
+```
+src/js/
+  renderer/
+    index.ts              # RenderMaster entry point
+    index.test.ts         # Unit tests
+    docs.md               # Module documentation
+  render-slave/
+    index.ts              # Standard Render Slave logic
+    index.test.ts
+    docs.md
+  text-render-slave/
+    index.ts              # Text Render Slave logic
+    index.test.ts
+    docs.md
+  asset-manager/
+    index.ts              # Asset Manager logic
+    index.test.ts
+    docs.md
+  webgl-post-processor/
+    index.ts              # WebGL shader pipeline
+    index.test.ts
+    docs.md
+  errors/
+    index.ts              # AppError classes
+    index.test.ts
+    docs.md
+  types/
+    index.ts              # Shared type definitions
+    docs.md
+src/workers/
+  render-slave.worker.ts        # Worker entry point
+  text-render-slave.worker.ts   # Worker entry point
+  asset-manager.worker.ts       # Worker entry point
+src/virtual-slaves.ts           # Virtual slave bundle
+src/dev-app/
+  index.html
+  main.ts
+  styles.css
+src/tests/
+  integration/
+    docs.md               # Integration test goals/documentation
+  e2e/
+    docs.md               # E2E test goals/documentation
+```
+
+### Required Tooling Setup
+
+The following must be configured at project initialization:
+
+**Dependencies:**
+```bash
+npm install -D @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint prettier vitest @vitest/ui playwright
+```
+
+**TypeScript Strict Mode (`tsconfig.json`):**
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}
+```
+
+**ESLint Config (`.eslintrc.json`):**
+- No `any` types allowed
+- 2-space indentation
+- Single quotes
+- Semicolons required
+
+**Prettier Config (`.prettierrc`):**
+- 2-space tabs
+- Single quotes
+- Trailing commas (es5)
+- 100 char print width
+
+**NPM Scripts (`package.json`):**
+```json
+{
+  "scripts": {
+    "test": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:unit": "vitest run src/js/**/*.test.ts",
+    "test:integration": "vitest run src/tests/integration",
+    "test:e2e": "playwright test src/tests/e2e",
+    "test:coverage": "vitest run --coverage src/js/**/*.test.ts",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,md}\"",
+    "type-check": "tsc --noEmit",
+    "validate": "npm run format && npm run lint && npm run type-check && npm run test"
+  }
+}
+```
+
+### Documentation Requirements
+
+**Every module must have a `docs.md`** containing:
+1. **Purpose**: What the module does and why it exists
+2. **How It Works**: Implementation overview, key algorithms, design decisions
+3. **Interface**: Public functions, parameters, return types, example usage
+4. **Tests**: What unit tests exist, edge cases covered
+
+**Project-level `docs.md`** in root:
+- High-level architecture overview
+- Key modules and relationships
+- Critical user flows
+- Technology stack
+
+### Error Handling
+
+Use standardized error classes from `src/js/errors/`:
+
+```typescript
+import { AppError, ValidationError, NotFoundError } from '@/js/errors';
+import { errorHandler } from '@/js/error-handler';
+
+// Always pass errors through errorHandler
+errorHandler.handle(error);
+throw error;
+```
+
+- Use specific error types (ValidationError, NotFoundError, etc.)
+- Include relevant context (layerId, assetId, etc.)
+- Never log sensitive data
+- Never expose internal error details to users
+
+### Testing Requirements
+
+**Testing Workflow:**
+1. **Phase 1**: Build module → immediately write unit tests → document in module's `docs.md`
+2. **Phase 2**: Build integration → write integration tests → update `src/tests/integration/docs.md`
+3. **Phase 3**: Build workflow → write E2E tests → update `src/tests/e2e/docs.md`
+
+**Unit Tests (Vitest):**
+- Test all code branches (if/else, switch, loops)
+- Test edge cases: empty arrays, null/undefined, zero, negative numbers
+- Test error conditions and exceptions
+- Test boundary values
+- Aim for 80%+ coverage
+- Use descriptive test names: "should reject invalid layer data"
+
+**Integration Tests:**
+- Test complete workflows from entry point to output
+- Test success AND failure paths
+- Verify side effects (bitmap creation, worker spawning)
+- Mock external dependencies appropriately
+
+**E2E Tests (Playwright):**
+- Test complete user journeys through dev app
+- Test JSON upload → render → display workflow
+- Test error scenarios (invalid JSON, missing assets)
+
+### Code Style
+
+- **Indentation**: 2 spaces (not 4, not tabs)
+- **Naming**: camelCase (variables/functions), PascalCase (classes/interfaces), UPPER_SNAKE_CASE (constants)
+- **Files**: kebab-case for multi-word files (`render-slave.ts`)
+- **CSS**: Normal CSS with BEM naming (NO Tailwind)
+- **Imports**: Group by external libs → internal modules → types → styles
+
+### TypeScript Rules
+
+- **ALWAYS** explicitly type function arguments
+- **NEVER** use `any` type
+- Use `unknown` if type is truly unknown
+- Use generics for flexible typing
+- Use `interface` for object shapes, `type` for unions/intersections
+
+---
+
+## Verification Checklist
+
+Before marking any implementation step complete:
+
+- [ ] Code formatted (`npm run format`)
+- [ ] All tests passing (`npm run test`)
+- [ ] Documentation updated (module `docs.md` and/or project `docs.md`)
+- [ ] No TypeScript errors (`npm run type-check`)
+- [ ] No ESLint errors (`npm run lint`)
+- [ ] Test goals replaced with actual test documentation (if applicable)
