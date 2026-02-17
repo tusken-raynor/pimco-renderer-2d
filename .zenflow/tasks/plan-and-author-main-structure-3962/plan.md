@@ -136,18 +136,19 @@ Create shared utility functions for canvas operations and color manipulation.
 
 ---
 
-### [ ] Step: Capability Detection Module
+### [x] Step: Capability Detection Module
+<!-- chat-id: 4de78900-9b70-404c-b04c-513f502bee6a -->
 
 Create browser capability detection for OffscreenCanvas and WebGL2.
 
 **Tasks:**
-- [ ] Create `src/js/renderer/capability-probe.ts`
+- [x] Create `src/js/renderer/capability-probe.ts`
   - Detect OffscreenCanvas support
   - Detect WebGL2 support
   - Determine fallback scenario (A-F) based on capabilities
   - Return typed CapabilityResult object
-- [ ] Create unit tests with mocked browser APIs
-- [ ] Update `src/js/renderer/docs.md` (or create if first renderer file)
+- [x] Create unit tests with mocked browser APIs
+- [x] Update `src/js/renderer/docs.md` (or create if first renderer file)
 
 **Verification:**
 - Unit tests cover all 6 scenarios
