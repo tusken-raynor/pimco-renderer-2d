@@ -145,6 +145,13 @@ src/
 │       ├── color.ts              # Color manipulation
 │       ├── canvas.ts             # Canvas helpers
 │       └── docs.md
+├── shaders/
+│   ├── alpha-erode.frag.glsl     # Alpha erosion for emboss preprocessing
+│   ├── emboss.frag.glsl          # Emboss/deboss convolution effect
+│   ├── fuzz.frag.glsl            # Fuzz/blur effect for embroidery
+│   ├── normal-map.frag.glsl      # Normal map generation
+│   ├── color-scale.frag.glsl     # Color scaling/tinting
+│   └── passthrough.vert.glsl     # Default vertex shader
 ├── workers/
 │   ├── render-slave.worker.ts
 │   ├── text-render-slave.worker.ts
@@ -408,7 +415,7 @@ export class RenderMaster {
 
 **Goal**: Implement full text layer rendering with all effects (excluding 3D projection).
 
-The `webgl-postprocessor` external dependency (github:choc-sproc/webgl-postprocessor) provides all necessary shader-based effects. This phase implements the complete text rendering pipeline.
+The `webgl-postprocessor` external dependency (github:choc-sproc/webgl-postprocessor) abstracts WebGL2 boilerplate while this project provides internal GLSL shaders (`src/shaders/`) that implement the effect algorithms. This phase implements the complete text rendering pipeline.
 
 **Deliverables**:
 1. Text Render Slave worker entry point
@@ -488,7 +495,7 @@ Each module folder contains `index.test.ts`:
 - **intra-layer-pipeline**: Each pipeline step
 - **batch-segmenter**: Segmentation by composite mode
 - **text-rasterizer**: Font metrics, text measurement
-- **effects**: Each effect's parameter handling, webgl-postprocessor integration
+- **effects**: Each effect's parameter handling, shader configuration, webgl-postprocessor integration
 
 ### Integration Tests
 
@@ -553,11 +560,14 @@ For effect verification:
    - Color brightness affects shadow intensity
 
 3. **WebGL Post-Processor** (external: `github:choc-sproc/webgl-postprocessor`):
-   - External dependency provides all shader-based effects
-   - Programs are created once and reused
-   - `sleep()`/`wake()` pattern for context management
-   - Texture uniforms must be unset after use
-   - Effects module wraps webgl-postprocessor with layer-specific configuration
+   - External dependency abstracts WebGL2 boilerplate (texture management, uniform binding, program compilation, multi-pass rendering)
+   - **Shaders are internal to this project** (`src/shaders/*.glsl`) - the library executes them, it does not provide them
+   - Usage pattern: Create `WebGLPostProcessor`, upload textures via `setUniforms()`, provide shader source via `fragmentSrc`, render via `to()` or `toFramebuffer()`
+   - Multi-pass rendering: `toFramebuffer()` returns `GPUTextureHandle` for chaining passes
+   - Programs are created once via `newProgram()` and switched via `useProgram()`
+   - `sleep()`/`wake()` pattern for GPU resource management
+   - Texture uniforms must be unset via `unsetTextureUniforms()` to free GPU memory
+   - Effects module wraps webgl-postprocessor with layer-specific configuration and internal shader sources
 
 4. **3D Projection** (deferred to future task):
    - Uses gl-matrix for matrix operations
