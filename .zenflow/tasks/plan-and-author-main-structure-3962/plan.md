@@ -188,20 +188,21 @@ Create the vanilla HTML/CSS/TypeScript dev app for testing the renderer.
 
 ---
 
-### [ ] Step: Asset Manager Worker
+### [x] Step: Asset Manager Worker
+<!-- chat-id: 69e795fe-d302-45e6-b7db-f0658ff35dbd -->
 
 Implement the Asset Manager worker for centralized asset loading.
 
 **Tasks:**
-- [ ] Create `src/js/asset-manager/index.ts` - AssetManager class
+- [x] Create `src/js/asset-manager/index.ts` - AssetManager class
   - Image loading via fetch + createImageBitmap
   - URL-to-ID cache management
   - Asset distribution to slaves via MessagePort
   - Handle fetch, distribute, preload, register-slave messages
-- [ ] Create `src/js/asset-manager/image-loader.ts` - Image loading helpers
-- [ ] Create `src/workers/asset-manager.worker.ts` - Worker entry point
-- [ ] Create `src/js/asset-manager/index.test.ts` - Unit tests
-- [ ] Create `src/js/asset-manager/docs.md` - Documentation
+- [x] Create `src/js/asset-manager/image-loader.ts` - Image loading helpers
+- [x] Create `src/workers/asset-manager.worker.ts` - Worker entry point
+- [x] Create `src/js/asset-manager/index.test.ts` - Unit tests
+- [x] Create `src/js/asset-manager/docs.md` - Documentation
 
 **Verification:**
 - Unit tests for image loading logic
