@@ -24,12 +24,16 @@ src/
     ├── hotstamp.ts              # Hotstamp effect pipeline implementation
     ├── embroidery.ts            # Embroidery effect pipeline implementation
     ├── metal.ts                 # Metal effect pipeline implementation
+    ├── foil.ts                  # Foil effect pipeline implementation
+    ├── painted.ts               # Painted effect pipeline implementation
     ├── no-effect.test.ts        # Unit tests for no-effect
     ├── shadow.test.ts           # Unit tests for shadow effect
     ├── engraving.test.ts        # Unit tests for engraving effect
     ├── hotstamp.test.ts         # Unit tests for hotstamp effect
     ├── embroidery.test.ts       # Unit tests for embroidery effect
     ├── metal.test.ts            # Unit tests for metal effect
+    ├── foil.test.ts             # Unit tests for foil effect
+    ├── painted.test.ts          # Unit tests for painted effect
     └── docs.md                  # This documentation
 ```
 
@@ -501,27 +505,127 @@ const matrix = getMetalEmbossMatrix(); // Returns [[-1,-1,-1],[-1,-1,1],[1,1,1]]
 - `createMetalEmboss(mask, width, height)`: Create dual emboss result with highlight and shadow canvases
 - `getMetalEmbossMatrix()`: Get a copy of the custom metal emboss matrix
 
+### Foil (`foil.ts`)
+
+Creates a shiny metallic foil appearance for text layers, with alpha erosion for crisp edges and shadow effects.
+
+**Pipeline:**
+
+1. Apply alpha erosion to shrink mask edges
+2. Tile texture pattern (foil texture)
+3. Apply color with blend mode
+4. Apply shrunken mask (destination-in composite)
+5. Create dual emboss canvases - only for text height > 43.5px
+6. Apply emboss highlights with blur (multiply blend for shadows)
+7. Apply emboss shadow (lighter blend)
+8. Add drop shadow (blurred mask)
+9. Draw foil content on top of shadow
+
+**Effect Parameters (from `maskData.effectparams`):**
+
+- `AlphaErosionRadius`: Erosion radius for alpha channel (default: 1)
+
+**Output Canvas Sizing:**
+
+- For text height <= 43.5px: Canvas matches input dimensions
+- For text height > 43.5px: Canvas is width + 2 pixels (to accommodate shadow offset)
+
+**Usage:**
+
+```typescript
+import { applyFoilEffect, extractFoilParams, getFoilEffectInfo } from '@/js/effects/foil';
+
+// Apply foil effect pipeline
+const result = applyFoilEffect({
+  width: 1024,
+  height: 1024,
+  color: '#ffd700', // Gold tint
+  alpha: 1.0,
+  blend: 'normal',
+  alphaErosionRadius: 1,
+  mask: textMask,
+  texture: foilTexture, // Optional foil texture
+  textHeight: 50, // Height of text for emboss/shadow threshold
+});
+
+// Result contains { canvas, ctx }
+
+// Get effect info for debugging
+const info = getFoilEffectInfo(1);
+// Returns: { erosionRadius: 1, embossThreshold: 43.5, shadowBlur: 2, embossBlur: 1 }
+```
+
+**Key Functions:**
+
+- `applyFoilEffect(params)`: Main pipeline function
+- `processFoilEffectLayer(layer, width, height, mask, textHeight, texture?)`: Convenience wrapper for TextLayerDescriptor
+- `createFoilEmboss(mask, width, height)`: Create dual emboss result with highlight and shadow canvases
+- `extractFoilParams(maskData)`: Extract AlphaErosionRadius from effectparams
+- `getFoilEffectInfo(alphaErosionRadius)`: Get effect parameters for debugging/preview
+
+### Painted (`painted.ts`)
+
+Creates a painted/printed appearance for text layers with a slight inset and edge beveling.
+
+**Pipeline:**
+
+1. Create expanded edge mask (blur + brightness/contrast expansion) - only for text height > 43.5px
+2. Apply dual emboss on expanded mask (for edge beveling)
+3. Create inset/shrunk mask using blur + brightness/contrast
+4. Convert mask to alpha (white to alpha)
+5. Tile texture pattern (paint texture)
+6. Apply color with blend mode
+7. Apply inset mask (destination-in composite)
+8. Composite emboss highlights with main content
+
+**Effect Parameters (from `maskData.effectparams`):**
+
+- `PaintedInsetShrink`: Amount to shrink the inset mask in pixels (default: 1.0)
+
+**Key Differences from Other Effects:**
+
+- Uses edge expansion (not erosion) for emboss
+- Creates an inset effect where paint appears slightly recessed
+- Edge beveling appears around the outside of the text
+
+**Usage:**
+
+```typescript
+import { applyPaintedEffect, extractPaintedParams, getPaintedEffectInfo } from '@/js/effects/painted';
+
+// Apply painted effect pipeline
+const result = applyPaintedEffect({
+  width: 1024,
+  height: 1024,
+  color: '#ff0000',
+  alpha: 1.0,
+  blend: 'multiply',
+  paintedInsetShrink: 1.0,
+  mask: textMask,
+  texture: paintTexture, // Optional paint texture
+  textHeight: 50, // Height of text for emboss threshold
+});
+
+// Result contains { canvas, ctx }
+
+// Get effect info for debugging
+const info = getPaintedEffectInfo(1.5);
+// Returns: { insetShrink: 1.5, embossThreshold: 43.5, defaultInsetShrink: 1.0 }
+```
+
+**Key Functions:**
+
+- `applyPaintedEffect(params)`: Main pipeline function
+- `processPaintedEffectLayer(layer, width, height, mask, textHeight, texture?)`: Convenience wrapper for TextLayerDescriptor
+- `createExpandedEdgeMask(mask, width, height)`: Create expanded edge mask for emboss
+- `createPaintedEmboss(expandedMask, width, height)`: Create dual emboss result with highlight and shadow canvases
+- `createInsetMask(mask, width, height, shrinkAmount)`: Create inset mask with alpha channel
+- `extractPaintedParams(maskData)`: Extract PaintedInsetShrink from effectparams
+- `getPaintedEffectInfo(paintedInsetShrink)`: Get effect parameters for debugging/preview
+
 ## Future Effect Pipelines
 
 The following pipelines are planned for future implementation:
-
-### Foil
-
-1. Alpha erode
-2. Tile texture
-3. Color blend
-4. Dual emboss
-5. Shrink mask
-6. Shadow
-
-### Painted
-
-1. Edge expand
-2. Dual emboss
-3. Inset shrink
-4. Tile texture
-5. Color blend
-6. Apply mask
 
 ### Normal
 
@@ -546,6 +650,8 @@ Unit tests for effect pipelines are located alongside the modules:
 - `hotstamp.test.ts`: Tests for hotstamp effect pipeline
 - `embroidery.test.ts`: Tests for embroidery effect pipeline
 - `metal.test.ts`: Tests for metal effect pipeline
+- `foil.test.ts`: Tests for foil effect pipeline
+- `painted.test.ts`: Tests for painted effect pipeline
 
 Tests are structured in two categories:
 

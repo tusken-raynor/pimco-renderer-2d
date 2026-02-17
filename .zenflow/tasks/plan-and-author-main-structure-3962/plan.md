@@ -560,27 +560,28 @@ Implement embroidery and metal effect pipelines.
 
 ---
 
-### [ ] Step: Foil and Painted Effects
+### [x] Step: Foil and Painted Effects
+<!-- chat-id: dfdc8991-76bd-46e6-b0ce-7daae42f6aad -->
 
 Implement foil and painted effect pipelines.
 
 **Tasks:**
-- [ ] Create `src/js/effects/foil.ts`
+- [x] Create `src/js/effects/foil.ts`
   - Alpha erode
   - Tile texture
   - Color blend
   - Dual emboss
   - Shrink mask
   - Shadow
-- [ ] Create `src/js/effects/painted.ts`
+- [x] Create `src/js/effects/painted.ts`
   - Edge expand
   - Dual emboss
   - Inset shrink
   - Tile texture
   - Color blend
   - Mask
-- [ ] Add unit tests
-- [ ] Update effects docs.md
+- [x] Add unit tests
+- [x] Update effects docs.md
 
 **Verification:**
 - Effects match legacy output
