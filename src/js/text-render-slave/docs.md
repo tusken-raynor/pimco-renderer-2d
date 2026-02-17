@@ -7,10 +7,11 @@ The Text Render Slave module is responsible for processing text/effect layers in
 This module provides:
 - **Text Rasterization**: Converting text content to canvas using font metrics
 - **Typography Support**: Font family, weight, size, letter spacing, text transforms
+- **2D Transform Application**: Translation, rotation, and scale via DOMMatrix
 - **Asset Management**: Storing images and fonts received from the Asset Manager
-- **Post-Mask Application**: Applying optional masks after rendering
+- **Post-Mask Application**: Applying optional masks after transforms (destination-in composite)
 
-Note: Effect application (embroidery, engraving, etc.) and 2D transforms are implemented in separate modules and integrated in later phases.
+Note: Effect application (embroidery, engraving, etc.) is implemented in the effects module and integrated in later phases.
 
 ## How It Works
 
@@ -22,6 +23,22 @@ Note: Effect application (embroidery, engraving, etc.) and 2D transforms are imp
 4. **Scale Calculation**: If text exceeds `maxwidth`, calculate scale factor
 5. **Canvas Creation**: Create canvas with computed dimensions
 6. **Text Rendering**: Draw text with correct alignment and baseline
+
+### 2D Transform Pipeline
+
+After text rasterization, transforms are applied in this order:
+
+1. **Parse Transform**: Extract translation, rotation, scale from `PimcoMaskSubstitutionTransformation`
+2. **Calculate Alignment Offset**: Adjust transform origin based on text alignment (left/center/right)
+3. **Build Transform Matrix**: Create DOMMatrix with combined transforms
+4. **Apply and Draw**: Set context transform and draw source centered at origin
+5. **Apply Post-Mask**: If present, apply destination-in composite to clip result
+
+Transform coordinates use percentages:
+- `translation[0]` = X offset as percentage (-50 to 50 maps to canvas edges)
+- `translation[1]` = Y offset as percentage (-50 to 50 maps to canvas edges)
+- `rotation` = Rotation in degrees
+- `scale` = Uniform number or `[x, y]` tuple
 
 ### Key Constants (from legacy renderer)
 
@@ -91,6 +108,46 @@ class TextRasterizer {
 function createTextRasterizer(): TextRasterizer;
 ```
 
+### Transform Functions
+
+```typescript
+// Parse transform data from mask substitution
+function parseTransform(
+  transform: PimcoMaskSubstitutionTransformation | undefined,
+  canvasWidth: number,
+  canvasHeight: number
+): ParsedTransform;
+
+// Calculate alignment-based offset for text
+function calculateAlignmentOffset(
+  alignment: TextAlignment | undefined,
+  sourceWidth: number
+): number;
+
+// Build a DOMMatrix representing the full transform chain
+function buildTransformMatrix(
+  parsed: ParsedTransform,
+  canvasWidth: number,
+  canvasHeight: number,
+  alignmentOffset: number
+): DOMMatrix;
+
+// Apply transforms and draw source onto target context
+function applyTransformAndDraw(
+  targetCtx: Canvas2DContext,
+  source: AnyCanvas | ImageBitmap,
+  transform: PimcoMaskSubstitutionTransformation | undefined,
+  canvasWidth: number,
+  canvasHeight: number,
+  alignment?: TextAlignment
+): void;
+
+// Check if a transform has any non-identity values
+function hasActiveTransform(
+  transform: PimcoMaskSubstitutionTransformation | undefined
+): boolean;
+```
+
 ### TextRenderSlave Class
 
 ```typescript
@@ -128,6 +185,18 @@ function textResultsToSegments(results: TextLayerResult[]): RenderSegment[];
 ### Types
 
 ```typescript
+// 2D Transform Types
+interface ParsedTransform {
+  translateX: number;  // X translation in pixels
+  translateY: number;  // Y translation in pixels
+  rotation: number;    // Rotation in degrees
+  scaleX: number;      // X scale factor
+  scaleY: number;      // Y scale factor
+}
+
+type TextAlignment = 'left' | 'center' | 'right';
+
+// Typography Types
 interface TypographyConfig {
   fontFamily: string;
   fontWeight: string | number;
@@ -267,6 +336,16 @@ console.log(`Transformed text: ${measurement.text}`);
 - **TextRasterizer class**: Factory function, measure, rasterize, transform, reusability
 - **Edge cases**: Very small/large workWidth, unicode, newlines, long text, whitespace, zero lineheight, negative scales
 
+### transforms.test.ts
+
+- **toScaleString**: Empty string for undefined, uniform and non-uniform scale strings
+- **toRotationString**: Empty string for undefined, degree suffix, string passthrough
+- **parseTransform**: Identity transform, translation as percentage, rotation in degrees, uniform/non-uniform scale, combined transforms
+- **calculateAlignmentOffset**: Center/left/right alignment, undefined defaults, scaling with source width
+- **buildTransformMatrix**: Identity at center, translation offset, scale factors, rotation, alignment offset
+- **hasActiveTransform**: False for undefined/empty/identity, true for any non-default values
+- **applyTransformAndDraw**: Context save/restore, DOMMatrix application, centered drawing, all transform types, alignment offsets
+
 ### index.test.ts
 
 - **Constructor**: Instance creation, empty stores, abort flag initialization
@@ -274,7 +353,7 @@ console.log(`Transformed text: ${measurement.text}`);
 - **Font management**: Register, retrieve, multiple fonts, clearing
 - **Abort handling**: Initial state, setting, resetting
 - **rasterizeText**: Mask data processing, empty content, typography
-- **renderLayer**: Aborted state, missing maskData, successful render, post-mask, layer index, composite settings
+- **renderLayer**: Aborted state, missing maskData, successful render, post-mask, layer index, composite settings, 2D transforms
 - **renderBatch**: Empty batch, single/multiple layers, abort reset, abort mid-render, skip failed layers
 - **textResultsToSegments**: Empty results, conversion, bitmap references, index exclusion
 
@@ -292,12 +371,12 @@ The TextRenderSlave is designed to run in a Web Worker context using OffscreenCa
 
 This module is part of Phase 3 implementation. Future steps will add:
 
-1. **2D Transform Application**: Translation, rotation, scale via DOMMatrix
-2. **Effect Pipeline**: Integration with WebGL postprocessor for effects (embroidery, engraving, etc.)
-3. **Text Render Slave Worker**: Worker entry point (`text-render-slave.worker.ts`)
+1. **Effect Pipeline**: Integration with WebGL postprocessor for effects (embroidery, engraving, etc.)
+2. **Text Render Slave Worker**: Worker entry point (`text-render-slave.worker.ts`)
 
 ### Reference Files
 
-- **Legacy code**: `old-src-ref/src/renderer/index.ts` (preEffect, drawSubstitutionMask functions)
+- **Legacy code**: `old-src-ref/src/renderer/index.ts` (preEffect, drawSubstitutionMask, applyWithTransformation functions)
+- **Legacy transforms spec**: `old-src-ref/src/renderer/transforms.spec.ts` (transform calculation tests)
 - **Types**: `src/js/types/pimco.ts`, `src/js/types/messages.ts`
 - **Canvas utils**: `src/js/utils/canvas.ts`

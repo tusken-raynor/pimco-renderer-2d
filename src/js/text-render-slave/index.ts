@@ -5,9 +5,9 @@
  * - Managing assets received from the Asset Manager (images, fonts)
  * - Processing batches of text layers (where mask is PimcoMaskSubstitutionCompiled)
  * - Text rasterization with typography settings
+ * - 2D transform application (translation, rotation, scale)
+ * - Post-mask application (destination-in composite after transforms)
  * - Effect application (delegated to effects module in future steps)
- * - 2D transform application (delegated in future steps)
- * - Post-mask application
  * - Returning segmented results for composition
  *
  * This module is designed to run in a Web Worker context using OffscreenCanvas.
@@ -17,6 +17,7 @@ import type { RenderSegment, TextLayerDescriptor } from '../types/messages';
 import type { CanvasCompositeOperation, PimcoMaskSubstitutionCompiled } from '../types/pimco';
 import { canvasToImageBitmap, createCanvas, getContext2D } from '../utils/canvas';
 import { TextRasterizer, createTextRasterizer, type RasterizedText } from './text-rasterizer';
+import { applyTransformAndDraw, hasActiveTransform, type TextAlignment } from './transforms';
 
 /**
  * Asset types that can be stored by the text render slave.
@@ -118,7 +119,7 @@ export class TextRenderSlave {
 
       // Add to document fonts (works in both main thread and workers with FontFace support)
       if (typeof self !== 'undefined' && 'fonts' in self) {
-        (self.fonts as FontFaceSet).add(fontFace);
+        (self.fonts).add(fontFace);
       }
 
       entry.loaded = true;
@@ -253,11 +254,14 @@ export class TextRenderSlave {
   /**
    * Render a single text layer.
    *
-   * This is a basic implementation that:
-   * 1. Rasterizes the text
-   * 2. Applies post-mask if present
+   * The rendering pipeline:
+   * 1. Rasterizes the text content using typography settings
+   * 2. Creates output canvas at full dimensions
+   * 3. Applies 2D transforms (translation, rotation, scale) if present
+   * 4. Falls back to centered positioning if no transforms
+   * 5. Applies post-mask (destination-in composite) if present
    *
-   * Note: Effect application and 2D transforms are implemented in later steps.
+   * Note: Effect application is implemented in later steps.
    *
    * @param layer - Text layer descriptor
    * @param width - Canvas width
@@ -276,8 +280,9 @@ export class TextRenderSlave {
       return null;
     }
 
-    // Get mask data
+    // Get mask data (required for text layers, but defensive check for runtime safety)
     const maskData = layer.maskData;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!maskData) {
       console.warn(`Missing mask data for text layer ${layer.id}`);
       return null;
@@ -294,13 +299,28 @@ export class TextRenderSlave {
       throw new Error('Failed to create output context');
     }
 
-    // Draw rasterized text centered on output canvas
-    // Note: Transform application will be added in a later step
-    const x = (width - rasterized.width) / 2;
-    const y = (height - rasterized.height) / 2;
-    outputCtx.drawImage(rasterized.canvas, x, y);
+    // Get text alignment for transform origin calculation
+    const alignment: TextAlignment = maskData.type?.alignment ?? 'center';
 
-    // Apply post-mask if present
+    // Apply transforms and draw
+    if (hasActiveTransform(maskData.transform)) {
+      // Use transform-based drawing (handles translation, rotation, scale)
+      applyTransformAndDraw(
+        outputCtx,
+        rasterized.canvas,
+        maskData.transform,
+        width,
+        height,
+        alignment
+      );
+    } else {
+      // No transforms: simple centered positioning
+      const x = (width - rasterized.width) / 2;
+      const y = (height - rasterized.height) / 2;
+      outputCtx.drawImage(rasterized.canvas, x, y);
+    }
+
+    // Apply post-mask if present (destination-in composite after transforms)
     if (layer.assetIds.postmask !== undefined) {
       const postMask = this.assets.get(layer.assetIds.postmask);
       if (postMask instanceof ImageBitmap) {

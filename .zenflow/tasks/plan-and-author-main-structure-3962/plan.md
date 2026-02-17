@@ -423,17 +423,18 @@ Implement text rasterization with font metrics.
 
 ---
 
-### [ ] Step: 2D Transform Application
+### [x] Step: 2D Transform Application
+<!-- chat-id: 09772ee8-2010-43ed-80fa-7b27273d0d78 -->
 
 Implement 2D transform (translation, rotation, scale) for text layers.
 
 **Tasks:**
-- [ ] Add transform application to text-render-slave
+- [x] Add transform application to text-render-slave
   - Translation, rotation, scale via DOMMatrix or canvas transforms
   - Support transform sequence (array of transforms)
-- [ ] Add post-mask application (destination-in after transforms)
-- [ ] Add unit tests for transforms
-- [ ] Update text-render-slave docs.md
+- [x] Add post-mask application (destination-in after transforms)
+- [x] Add unit tests for transforms
+- [x] Update text-render-slave docs.md
 
 **Verification:**
 - All transform types work correctly
