@@ -12,6 +12,7 @@
  */
 
 import type { ProductImageComponent } from '../js/types';
+import { RenderMaster } from '../js/renderer';
 
 // DOM Elements
 const jsonUploadInput = document.getElementById('json-upload') as HTMLInputElement;
@@ -29,6 +30,8 @@ const jsonPreview = document.getElementById('json-preview') as HTMLPreElement;
 
 // State
 let currentLayers: ProductImageComponent[] | null = null;
+let renderMaster: RenderMaster | null = null;
+let isRendering = false;
 
 /**
  * Set status message with optional type for styling.
@@ -219,115 +222,122 @@ function clearCanvas(): void {
 }
 
 /**
- * Render the current layers to the canvas.
- * NOTE: This is a placeholder implementation until RenderMaster is complete.
- * Currently displays layer info and a placeholder graphic.
+ * Destroy and recreate RenderMaster (e.g., after canvas size change).
  */
-function renderLayers(): void {
+function resetRenderMaster(): void {
+  if (renderMaster) {
+    renderMaster.destroy();
+    renderMaster = null;
+    // eslint-disable-next-line no-console
+    console.log('[DevApp] RenderMaster destroyed for reset');
+  }
+}
+
+/**
+ * Initialize or get the RenderMaster instance.
+ */
+function ensureRenderMaster(): RenderMaster {
+  if (!renderMaster) {
+    const width = parseInt(canvasWidthInput.value, 10) || 800;
+    const height = parseInt(canvasHeightInput.value, 10) || 800;
+
+    renderMaster = new RenderMaster({
+      width,
+      height,
+    });
+
+    const capabilities = renderMaster.getCapabilities();
+    // eslint-disable-next-line no-console
+    console.log('[DevApp] RenderMaster initialized', {
+      scenario: capabilities.scenario,
+      offscreenCanvas: capabilities.offscreenCanvas,
+      webgl2: capabilities.webgl2,
+      slaveCount: renderMaster.getSlaveCount(),
+    });
+  }
+  return renderMaster;
+}
+
+/**
+ * Draw an ImageBitmap to the canvas.
+ */
+function drawBitmapToCanvas(bitmap: ImageBitmap): void {
+  const ctx = renderCanvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Failed to get 2D rendering context');
+  }
+
+  // Clear and draw the bitmap
+  ctx.clearRect(0, 0, renderCanvas.width, renderCanvas.height);
+  ctx.drawImage(bitmap, 0, 0);
+}
+
+/**
+ * Render the current layers to the canvas using RenderMaster.
+ */
+async function renderLayers(): Promise<void> {
   if (!currentLayers || currentLayers.length === 0) {
     showError('No layers loaded');
     return;
   }
 
+  if (isRendering) {
+    // eslint-disable-next-line no-console
+    console.log('[DevApp] Render already in progress, will be aborted by new render');
+  }
+
   hideError();
   setStatus('Rendering...', 'loading');
   renderBtn.disabled = true;
+  isRendering = true;
 
   const startTime = performance.now();
 
   try {
     updateCanvasDimensions();
 
-    const ctx = renderCanvas.getContext('2d');
-    if (!ctx) {
-      throw new Error('Failed to get 2D rendering context');
-    }
+    const width = renderCanvas.width;
+    const height = renderCanvas.height;
 
-    // Clear canvas
-    ctx.clearRect(0, 0, renderCanvas.width, renderCanvas.height);
+    // Get or create RenderMaster
+    const master = ensureRenderMaster();
 
-    // TODO: Replace this placeholder with actual RenderMaster integration
-    // For now, display a placeholder showing layer information
-
-    // Draw placeholder background
-    ctx.fillStyle = '#f0f0f0';
-    ctx.fillRect(0, 0, renderCanvas.width, renderCanvas.height);
-
-    // Draw centered text showing layer count
-    ctx.fillStyle = '#333';
-    ctx.font = 'bold 24px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    const centerX = renderCanvas.width / 2;
-    const centerY = renderCanvas.height / 2;
-
-    ctx.fillText('PIMCO Renderer Placeholder', centerX, centerY - 60);
-
-    ctx.font = '18px system-ui, sans-serif';
-    ctx.fillText(`${String(currentLayers.length)} layers loaded`, centerX, centerY - 20);
-
-    // Draw small boxes representing layers
-    const boxSize = 30;
-    const gap = 10;
-    const maxBoxes = Math.min(currentLayers.length, 20);
-    const totalWidth = maxBoxes * (boxSize + gap) - gap;
-    const startX = centerX - totalWidth / 2;
-
-    ctx.font = '10px system-ui, sans-serif';
-    ctx.textAlign = 'left';
-
-    for (let i = 0; i < maxBoxes; i++) {
-      const layer = currentLayers[i];
-      const x = startX + i * (boxSize + gap);
-      const y = centerY + 20;
-
-      // Use layer color if available, otherwise generate one
-      let fillColor = '#888';
-      if (typeof layer.color === 'string' && layer.color) {
-        fillColor = layer.color;
-      } else {
-        // Generate color based on index
-        const hue = (i * 360) / maxBoxes;
-        fillColor = `hsl(${String(hue)}, 60%, 50%)`;
-      }
-
-      ctx.fillStyle = fillColor;
-      ctx.fillRect(x, y, boxSize, boxSize);
-
-      // Draw border
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x, y, boxSize, boxSize);
-    }
-
-    if (currentLayers.length > maxBoxes) {
-      ctx.fillStyle = '#666';
-      ctx.font = '14px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`+ ${String(currentLayers.length - maxBoxes)} more`, centerX, centerY + 80);
-    }
-
-    // Draw note about placeholder
-    ctx.fillStyle = '#888';
-    ctx.font = 'italic 12px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('(RenderMaster not yet integrated)', centerX, centerY + 120);
+    // Render layers
+    const bitmap = await master.render(currentLayers, width, height);
 
     const endTime = performance.now();
     const duration = endTime - startTime;
 
+    // Draw result to canvas
+    drawBitmapToCanvas(bitmap);
+
+    // Close the bitmap after drawing (we no longer need it)
+    bitmap.close();
+
     renderTimeDisplay.textContent = `${duration.toFixed(2)}ms`;
-    setStatus('Render complete (placeholder)', 'success');
+    setStatus(`Render complete in ${duration.toFixed(2)}ms`, 'success');
 
     // eslint-disable-next-line no-console
     console.log(
-      `[DevApp] Placeholder render complete in ${duration.toFixed(2)}ms for ${String(currentLayers.length)} layers`
+      `[DevApp] Render complete in ${duration.toFixed(2)}ms for ${String(currentLayers.length)} layers`
     );
   } catch (error) {
-    setStatus('Render failed', 'error');
-    showError(error instanceof Error ? error : new Error(String(error)));
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+
+    // Check if it's an abort error (user triggered new render)
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('abort')) {
+      setStatus('Render aborted', 'info');
+      // eslint-disable-next-line no-console
+      console.log(`[DevApp] Render aborted after ${duration.toFixed(2)}ms`);
+    } else {
+      setStatus('Render failed', 'error');
+      showError(error instanceof Error ? error : new Error(String(error)));
+      console.error(`[DevApp] Render failed after ${duration.toFixed(2)}ms:`, error);
+    }
   } finally {
+    isRendering = false;
     renderBtn.disabled = false;
     updateRenderButtonState();
   }
@@ -353,11 +363,17 @@ exampleSelect.addEventListener('change', (event) => {
   }
 });
 
-canvasWidthInput.addEventListener('change', updateCanvasDimensions);
-canvasHeightInput.addEventListener('change', updateCanvasDimensions);
+canvasWidthInput.addEventListener('change', () => {
+  updateCanvasDimensions();
+  resetRenderMaster();
+});
+canvasHeightInput.addEventListener('change', () => {
+  updateCanvasDimensions();
+  resetRenderMaster();
+});
 
 renderBtn.addEventListener('click', () => {
-  renderLayers();
+  void renderLayers();
 });
 
 clearBtn.addEventListener('click', () => {

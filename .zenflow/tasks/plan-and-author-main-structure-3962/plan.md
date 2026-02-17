@@ -348,19 +348,20 @@ Implement the RenderMaster orchestration class.
 
 ---
 
-### [ ] Step: Dev App Integration with Standard Rendering
+### [x] Step: Dev App Integration with Standard Rendering
+<!-- chat-id: 69121fe0-b762-4e65-818d-320d3518fcba -->
 
 Connect dev app to RenderMaster for standard layer rendering.
 
 **Tasks:**
-- [ ] Update `src/dev-app/main.ts`
+- [x] Update `src/dev-app/main.ts`
   - Instantiate RenderMaster
   - Pass uploaded JSON layers to render()
   - Display ImageBitmap result on canvas
   - Show render timing
   - Handle and display errors
-- [ ] Create integration test for standard rendering workflow
-- [ ] Update src/tests/integration/docs.md with test documentation
+- [x] Create integration test for standard rendering workflow
+- [x] Update src/tests/integration/docs.md with test documentation
 
 **Verification:**
 - Dev app renders uploaded JSON
