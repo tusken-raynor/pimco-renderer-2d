@@ -228,8 +228,6 @@ export function isTextLayerMask(
 /**
  * Type guard to check if a mask is a standard layer (URL string).
  */
-export function isStandardLayerMask(
-  mask: string | PimcoMaskSubstitutionCompiled
-): mask is string {
+export function isStandardLayerMask(mask: string | PimcoMaskSubstitutionCompiled): mask is string {
   return typeof mask === 'string';
 }

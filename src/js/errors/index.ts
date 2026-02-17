@@ -22,12 +22,7 @@ export class AppError extends Error {
   /** Timestamp when the error occurred */
   public readonly timestamp: Date;
 
-  constructor(
-    message: string,
-    code = 'APP_ERROR',
-    context: ErrorContext = {},
-    cause?: Error
-  ) {
+  constructor(message: string, code = 'APP_ERROR', context: ErrorContext = {}, cause?: Error) {
     super(message);
     this.name = 'AppError';
     this.code = code;
@@ -58,9 +53,8 @@ export class AppError extends Error {
    * Create a string representation suitable for logging.
    */
   override toString(): string {
-    const contextStr = Object.keys(this.context).length > 0
-      ? ` Context: ${JSON.stringify(this.context)}`
-      : '';
+    const contextStr =
+      Object.keys(this.context).length > 0 ? ` Context: ${JSON.stringify(this.context)}` : '';
     return `[${this.code}] ${this.message}${contextStr}`;
   }
 }
@@ -72,16 +66,8 @@ export class ValidationError extends AppError {
   /** The field or parameter that failed validation */
   public readonly field: string | undefined;
 
-  constructor(
-    message: string,
-    field?: string,
-    context: ErrorContext = {}
-  ) {
-    super(
-      message,
-      'VALIDATION_ERROR',
-      field !== undefined ? { ...context, field } : context
-    );
+  constructor(message: string, field?: string, context: ErrorContext = {}) {
+    super(message, 'VALIDATION_ERROR', field !== undefined ? { ...context, field } : context);
     this.name = 'ValidationError';
     this.field = field;
   }
@@ -96,16 +82,12 @@ export class NotFoundError extends AppError {
   /** The identifier of the resource that was not found */
   public readonly resourceId: string;
 
-  constructor(
-    resourceType: string,
-    resourceId: string,
-    context: ErrorContext = {}
-  ) {
-    super(
-      `${resourceType} not found: ${resourceId}`,
-      'NOT_FOUND',
-      { ...context, resourceType, resourceId }
-    );
+  constructor(resourceType: string, resourceId: string, context: ErrorContext = {}) {
+    super(`${resourceType} not found: ${resourceId}`, 'NOT_FOUND', {
+      ...context,
+      resourceType,
+      resourceId,
+    });
     this.name = 'NotFoundError';
     this.resourceType = resourceType;
     this.resourceId = resourceId;
@@ -135,12 +117,7 @@ export class RenderError extends AppError {
     if (layerId !== undefined) {
       extendedContext.layerId = layerId;
     }
-    super(
-      message,
-      'RENDER_ERROR',
-      extendedContext,
-      cause
-    );
+    super(message, 'RENDER_ERROR', extendedContext, cause);
     this.name = 'RenderError';
     this.phase = phase;
     this.layerId = layerId;
@@ -192,12 +169,7 @@ export class WorkerError extends AppError {
     if (workerId !== undefined) {
       extendedContext.workerId = workerId;
     }
-    super(
-      message,
-      'WORKER_ERROR',
-      extendedContext,
-      cause
-    );
+    super(message, 'WORKER_ERROR', extendedContext, cause);
     this.name = 'WorkerError';
     this.workerId = workerId;
   }
@@ -207,10 +179,7 @@ export class WorkerError extends AppError {
  * Error thrown when a render operation is aborted.
  */
 export class AbortError extends AppError {
-  constructor(
-    message = 'Operation aborted',
-    context: ErrorContext = {}
-  ) {
+  constructor(message = 'Operation aborted', context: ErrorContext = {}) {
     super(message, 'ABORT_ERROR', context);
     this.name = 'AbortError';
   }
@@ -223,16 +192,11 @@ export class CapabilityError extends AppError {
   /** The capability that is missing */
   public readonly capability: string;
 
-  constructor(
-    capability: string,
-    message?: string,
-    context: ErrorContext = {}
-  ) {
-    super(
-      message ?? `Required capability not available: ${capability}`,
-      'CAPABILITY_ERROR',
-      { ...context, capability }
-    );
+  constructor(capability: string, message?: string, context: ErrorContext = {}) {
+    super(message ?? `Required capability not available: ${capability}`, 'CAPABILITY_ERROR', {
+      ...context,
+      capability,
+    });
     this.name = 'CapabilityError';
     this.capability = capability;
   }

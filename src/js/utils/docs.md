@@ -14,8 +14,8 @@ The utils module is organized into two main categories:
 ### Types
 
 ```typescript
-type RGBColor = [number, number, number];   // [R, G, B] values 0-255
-type RGBAColor = [number, number, number, number];  // [R, G, B, A] with A 0-1
+type RGBColor = [number, number, number]; // [R, G, B] values 0-255
+type RGBAColor = [number, number, number, number]; // [R, G, B, A] with A 0-1
 ```
 
 ### Parsing Functions
@@ -25,9 +25,9 @@ type RGBAColor = [number, number, number, number];  // [R, G, B, A] with A 0-1
 Parse a hex color string to RGB values. Supports 3-digit (`#RGB`) and 6-digit (`#RRGGBB`) formats.
 
 ```typescript
-parseHexColor('#ff0000');  // [255, 0, 0]
-parseHexColor('#f00');     // [255, 0, 0]
-parseHexColor('invalid');  // null
+parseHexColor('#ff0000'); // [255, 0, 0]
+parseHexColor('#f00'); // [255, 0, 0]
+parseHexColor('invalid'); // null
 ```
 
 #### `parseHexColorWithAlpha(hex: string): RGBAColor | null`
@@ -35,9 +35,9 @@ parseHexColor('invalid');  // null
 Parse a hex color string including alpha channel. Supports 3, 4, 6, and 8-digit formats.
 
 ```typescript
-parseHexColorWithAlpha('#ff0000');    // [255, 0, 0, 1]
-parseHexColorWithAlpha('#ff000080');  // [255, 0, 0, 0.5]
-parseHexColorWithAlpha('#f008');      // [255, 0, 0, ~0.53]
+parseHexColorWithAlpha('#ff0000'); // [255, 0, 0, 1]
+parseHexColorWithAlpha('#ff000080'); // [255, 0, 0, 0.5]
+parseHexColorWithAlpha('#f008'); // [255, 0, 0, ~0.53]
 ```
 
 ### Conversion Functions
@@ -47,7 +47,7 @@ parseHexColorWithAlpha('#f008');      // [255, 0, 0, ~0.53]
 Convert RGB values to hex string. Clamps values to 0-255.
 
 ```typescript
-rgbToHex(255, 0, 128);  // '#ff0080'
+rgbToHex(255, 0, 128); // '#ff0080'
 ```
 
 #### `rgbaToHex(r, g, b, a): string`
@@ -55,7 +55,7 @@ rgbToHex(255, 0, 128);  // '#ff0080'
 Convert RGBA values to 8-digit hex string.
 
 ```typescript
-rgbaToHex(255, 0, 0, 0.5);  // '#ff000080'
+rgbaToHex(255, 0, 0, 0.5); // '#ff000080'
 ```
 
 ### Brightness & Luminance
@@ -73,9 +73,9 @@ Calculate perceived brightness using HSP color model (0-255). More perceptually 
 Determine if a color is "dark". Useful for choosing contrasting text colors.
 
 ```typescript
-isDarkColor(0, 0, 0);        // true
-isDarkColor(255, 255, 255);  // false
-isDarkColor(128, 128, 128, 130);  // true (custom threshold)
+isDarkColor(0, 0, 0); // true
+isDarkColor(255, 255, 255); // false
+isDarkColor(128, 128, 128, 130); // true (custom threshold)
 ```
 
 ### Color Operations
@@ -85,7 +85,7 @@ isDarkColor(128, 128, 128, 130);  // true (custom threshold)
 Per-channel color multiplication for tinting operations.
 
 ```typescript
-multiplyColor([255, 255, 255], [128, 128, 128]);  // [128, 128, 128]
+multiplyColor([255, 255, 255], [128, 128, 128]); // [128, 128, 128]
 ```
 
 #### `highlightSaturate(color: RGBColor, multiply: RGBColor): RGBColor`
@@ -101,7 +101,7 @@ Standard alpha compositing of two colors.
 Linear interpolation between two colors.
 
 ```typescript
-lerpColor([255, 0, 0], [0, 255, 0], 0.5);  // [128, 128, 0]
+lerpColor([255, 0, 0], [0, 255, 0], 0.5); // [128, 128, 0]
 ```
 
 #### `clampColorValue(value, min?, max?): number`
@@ -155,6 +155,7 @@ Create a canvas with its 2D context already attached. Throws if context unavaila
 #### `resetCanvasContext(ctx: Canvas2DContext): void`
 
 Reset a canvas context to its default state. Clears content and resets all properties:
+
 - Transformations
 - Line styles
 - Fill/stroke styles
@@ -183,6 +184,7 @@ Resize a canvas. When `preserveContent` is true (default), existing content is p
 #### `drawImageFit(ctx, image, x, y, maxWidth, maxHeight, fit): void`
 
 Draw an image with aspect ratio handling:
+
 - `'contain'` - Fit inside bounds, may leave transparent areas
 - `'cover'` - Fill bounds completely, may crop
 - `'fill'` - Stretch to fill (distorts aspect ratio)
@@ -230,6 +232,7 @@ The color utilities are used in the 5-step intra-layer rendering pipeline:
 ### Worker Communication
 
 Canvas utilities support both main thread and worker contexts:
+
 - `createCanvas` automatically uses OffscreenCanvas in workers
 - `canvasToImageBitmap` enables efficient transfer via postMessage
 
@@ -238,6 +241,7 @@ Canvas utilities support both main thread and worker contexts:
 Unit tests are in `index.test.ts`. Color utilities are fully tested. Canvas utilities that require a real canvas implementation are tested in E2E tests since jsdom doesn't provide canvas context.
 
 Run tests:
+
 ```bash
 npm run test:unit -- --run src/js/utils/
 ```

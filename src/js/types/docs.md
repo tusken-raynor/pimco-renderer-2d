@@ -82,12 +82,7 @@ function classifyLayer(layer: ProductImageComponent) {
 ### Message Types
 
 ```typescript
-import {
-  BatchMessage,
-  ResultMessage,
-  isResultMessage,
-  RenderSegment,
-} from '@/js/types';
+import { BatchMessage, ResultMessage, isResultMessage, RenderSegment } from '@/js/types';
 
 // Example: Handle worker messages
 worker.onmessage = (event: MessageEvent) => {
@@ -105,60 +100,60 @@ worker.onmessage = (event: MessageEvent) => {
 
 All message types have corresponding type guards for runtime type checking:
 
-| Type | Guard Function |
-|------|----------------|
-| `InitMessage` | `isInitMessage()` |
-| `BatchMessage` | `isBatchMessage()` |
-| `AbortMessage` | `isAbortMessage()` |
-| `ReadyMessage` | `isReadyMessage()` |
-| `CapabilitiesMessage` | `isCapabilitiesMessage()` |
-| `ResultMessage` | `isResultMessage()` |
-| `ErrorMessage` | `isErrorMessage()` |
-| `FetchMessage` | `isFetchMessage()` |
-| `DistributeMessage` | `isDistributeMessage()` |
-| `PreloadMessage` | `isPreloadMessage()` |
-| `RegisterSlaveMessage` | `isRegisterSlaveMessage()` |
-| `FetchCompleteMessage` | `isFetchCompleteMessage()` |
+| Type                        | Guard Function                  |
+| --------------------------- | ------------------------------- |
+| `InitMessage`               | `isInitMessage()`               |
+| `BatchMessage`              | `isBatchMessage()`              |
+| `AbortMessage`              | `isAbortMessage()`              |
+| `ReadyMessage`              | `isReadyMessage()`              |
+| `CapabilitiesMessage`       | `isCapabilitiesMessage()`       |
+| `ResultMessage`             | `isResultMessage()`             |
+| `ErrorMessage`              | `isErrorMessage()`              |
+| `FetchMessage`              | `isFetchMessage()`              |
+| `DistributeMessage`         | `isDistributeMessage()`         |
+| `PreloadMessage`            | `isPreloadMessage()`            |
+| `RegisterSlaveMessage`      | `isRegisterSlaveMessage()`      |
+| `FetchCompleteMessage`      | `isFetchCompleteMessage()`      |
 | `DistributeCompleteMessage` | `isDistributeCompleteMessage()` |
-| `AssetDataMessage` | `isAssetDataMessage()` |
+| `AssetDataMessage`          | `isAssetDataMessage()`          |
 
 ## Key Types Reference
 
 ### ProductImageComponent
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | Unique identifier |
-| `name` | `string` | Human-readable name |
-| `mode` | `'color' \| 'image'` | Color mode |
-| `color` | `string \| string[] \| Record<string, string>` | Color value(s) |
-| `texture` | `string` | Texture URL |
-| `alpha` | `number` | Intra-layer opacity (0-1) |
-| `blend` | `BlendMode` | Intra-layer blend mode |
-| `mask` | `string \| PimcoMaskSubstitutionCompiled` | Mask definition |
-| `image` | `string` | Base image URL |
-| `order` | `number` | Z-order (ascending) |
-| `compositemode` | `CanvasCompositeOperation` | Inter-layer composite |
-| `compositealpha` | `number` | Inter-layer opacity |
+| Field            | Type                                           | Description               |
+| ---------------- | ---------------------------------------------- | ------------------------- |
+| `id`             | `string`                                       | Unique identifier         |
+| `name`           | `string`                                       | Human-readable name       |
+| `mode`           | `'color' \| 'image'`                           | Color mode                |
+| `color`          | `string \| string[] \| Record<string, string>` | Color value(s)            |
+| `texture`        | `string`                                       | Texture URL               |
+| `alpha`          | `number`                                       | Intra-layer opacity (0-1) |
+| `blend`          | `BlendMode`                                    | Intra-layer blend mode    |
+| `mask`           | `string \| PimcoMaskSubstitutionCompiled`      | Mask definition           |
+| `image`          | `string`                                       | Base image URL            |
+| `order`          | `number`                                       | Z-order (ascending)       |
+| `compositemode`  | `CanvasCompositeOperation`                     | Inter-layer composite     |
+| `compositealpha` | `number`                                       | Inter-layer opacity       |
 
 ### RenderSegment
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `bitmap` | `ImageBitmap` | Rendered bitmap |
-| `compositemode` | `CanvasCompositeOperation` | Composite operation |
-| `compositealpha` | `number` | Composite opacity |
+| Field            | Type                       | Description         |
+| ---------------- | -------------------------- | ------------------- |
+| `bitmap`         | `ImageBitmap`              | Rendered bitmap     |
+| `compositemode`  | `CanvasCompositeOperation` | Composite operation |
+| `compositealpha` | `number`                   | Composite opacity   |
 
 ### FallbackScenario
 
 | Scenario | Master | OffscreenCanvas | WebGL2 | Standard Slaves | Text Slaves |
-|----------|--------|-----------------|--------|-----------------|-------------|
-| A | main | Yes | Yes | workers | workers |
-| B | main | Yes | No | workers | virtual |
-| C | main | No | - | virtual | virtual |
-| D | worker | Yes | Yes | workers | workers |
-| E | worker | Yes | No | workers | virtual |
-| F | worker | No | - | virtual | virtual |
+| -------- | ------ | --------------- | ------ | --------------- | ----------- |
+| A        | main   | Yes             | Yes    | workers         | workers     |
+| B        | main   | Yes             | No     | workers         | virtual     |
+| C        | main   | No              | -      | virtual         | virtual     |
+| D        | worker | Yes             | Yes    | workers         | workers     |
+| E        | worker | Yes             | No     | workers         | virtual     |
+| F        | worker | No              | -      | virtual         | virtual     |
 
 ## Tests
 

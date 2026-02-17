@@ -160,21 +160,22 @@ Create browser capability detection for OffscreenCanvas and WebGL2.
 
 ---
 
-### [ ] Step: Dev App Foundation
+### [x] Step: Dev App Foundation
+<!-- chat-id: 1ef0904b-986d-4b92-aa5f-54cd097a6765 -->
 
 Create the vanilla HTML/CSS/TypeScript dev app for testing the renderer.
 
 **Tasks:**
-- [ ] Create `src/dev-app/index.html` - Basic HTML structure with canvas and file input
-- [ ] Create `src/dev-app/styles.css` - Minimal BEM-named styles
-- [ ] Create `src/dev-app/main.ts` - App entry point
+- [x] Create `src/dev-app/index.html` - Basic HTML structure with canvas and file input
+- [x] Create `src/dev-app/styles.css` - Minimal BEM-named styles
+- [x] Create `src/dev-app/main.ts` - App entry point
   - File input handler for JSON upload
   - Canvas display for rendered output
   - Render button and timing display
   - Console logging for debug output
   - Error display for failed renders
-- [ ] Configure Vite to serve dev-app as entry point
-- [ ] Add example JSON files to `src/dev-app/examples/` for testing
+- [x] Configure Vite to serve dev-app as entry point
+- [x] Example JSON files already in `public/` folder (served automatically by Vite)
 
 **Verification:**
 - `npm run dev` starts dev server
@@ -183,7 +184,7 @@ Create the vanilla HTML/CSS/TypeScript dev app for testing the renderer.
 
 **Reference Files:**
 - `requirements.md`: Dev App Requirements section
-- `old-src-ref/example1.json`, `example2.json`, `example3.json`: Test data (copy to examples folder)
+- `public/example1.json`, `example2.json`, `example3.json`: Test data (served from public folder)
 
 ---
 

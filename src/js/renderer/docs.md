@@ -17,16 +17,17 @@ The capability probe detects browser support for critical APIs:
 
 Based on these capabilities and the execution context (main thread vs worker), the probe determines one of six fallback scenarios:
 
-| Scenario | Master | OffscreenCanvas | WebGL2 | Std Slaves | Text Slaves | Composition |
-|----------|--------|-----------------|--------|------------|-------------|-------------|
-| A | main thread | Yes | Yes | workers | workers | Canvas |
-| B | main thread | Yes | No | workers | virtual | Canvas |
-| C | main thread | No | - | virtual | virtual | Canvas |
-| D | worker | Yes | Yes | workers | workers | OffscreenCanvas |
-| E | worker | Yes | No | workers | virtual | OffscreenCanvas |
-| F | worker | No | - | virtual | virtual | Software (ImageData) |
+| Scenario | Master      | OffscreenCanvas | WebGL2 | Std Slaves | Text Slaves | Composition          |
+| -------- | ----------- | --------------- | ------ | ---------- | ----------- | -------------------- |
+| A        | main thread | Yes             | Yes    | workers    | workers     | Canvas               |
+| B        | main thread | Yes             | No     | workers    | virtual     | Canvas               |
+| C        | main thread | No              | -      | virtual    | virtual     | Canvas               |
+| D        | worker      | Yes             | Yes    | workers    | workers     | OffscreenCanvas      |
+| E        | worker      | Yes             | No     | workers    | virtual     | OffscreenCanvas      |
+| F        | worker      | No              | -      | virtual    | virtual     | Software (ImageData) |
 
 **Key Points:**
+
 - Without OffscreenCanvas, all slaves run as "virtual" (on the main thread)
 - Without WebGL2, text slaves cannot use shader effects and fall back to virtual
 - In worker context without OffscreenCanvas, software composition is used
@@ -122,6 +123,7 @@ Unit tests in `capability-probe.test.ts` cover:
 5. **Integration**: `probeCapabilities()` and `probeCapabilitiesForContext()`
 
 Edge cases:
+
 - Safari-like environments where OffscreenCanvas exists but throws
 - Environments with OffscreenCanvas but no WebGL2
 - Worker environments without OffscreenCanvas (scenario F)

@@ -6,9 +6,7 @@
 /**
  * Type representing a 2D rendering context from either a regular canvas or offscreen canvas.
  */
-export type Canvas2DContext =
-  | CanvasRenderingContext2D
-  | OffscreenCanvasRenderingContext2D;
+export type Canvas2DContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
 /**
  * Type representing either a regular canvas or offscreen canvas.
@@ -32,11 +30,7 @@ export function isOffscreenCanvasSupported(): boolean {
  * @param preferOffscreen - Whether to prefer OffscreenCanvas when available (default: true)
  * @returns A canvas element
  */
-export function createCanvas(
-  width: number,
-  height: number,
-  preferOffscreen = true
-): AnyCanvas {
+export function createCanvas(width: number, height: number, preferOffscreen = true): AnyCanvas {
   if (preferOffscreen && isOffscreenCanvasSupported()) {
     return new OffscreenCanvas(width, height);
   }
@@ -195,7 +189,7 @@ export function resizeCanvas(
   newHeight: number,
   preserveContent = true
 ): AnyCanvas {
-  if (preserveContent && (canvas.width > 0) && (canvas.height > 0)) {
+  if (preserveContent && canvas.width > 0 && canvas.height > 0) {
     // Clone the current content
     const clone = cloneCanvas(canvas);
 
@@ -253,7 +247,12 @@ export function drawImageFit(
     return;
   }
 
-  if (typeof imgWidth !== 'number' || typeof imgHeight !== 'number' || imgWidth <= 0 || imgHeight <= 0) {
+  if (
+    typeof imgWidth !== 'number' ||
+    typeof imgHeight !== 'number' ||
+    imgWidth <= 0 ||
+    imgHeight <= 0
+  ) {
     return;
   }
 
@@ -269,8 +268,10 @@ export function drawImageFit(
     const aspectRatio = imgWidth / imgHeight;
     const targetAspect = maxWidth / maxHeight;
 
-    if ((fit === 'contain' && aspectRatio > targetAspect) ||
-        (fit === 'cover' && aspectRatio < targetAspect)) {
+    if (
+      (fit === 'contain' && aspectRatio > targetAspect) ||
+      (fit === 'cover' && aspectRatio < targetAspect)
+    ) {
       // Width-constrained
       drawWidth = maxWidth;
       drawHeight = maxWidth / aspectRatio;
@@ -295,14 +296,7 @@ export function drawImageFit(
  * @param matrix - The DOMMatrix to apply
  */
 export function applyMatrix(ctx: Canvas2DContext, matrix: DOMMatrix): void {
-  ctx.setTransform(
-    matrix.a,
-    matrix.b,
-    matrix.c,
-    matrix.d,
-    matrix.e,
-    matrix.f
-  );
+  ctx.setTransform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
 }
 
 /**
@@ -346,9 +340,7 @@ export function isWebGL2Supported(): boolean {
  * @param imageData - The ImageData to convert
  * @returns Promise resolving to an ImageBitmap
  */
-export async function imageDataToImageBitmap(
-  imageData: ImageData
-): Promise<ImageBitmap> {
+export async function imageDataToImageBitmap(imageData: ImageData): Promise<ImageBitmap> {
   return createImageBitmap(imageData);
 }
 
@@ -369,10 +361,7 @@ export async function canvasToImageBitmap(canvas: AnyCanvas): Promise<ImageBitma
  * @param ctx - Target context
  * @param source - Source image or canvas
  */
-export function drawCover(
-  ctx: Canvas2DContext,
-  source: CanvasImageSource
-): void {
+export function drawCover(ctx: Canvas2DContext, source: CanvasImageSource): void {
   const canvas = ctx.canvas;
   drawImageFit(ctx, source, 0, 0, canvas.width, canvas.height, 'cover');
 }
@@ -384,10 +373,7 @@ export function drawCover(
  * @param ctx - Target context
  * @param source - Source image or canvas
  */
-export function drawContain(
-  ctx: Canvas2DContext,
-  source: CanvasImageSource
-): void {
+export function drawContain(ctx: Canvas2DContext, source: CanvasImageSource): void {
   const canvas = ctx.canvas;
   drawImageFit(ctx, source, 0, 0, canvas.width, canvas.height, 'contain');
 }

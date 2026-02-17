@@ -166,12 +166,7 @@ export function brightness(r: number, g: number, b: number): number {
  * @param threshold - Brightness threshold (default: 127.5)
  * @returns true if the color is dark, false otherwise
  */
-export function isDarkColor(
-  r: number,
-  g: number,
-  b: number,
-  threshold = 127.5
-): boolean {
+export function isDarkColor(r: number, g: number, b: number, threshold = 127.5): boolean {
   return brightness(r, g, b) < threshold;
 }
 
@@ -200,10 +195,7 @@ export function multiplyColor(base: RGBColor, multiply: RGBColor): RGBColor {
  * @param multiplyColor - Color to multiply with [R, G, B] with values 0-255
  * @returns Result color [R, G, B] with values 0-255
  */
-export function highlightSaturate(
-  colorArray: RGBColor,
-  multiplyColorArray: RGBColor
-): RGBColor {
+export function highlightSaturate(colorArray: RGBColor, multiplyColorArray: RGBColor): RGBColor {
   // Double the color values
   let newRed = colorArray[0] << 1;
   let newGreen = colorArray[1] << 1;

@@ -86,13 +86,7 @@ throw new CapabilityError('WebGL2', 'Effects require WebGL2 support');
 ### Handling Errors with Type Guards
 
 ```typescript
-import {
-  isAppError,
-  isValidationError,
-  isRenderError,
-  isAbortError,
-  wrapError,
-} from '@/js/errors';
+import { isAppError, isValidationError, isRenderError, isAbortError, wrapError } from '@/js/errors';
 
 try {
   await render(layers);
@@ -126,16 +120,11 @@ try {
 All errors support a context object for additional metadata:
 
 ```typescript
-throw new RenderError(
-  'Failed to apply effect',
-  'effects',
-  'layer-123',
-  {
-    effect: 'embroidery',
-    shaderProgram: 'fuzz',
-    glError: 'INVALID_OPERATION',
-  }
-);
+throw new RenderError('Failed to apply effect', 'effects', 'layer-123', {
+  effect: 'embroidery',
+  shaderProgram: 'fuzz',
+  glError: 'INVALID_OPERATION',
+});
 ```
 
 ### Error Serialization
@@ -186,16 +175,16 @@ function handleError(error: unknown): void {
 
 ## Error Classes Reference
 
-| Class | Code | Key Fields |
-|-------|------|------------|
-| `AppError` | `APP_ERROR` | `code`, `context`, `cause`, `timestamp` |
-| `ValidationError` | `VALIDATION_ERROR` | `field` |
-| `NotFoundError` | `NOT_FOUND` | `resourceType`, `resourceId` |
-| `RenderError` | `RENDER_ERROR` | `phase`, `layerId` |
-| `AssetLoadError` | `ASSET_LOAD_ERROR` | `url`, `assetType` |
-| `WorkerError` | `WORKER_ERROR` | `workerId` |
-| `AbortError` | `ABORT_ERROR` | - |
-| `CapabilityError` | `CAPABILITY_ERROR` | `capability` |
+| Class             | Code               | Key Fields                              |
+| ----------------- | ------------------ | --------------------------------------- |
+| `AppError`        | `APP_ERROR`        | `code`, `context`, `cause`, `timestamp` |
+| `ValidationError` | `VALIDATION_ERROR` | `field`                                 |
+| `NotFoundError`   | `NOT_FOUND`        | `resourceType`, `resourceId`            |
+| `RenderError`     | `RENDER_ERROR`     | `phase`, `layerId`                      |
+| `AssetLoadError`  | `ASSET_LOAD_ERROR` | `url`, `assetType`                      |
+| `WorkerError`     | `WORKER_ERROR`     | `workerId`                              |
+| `AbortError`      | `ABORT_ERROR`      | -                                       |
+| `CapabilityError` | `CAPABILITY_ERROR` | `capability`                            |
 
 ## Tests
 
@@ -214,6 +203,7 @@ npm run test:unit -- src/js/errors/index.test.ts
 ```
 
 Test coverage:
+
 - Error class instantiation with all parameter combinations
 - Field preservation (message, code, context, cause)
 - Type guard accuracy for all error types
