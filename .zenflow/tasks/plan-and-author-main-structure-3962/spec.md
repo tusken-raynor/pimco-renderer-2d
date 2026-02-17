@@ -23,7 +23,8 @@
     "playwright": "^1.x"
   },
   "dependencies": {
-    "gl-matrix": "^3.x"
+    "gl-matrix": "^3.x",
+    "webgl-postprocessor": "github:choc-sproc/webgl-postprocessor"
   }
 }
 ```
@@ -109,20 +110,12 @@ src/
 │   ├── text-render-slave/
 │   │   ├── index.ts              # Text render slave logic
 │   │   ├── text-rasterizer.ts
-│   │   ├── mesh-projector.ts
 │   │   ├── index.test.ts
 │   │   └── docs.md
 │   ├── asset-manager/
 │   │   ├── index.ts              # Asset loading/caching/distribution
 │   │   ├── image-loader.ts
 │   │   ├── font-loader.ts
-│   │   ├── mesh-loader.ts
-│   │   ├── index.test.ts
-│   │   └── docs.md
-│   ├── webgl-post-processor/
-│   │   ├── index.ts              # WebGL shader pipeline
-│   │   ├── shader-programs.ts
-│   │   ├── effect-chains.ts      # Per-effect shader sequences
 │   │   ├── index.test.ts
 │   │   └── docs.md
 │   ├── effects/
@@ -156,13 +149,6 @@ src/
 │   ├── render-slave.worker.ts
 │   ├── text-render-slave.worker.ts
 │   └── asset-manager.worker.ts
-├── shaders/
-│   ├── alpha-erode.frag.glsl
-│   ├── emboss.frag.glsl
-│   ├── fuzz.frag.glsl
-│   ├── normal-map.frag.glsl
-│   ├── color-scale.frag.glsl
-│   └── projection.vert.glsl
 ├── virtual-slaves.ts             # Main-thread fallback bundle
 ├── dev-app/
 │   ├── index.html
@@ -418,60 +404,39 @@ export class RenderMaster {
 - Unit tests for pipeline steps
 - Integration test: JSON → rendered output
 
-### Phase 3: Text Render Slave (Basic)
+### Phase 3: Text Render Slave with Effects
 
-**Goal**: Implement text layer rendering without effects.
+**Goal**: Implement full text layer rendering with all effects (excluding 3D projection).
+
+The `webgl-postprocessor` external dependency (github:choc-sproc/webgl-postprocessor) provides all necessary shader-based effects. This phase implements the complete text rendering pipeline.
 
 **Deliverables**:
 1. Text Render Slave worker entry point
 2. Text rasterization with font metrics
-3. 2D transform application
+3. 2D transform application (translation, rotation, scale)
 4. Post-mask application
-5. No-effect path (tile texture + color multiply + mask)
-6. Font loading in Asset Manager
-7. RenderMaster text layer routing
+5. Font loading in Asset Manager
+6. RenderMaster text layer routing
+7. All effect implementations using webgl-postprocessor:
+   - No-effect (tile texture + color multiply + mask)
+   - Shadow effect
+   - Engraving effect
+   - Hotstamp effect
+   - Embroidery effect
+   - Metal effect
+   - Foil effect
+   - Painted effect
+   - Normal effect (normal map generation)
 
 **Verification**:
-- Renders text layers without effects
+- Renders text layers with all effects
 - Font loading works
-- Unit tests for text rasterization
-
-### Phase 4: Effect Shaders
-
-**Goal**: Implement all shader-based text effects.
-
-**Deliverables** (in order of complexity):
-1. WebGLPostProcessor integration
-2. Shadow effect
-3. Engraving effect
-4. Hotstamp effect
-5. Embroidery effect (with fuzz shader)
-6. Metal effect
-7. Foil effect
-8. Painted effect
-9. Normal effect (normal map generation)
-
-**Verification**:
 - Each effect matches legacy renderer output
-- Unit tests for shader uniforms
+- Unit tests for text rasterization
+- Unit tests for effect parameter handling
 - Visual comparison tests
 
-### Phase 5: 3D Mesh Projection
-
-**Goal**: Implement 3D mesh projection for text layers.
-
-**Deliverables**:
-1. Mesh loading in Asset Manager (.obj parser)
-2. WebGL mesh projection pipeline
-3. UV mapping with auto-mode support
-4. Perspective and orthographic projection
-
-**Verification**:
-- Projected text matches legacy output
-- Unit tests for mesh parsing
-- Integration test with projection layers
-
-### Phase 6: Fallback & Polish
+### Phase 4: Fallback & Polish
 
 **Goal**: Implement all fallback scenarios and finalize.
 
@@ -490,6 +455,23 @@ export class RenderMaster {
 - Performance improvement over single-threaded
 - E2E tests pass
 
+### Phase 5: 3D Mesh Projection (Deferred)
+
+**Goal**: Implement 3D mesh projection for text layers.
+
+**Note**: This phase is deferred to a future task and not part of the current scope.
+
+**Deliverables** (future):
+1. Mesh loading in Asset Manager (.obj parser)
+2. WebGL mesh projection pipeline
+3. UV mapping with auto-mode support
+4. Perspective and orthographic projection
+
+**Verification** (future):
+- Projected text matches legacy output
+- Unit tests for mesh parsing
+- Integration test with projection layers
+
 ---
 
 ## Verification Approach
@@ -506,8 +488,7 @@ Each module folder contains `index.test.ts`:
 - **intra-layer-pipeline**: Each pipeline step
 - **batch-segmenter**: Segmentation by composite mode
 - **text-rasterizer**: Font metrics, text measurement
-- **webgl-post-processor**: Shader uniform setup
-- **effects**: Each effect's parameter handling
+- **effects**: Each effect's parameter handling, webgl-postprocessor integration
 
 ### Integration Tests
 
@@ -571,16 +552,19 @@ For effect verification:
    - Text height threshold (43.5px) controls emboss application
    - Color brightness affects shadow intensity
 
-3. **WebGL Post-Processor Usage** (`effects/index.ts`):
+3. **WebGL Post-Processor** (external: `github:choc-sproc/webgl-postprocessor`):
+   - External dependency provides all shader-based effects
    - Programs are created once and reused
    - `sleep()`/`wake()` pattern for context management
    - Texture uniforms must be unset after use
+   - Effects module wraps webgl-postprocessor with layer-specific configuration
 
-4. **3D Projection** (`renderer/index.ts:1506+`):
+4. **3D Projection** (deferred to future task):
    - Uses gl-matrix for matrix operations
    - Mesh data stored as interleaved Float32Array
    - Program caching by identifier
    - UV auto-mode for dynamic texture mapping
+   - Not included in current scope
 
 ### Combinable Composite Modes
 
