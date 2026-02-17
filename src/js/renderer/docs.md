@@ -127,3 +127,138 @@ Edge cases:
 - Safari-like environments where OffscreenCanvas exists but throws
 - Environments with OffscreenCanvas but no WebGL2
 - Worker environments without OffscreenCanvas (scenario F)
+
+---
+
+### Layer Classification (`layer-classifier.ts`)
+
+The layer classifier determines how each layer should be rendered based on its `mask` field type:
+
+| Mask Type                        | Layer Type | Renderer            | Description                              |
+| -------------------------------- | ---------- | ------------------- | ---------------------------------------- |
+| String (URL)                     | Standard   | Standard Slave      | Uses image mask for compositing          |
+| Object (PimcoMaskSubstitutionCompiled) | Text       | Text Render Slave   | Uses effect pipeline with text rasterization |
+
+**Classification Logic:**
+
+```
+1. Examine the `mask` field of each ProductImageComponent
+2. If typeof mask === 'string' → Standard layer
+3. If typeof mask === 'object' → Text layer
+4. For text layers, extract effect type from mask.effect
+5. Return classification with original indices preserved
+```
+
+**Key Points:**
+
+- Classification is deterministic based solely on the `mask` field type
+- Original layer order and indices are preserved for correct composition
+- Text layers may or may not have an effect specified (no effect = basic text rendering)
+- Empty string masks are valid standard layers
+
+### Interface
+
+### `layer-classifier.ts`
+
+```typescript
+// Classify a single layer
+classifyLayer(layer: ProductImageComponent, index: number): LayerClassification
+
+// Classify all layers with grouping
+classifyLayers(layers: ProductImageComponent[]): ClassificationResult
+
+// Type checks
+isStandardLayer(layer: ProductImageComponent): boolean
+isTextLayer(layer: ProductImageComponent): boolean
+
+// Property accessors
+getLayerEffect(layer: ProductImageComponent): PimcoMaskSubstitutionEffect | undefined
+getMaskUrl(layer: ProductImageComponent): string | undefined
+getMaskData(layer: ProductImageComponent): PimcoMaskSubstitutionCompiled | undefined
+
+// Filtering utilities
+filterStandardLayers(layers: ProductImageComponent[]): (ProductImageComponent & { mask: string })[]
+filterTextLayers(layers: ProductImageComponent[]): (ProductImageComponent & { mask: PimcoMaskSubstitutionCompiled })[]
+```
+
+### Types
+
+```typescript
+type LayerType = 'standard' | 'text';
+
+interface LayerClassification {
+  type: LayerType;
+  index: number;                              // Original index in layer array
+  layer: ProductImageComponent;               // Reference to original layer
+  effect?: PimcoMaskSubstitutionEffect;      // For text layers only
+  maskData?: PimcoMaskSubstitutionCompiled;  // For text layers only
+  maskUrl?: string;                           // For standard layers only
+}
+
+interface ClassificationResult {
+  all: LayerClassification[];      // All classifications in order
+  standard: LayerClassification[]; // Standard layers only
+  text: LayerClassification[];     // Text layers only
+  total: number;
+  standardCount: number;
+  textCount: number;
+}
+```
+
+### Example Usage
+
+```typescript
+import { classifyLayers, isTextLayer, getLayerEffect } from './layer-classifier';
+
+const layers = [
+  { id: 'bg', mask: '/masks/bg.png', ... },                    // Standard
+  { id: 'logo', mask: { content: 'ACME', effect: 'embroidery' }, ... },  // Text
+  { id: 'overlay', mask: '/masks/overlay.png', ... },          // Standard
+];
+
+const result = classifyLayers(layers);
+
+console.log(result.standardCount);  // 2
+console.log(result.textCount);      // 1
+console.log(result.text[0].effect); // 'embroidery'
+console.log(result.text[0].index);  // 1 (original position)
+
+// Quick type checks
+if (isTextLayer(layers[1])) {
+  const effect = getLayerEffect(layers[1]);
+  console.log(effect);  // 'embroidery'
+}
+```
+
+## Tests
+
+Unit tests in `layer-classifier.test.ts` cover:
+
+1. **Single layer classification**:
+   - Standard layers with string masks
+   - Text layers with object masks
+   - Text layers with all effect types
+   - Edge cases (empty masks, no effect)
+
+2. **Batch classification**:
+   - Empty arrays
+   - All standard layers
+   - All text layers
+   - Mixed layer types
+   - Index preservation
+
+3. **Type check functions**:
+   - `isStandardLayer()` and `isTextLayer()` correctness
+
+4. **Property accessors**:
+   - `getLayerEffect()`, `getMaskUrl()`, `getMaskData()`
+   - Undefined returns for wrong layer types
+
+5. **Filter functions**:
+   - `filterStandardLayers()` and `filterTextLayers()`
+   - Correct type narrowing
+
+6. **Edge cases**:
+   - Complex mask data with all optional fields
+   - Large numbers of layers (100+)
+   - Layers with all optional ProductImageComponent fields

@@ -217,18 +217,19 @@ Implement the Asset Manager worker for centralized asset loading.
 
 ## Phase 2: Standard Render Slave
 
-### [ ] Step: Layer Classification Module
+### [x] Step: Layer Classification Module
+<!-- chat-id: 045f319a-856d-47f7-b8f6-ae612fb65c18 -->
 
 Implement layer classification logic (standard vs text layers).
 
 **Tasks:**
-- [ ] Create `src/js/renderer/layer-classifier.ts`
+- [x] Create `src/js/renderer/layer-classifier.ts`
   - Classify layers based on `mask` field type
   - String URL → standard layer
   - Object (PimcoMaskSubstitutionCompiled) → text layer
   - Return typed classification result
-- [ ] Create unit tests for classification logic
-- [ ] Update renderer docs.md
+- [x] Create unit tests for classification logic
+- [x] Update renderer docs.md
 
 **Verification:**
 - All classification cases tested
