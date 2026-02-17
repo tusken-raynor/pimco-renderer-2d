@@ -55,10 +55,11 @@ The Asset Manager provides centralized asset loading, caching, and distribution 
 
 1. **Register Slaves**: Master registers slave MessagePorts with Asset Manager
 2. **Distribute Request**: Master sends `distribute` message with deliveries
-3. **Clone & Transfer**:
+3. **Font Deduplication**: For fonts, check if already sent to this slave (send once per slave)
+4. **Clone & Transfer**:
    - ImageBitmap: Clone via OffscreenCanvas, transfer to slave
    - ArrayBuffer: Slice to copy, transfer to slave
-4. **Response**: Return `distribute-complete` when all deliveries done
+5. **Response**: Return `distribute-complete` when all deliveries done
 
 ### Cache Management
 
@@ -159,6 +160,54 @@ function loadImages(
 function cloneImageBitmap(bitmap: ImageBitmap): Promise<ImageBitmap>;
 ```
 
+### Font Loader Utilities
+
+```typescript
+// Load single font as ArrayBuffer
+function loadFont(url: string, options?: FontLoadOptions): Promise<FontLoadResult>;
+
+// Load multiple fonts in parallel
+function loadFonts(
+  urls: string[],
+  options?: FontLoadOptions
+): Promise<{
+  fonts: Map<string, FontLoadResult>;
+  failed: string[];
+}>;
+
+// Check if URL appears to be a font file
+function isFontUrl(url: string): boolean;
+
+// Get list of supported font MIME types
+function getSupportedFontMimeTypes(): string[];
+```
+
+### Font Distribution Tracker
+
+The `FontDistributionTracker` class tracks which fonts have been sent to which text slaves, ensuring each font is only transferred once per slave.
+
+```typescript
+class FontDistributionTracker {
+  // Check if font was already sent to slave
+  hasSent(slaveId: number, fontId: number): boolean;
+
+  // Mark font as sent to slave
+  markSent(slaveId: number, fontId: number): void;
+
+  // Get count of fonts sent to a slave
+  getSentCount(slaveId: number): number;
+
+  // Get all font IDs sent to a slave
+  getSentFontIds(slaveId: number): number[];
+
+  // Remove tracking for a terminated slave
+  removeSlave(slaveId: number): void;
+
+  // Clear all tracking data
+  clear(): void;
+}
+```
+
 ## Usage Example
 
 ```typescript
@@ -189,14 +238,27 @@ Unit tests cover:
 - Parallel loading with failure reporting
 - ImageBitmap cloning
 
+### Font Loader (`font-loader.ts`)
+
+- Successful font loading as ArrayBuffer
+- HTTP error handling (404, etc.)
+- Network error handling
+- Abort signal cancellation
+- Parallel font loading with failure reporting
+- Font distribution tracking (send once per slave)
+- Font URL detection utility
+- Supported MIME types utility
+
 ### AssetManager (`index.ts`)
 
 - Fetch and cache images
+- Fetch and cache fonts (with once-per-slave distribution)
 - Report failed asset loads
 - Avoid refetching cached assets
 - Reuse cached URL with different ID
 - Register slave ports
 - Distribute assets to slaves
+- Font distribution deduplication
 - Handle missing slaves gracefully
 - Handle missing assets gracefully
 - Enforce cache size limit
@@ -222,6 +284,7 @@ The module uses the standardized error classes:
 3. **ImageBitmap**: GPU-optimized format for fast drawing
 4. **Transferables**: Assets are transferred (zero-copy) to slaves
 5. **Clone on Distribute**: Original stays cached, clones sent to slaves
+6. **Font Deduplication**: Fonts are sent only once per text slave, reducing transfer overhead
 
 ## Browser Compatibility
 

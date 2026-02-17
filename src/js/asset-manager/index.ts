@@ -23,6 +23,7 @@ import {
   isRegisterSlaveMessage,
 } from '../types';
 import { loadImage, cloneImageBitmap } from './image-loader';
+import { loadFont, FontDistributionTracker } from './font-loader';
 
 /**
  * Type guard to check if data is an ImageBitmap.
@@ -111,6 +112,9 @@ export class AssetManager {
 
   /** Abort controller for cancelling pending operations */
   private abortController: AbortController | null = null;
+
+  /** Tracks which fonts have been sent to which text slaves */
+  private fontDistributionTracker = new FontDistributionTracker();
 
   constructor(options: AssetManagerOptions = {}) {
     this.maxCacheSize = options.maxCacheSize ?? 100;
@@ -210,9 +214,11 @@ export class AssetManager {
       case 'image':
         return loadImage(asset.url, signal ? { signal } : {});
 
-      case 'font':
-        // Font loading - fetch as ArrayBuffer
-        return this.loadBinaryAsset(asset.url, signal);
+      case 'font': {
+        // Font loading - fetch as ArrayBuffer using specialized font loader
+        const result = await loadFont(asset.url, signal ? { signal } : {});
+        return result.data;
+      }
 
       case 'mesh':
         // Mesh loading - fetch as ArrayBuffer
@@ -325,6 +331,14 @@ export class AssetManager {
         continue;
       }
 
+      // For fonts, check if already sent to this slave (send once per slave)
+      if (cachedAsset.assetType === 'font') {
+        if (this.fontDistributionTracker.hasSent(delivery.slaveId, assetId)) {
+          // Font already sent to this slave, skip
+          continue;
+        }
+      }
+
       try {
         // Prepare asset data for transfer
         let transferableData: ImageBitmap | ArrayBuffer;
@@ -349,6 +363,11 @@ export class AssetManager {
         };
 
         slave.port.postMessage(assetDataMsg, transferables);
+
+        // Mark font as sent to this slave
+        if (cachedAsset.assetType === 'font') {
+          this.fontDistributionTracker.markSent(delivery.slaveId, assetId);
+        }
       } catch (error) {
         console.error(
           `Failed to deliver asset ${String(assetId)} to slave ${String(delivery.slaveId)}:`,
@@ -438,6 +457,9 @@ export class AssetManager {
 
     // Clear slave ports
     this.slaves.clear();
+
+    // Clear font distribution tracking
+    this.fontDistributionTracker.clear();
   }
 
   /**
@@ -474,3 +496,13 @@ export class AssetManager {
 
 // Re-export image loader utilities
 export { loadImage, loadImages, cloneImageBitmap } from './image-loader';
+
+// Re-export font loader utilities
+export {
+  loadFont,
+  loadFonts,
+  FontDistributionTracker,
+  getSupportedFontMimeTypes,
+  isFontUrl,
+} from './font-loader';
+export type { FontLoadOptions, FontLoadResult } from './font-loader';

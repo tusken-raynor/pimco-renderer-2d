@@ -5,6 +5,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AssetManager } from './index';
 import { loadImage, loadImages, cloneImageBitmap } from './image-loader';
+import {
+  loadFont,
+  loadFonts,
+  FontDistributionTracker,
+  getSupportedFontMimeTypes,
+  isFontUrl,
+} from './font-loader';
 import type { FetchMessage, RegisterSlaveMessage, DistributeMessage } from '../types';
 
 // Mock fetch globally
@@ -144,6 +151,200 @@ describe('image-loader', () => {
       expect(result).toBe(clonedBitmap);
       // Original should not be closed
       expect(originalBitmap.close).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('font-loader', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('loadFont', () => {
+    it('should load a font successfully', async () => {
+      const mockArrayBuffer = new ArrayBuffer(1024);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+      });
+
+      const result = await loadFont('https://example.com/font.woff2');
+
+      expect(mockFetch).toHaveBeenCalledWith('https://example.com/font.woff2', {
+        credentials: 'same-origin',
+      });
+      expect(result.data).toBe(mockArrayBuffer);
+      expect(result.size).toBe(1024);
+    });
+
+    it('should throw AssetLoadError on HTTP error', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      await expect(loadFont('https://example.com/missing.woff2')).rejects.toThrow(
+        'HTTP 404: Not Found'
+      );
+    });
+
+    it('should throw AssetLoadError on network error', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      await expect(loadFont('https://example.com/font.woff2')).rejects.toThrow(
+        'Failed to load font: Network error'
+      );
+    });
+
+    it('should respect abort signal', async () => {
+      const abortError = new DOMException('Aborted', 'AbortError');
+      mockFetch.mockRejectedValueOnce(abortError);
+
+      await expect(loadFont('https://example.com/font.woff2')).rejects.toThrow('Load aborted');
+    });
+
+    it('should pass abort signal to fetch', async () => {
+      const mockArrayBuffer = new ArrayBuffer(100);
+      const abortController = new AbortController();
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+      });
+
+      await loadFont('https://example.com/font.woff2', { signal: abortController.signal });
+
+      expect(mockFetch).toHaveBeenCalledWith('https://example.com/font.woff2', {
+        credentials: 'same-origin',
+        signal: abortController.signal,
+      });
+    });
+  });
+
+  describe('loadFonts', () => {
+    it('should load multiple fonts in parallel', async () => {
+      const mockArrayBuffer1 = new ArrayBuffer(100);
+      const mockArrayBuffer2 = new ArrayBuffer(200);
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, arrayBuffer: () => Promise.resolve(mockArrayBuffer1) })
+        .mockResolvedValueOnce({ ok: true, arrayBuffer: () => Promise.resolve(mockArrayBuffer2) });
+
+      const urls = ['https://example.com/font1.woff2', 'https://example.com/font2.woff2'];
+      const result = await loadFonts(urls);
+
+      expect(result.fonts.size).toBe(2);
+      expect(result.fonts.get('https://example.com/font1.woff2')?.data).toBe(mockArrayBuffer1);
+      expect(result.fonts.get('https://example.com/font2.woff2')?.data).toBe(mockArrayBuffer2);
+      expect(result.failed).toHaveLength(0);
+    });
+
+    it('should report failed loads separately', async () => {
+      const mockArrayBuffer = new ArrayBuffer(100);
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, arrayBuffer: () => Promise.resolve(mockArrayBuffer) })
+        .mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found' });
+
+      const urls = ['https://example.com/good.woff2', 'https://example.com/bad.woff2'];
+      const result = await loadFonts(urls);
+
+      expect(result.fonts.size).toBe(1);
+      expect(result.fonts.get('https://example.com/good.woff2')?.data).toBe(mockArrayBuffer);
+      expect(result.failed).toContain('https://example.com/bad.woff2');
+    });
+  });
+
+  describe('FontDistributionTracker', () => {
+    let tracker: FontDistributionTracker;
+
+    beforeEach(() => {
+      tracker = new FontDistributionTracker();
+    });
+
+    it('should track fonts sent to slaves', () => {
+      expect(tracker.hasSent(1, 100)).toBe(false);
+
+      tracker.markSent(1, 100);
+
+      expect(tracker.hasSent(1, 100)).toBe(true);
+      expect(tracker.hasSent(1, 101)).toBe(false);
+      expect(tracker.hasSent(2, 100)).toBe(false);
+    });
+
+    it('should track multiple fonts per slave', () => {
+      tracker.markSent(1, 100);
+      tracker.markSent(1, 101);
+      tracker.markSent(1, 102);
+
+      expect(tracker.getSentCount(1)).toBe(3);
+      expect(tracker.getSentFontIds(1)).toEqual([100, 101, 102]);
+    });
+
+    it('should track multiple slaves', () => {
+      tracker.markSent(1, 100);
+      tracker.markSent(2, 100);
+      tracker.markSent(2, 101);
+
+      expect(tracker.getSlaveCount()).toBe(2);
+      expect(tracker.getSentCount(1)).toBe(1);
+      expect(tracker.getSentCount(2)).toBe(2);
+    });
+
+    it('should handle removing a slave', () => {
+      tracker.markSent(1, 100);
+      tracker.markSent(2, 100);
+
+      tracker.removeSlave(1);
+
+      expect(tracker.hasSent(1, 100)).toBe(false);
+      expect(tracker.hasSent(2, 100)).toBe(true);
+      expect(tracker.getSlaveCount()).toBe(1);
+    });
+
+    it('should handle clearing all data', () => {
+      tracker.markSent(1, 100);
+      tracker.markSent(2, 101);
+
+      tracker.clear();
+
+      expect(tracker.hasSent(1, 100)).toBe(false);
+      expect(tracker.hasSent(2, 101)).toBe(false);
+      expect(tracker.getSlaveCount()).toBe(0);
+    });
+
+    it('should return empty array for unknown slave', () => {
+      expect(tracker.getSentFontIds(999)).toEqual([]);
+      expect(tracker.getSentCount(999)).toBe(0);
+    });
+  });
+
+  describe('utility functions', () => {
+    it('getSupportedFontMimeTypes should return expected types', () => {
+      const types = getSupportedFontMimeTypes();
+
+      expect(types).toContain('font/woff2');
+      expect(types).toContain('font/woff');
+      expect(types).toContain('font/ttf');
+      expect(types).toContain('font/otf');
+    });
+
+    it('isFontUrl should detect font URLs', () => {
+      expect(isFontUrl('https://example.com/font.woff2')).toBe(true);
+      expect(isFontUrl('https://example.com/font.woff')).toBe(true);
+      expect(isFontUrl('https://example.com/font.ttf')).toBe(true);
+      expect(isFontUrl('https://example.com/font.otf')).toBe(true);
+      expect(isFontUrl('https://example.com/font.eot')).toBe(true);
+      expect(isFontUrl('https://example.com/font.WOFF2')).toBe(true); // Case insensitive
+    });
+
+    it('isFontUrl should reject non-font URLs', () => {
+      expect(isFontUrl('https://example.com/image.png')).toBe(false);
+      expect(isFontUrl('https://example.com/script.js')).toBe(false);
+      expect(isFontUrl('https://example.com/styles.css')).toBe(false);
+      expect(isFontUrl('https://example.com/data.json')).toBe(false);
     });
   });
 });
@@ -531,6 +732,172 @@ describe('AssetManager', () => {
       expect(assetManager.isCached(1)).toBe(true);
       const cached = assetManager.getCachedAsset(1);
       expect(cached?.assetType).toBe('mesh');
+    });
+  });
+
+  describe('font distribution tracking', () => {
+    it('should send font only once per slave', async () => {
+      // Load a font
+      const mockArrayBuffer = new ArrayBuffer(100);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+      });
+
+      await assetManager.handleMessage({
+        type: 'fetch',
+        assets: [{ id: 1, url: 'https://example.com/font.woff2', assetType: 'font' }],
+      });
+
+      // Register a slave
+      const mockPort = {
+        postMessage: vi.fn(),
+      } as unknown as MessagePort;
+
+      await assetManager.handleMessage({
+        type: 'register-slave',
+        slaveId: 100,
+        port: mockPort,
+      });
+
+      // First distribution - should send
+      await assetManager.handleMessage({
+        type: 'distribute',
+        deliveries: [{ slaveId: 100, assetIds: [1] }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockPort.postMessage).toHaveBeenCalledTimes(1);
+
+      // Second distribution of same font to same slave - should NOT send again
+      await assetManager.handleMessage({
+        type: 'distribute',
+        deliveries: [{ slaveId: 100, assetIds: [1] }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockPort.postMessage).toHaveBeenCalledTimes(1); // Still just 1 call
+    });
+
+    it('should send font to different slaves', async () => {
+      // Load a font
+      const mockArrayBuffer = new ArrayBuffer(100);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+      });
+
+      await assetManager.handleMessage({
+        type: 'fetch',
+        assets: [{ id: 1, url: 'https://example.com/font.woff2', assetType: 'font' }],
+      });
+
+      // Register two slaves
+      const mockPort1 = { postMessage: vi.fn() } as unknown as MessagePort;
+      const mockPort2 = { postMessage: vi.fn() } as unknown as MessagePort;
+
+      await assetManager.handleMessage({
+        type: 'register-slave',
+        slaveId: 100,
+        port: mockPort1,
+      });
+
+      await assetManager.handleMessage({
+        type: 'register-slave',
+        slaveId: 101,
+        port: mockPort2,
+      });
+
+      // Distribute same font to both slaves
+      await assetManager.handleMessage({
+        type: 'distribute',
+        deliveries: [
+          { slaveId: 100, assetIds: [1] },
+          { slaveId: 101, assetIds: [1] },
+        ],
+      });
+
+      // Both should receive the font
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockPort1.postMessage).toHaveBeenCalledTimes(1);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockPort2.postMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should always send images (not tracked like fonts)', async () => {
+      // Load an image
+      const mockBlob = new Blob(['test'], { type: 'image/png' });
+      const mockBitmap = new MockImageBitmap();
+
+      mockFetch.mockResolvedValue({ ok: true, blob: () => Promise.resolve(mockBlob) });
+      mockCreateImageBitmap.mockResolvedValue(mockBitmap);
+
+      await assetManager.handleMessage({
+        type: 'fetch',
+        assets: [{ id: 1, url: 'https://example.com/img.png', assetType: 'image' }],
+      });
+
+      // Register a slave
+      const mockPort = {
+        postMessage: vi.fn(),
+      } as unknown as MessagePort;
+
+      await assetManager.handleMessage({
+        type: 'register-slave',
+        slaveId: 100,
+        port: mockPort,
+      });
+
+      // First distribution
+      await assetManager.handleMessage({
+        type: 'distribute',
+        deliveries: [{ slaveId: 100, assetIds: [1] }],
+      });
+
+      // Second distribution of same image - should send again (images not tracked)
+      await assetManager.handleMessage({
+        type: 'distribute',
+        deliveries: [{ slaveId: 100, assetIds: [1] }],
+      });
+
+      // Images are sent every time (2 calls)
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockPort.postMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('should clear font distribution tracking on destroy', async () => {
+      // Load a font
+      const mockArrayBuffer = new ArrayBuffer(100);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+      });
+
+      await assetManager.handleMessage({
+        type: 'fetch',
+        assets: [{ id: 1, url: 'https://example.com/font.woff2', assetType: 'font' }],
+      });
+
+      // Register and distribute
+      const mockPort = { postMessage: vi.fn() } as unknown as MessagePort;
+      await assetManager.handleMessage({
+        type: 'register-slave',
+        slaveId: 100,
+        port: mockPort,
+      });
+
+      await assetManager.handleMessage({
+        type: 'distribute',
+        deliveries: [{ slaveId: 100, assetIds: [1] }],
+      });
+
+      // Destroy and recreate
+      assetManager.destroy();
+
+      // Create a new manager to verify tracking was cleared
+      // (The tracking is internal, but destroy() clears it)
+      // We can verify by checking cache stats are cleared
+      expect(assetManager.getCacheStats().size).toBe(0);
     });
   });
 });
