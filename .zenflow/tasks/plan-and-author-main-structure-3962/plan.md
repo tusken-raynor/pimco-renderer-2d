@@ -112,18 +112,19 @@ Create the shared type definitions and error handling infrastructure.
 
 ---
 
-### [ ] Step: Utility Functions
+### [x] Step: Utility Functions
+<!-- chat-id: f91c36fb-8793-47e9-8e28-d2a8a9a4c1a6 -->
 
 Create shared utility functions for canvas operations and color manipulation.
 
 **Tasks:**
-- [ ] Create `src/js/utils/index.ts` - export barrel
-- [ ] Create `src/js/utils/color.ts` - Color parsing, manipulation, brightness calculation
+- [x] Create `src/js/utils/index.ts` - export barrel
+- [x] Create `src/js/utils/color.ts` - Color parsing, manipulation, brightness calculation
   - Reference legacy `effects/index.ts` for color patterns
-- [ ] Create `src/js/utils/canvas.ts` - Canvas context helpers, reset functions
+- [x] Create `src/js/utils/canvas.ts` - Canvas context helpers, reset functions
   - Reference legacy `canvas-workers.ts` for reset patterns
-- [ ] Create `src/js/utils/index.test.ts` - Unit tests for all utilities
-- [ ] Create `src/js/utils/docs.md` - Document utilities
+- [x] Create `src/js/utils/index.test.ts` - Unit tests for all utilities
+- [x] Create `src/js/utils/docs.md` - Document utilities
 
 **Verification:**
 - All utility functions have unit tests
