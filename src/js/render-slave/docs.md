@@ -4,9 +4,10 @@
 
 The Render Slave module provides the core rendering logic for **standard layers** in the multi-threaded 2D product image renderer. Standard layers are those where the `mask` field is a URL string (as opposed to text layers where `mask` is a `PimcoMaskSubstitutionCompiled` object).
 
-The module consists of two main components:
+The module consists of three main components:
 1. **Intra-Layer Pipeline** - The 5-step rendering process for a single layer
 2. **RenderSlave Class** - Asset management and batch rendering coordination
+3. **Batch Segmenter** - Groups consecutive combinable layers to reduce composition overhead
 
 ## How It Works
 
@@ -83,6 +84,43 @@ interface ImagePlacementDefinition {
 - `scale`: Scale by x/y factors
 - `translate`: Translation by x/y pixels or percentages
 - `skew`: Skew by x/y angles
+
+### Batch Segmentation
+
+The Batch Segmenter groups consecutive layers with combinable composite modes into single render segments. This reduces the number of composition operations needed by the master during final composition.
+
+```
+Layer Sequence:                          Resulting Segments:
+┌──────────────┐                         ┌──────────────────┐
+│ Layer 1      │ (source-over)     ─┐    │ Segment 1        │
+├──────────────┤                    ├───▶│ (3 layers merged)│
+│ Layer 2      │ (screen)          ─┤    └──────────────────┘
+├──────────────┤                    │
+│ Layer 3      │ (lighten)         ─┘    ┌──────────────────┐
+├──────────────┤                    ────▶│ Segment 2        │
+│ Layer 4      │ (multiply)              │ (standalone)     │
+├──────────────┤                         └──────────────────┘
+│ Layer 5      │ (source-over)     ────▶ ┌──────────────────┐
+└──────────────┘                         │ Segment 3        │
+                                         │ (standalone)     │
+                                         └──────────────────┘
+```
+
+**Combinable Modes:**
+These modes can be batched together because they are associative:
+- `source-over`: Standard alpha compositing
+- `screen`: Lightening blend
+- `lighten`: Take lighter of each channel
+- `lighter`: Add RGB values (also known as 'add')
+
+**Non-Combinable Modes:**
+All other modes require standalone segments to preserve correct visual output:
+- `multiply`, `overlay`, `darken`, `color-dodge`, `color-burn`
+- `hard-light`, `soft-light`, `difference`, `exclusion`
+- `source-in`, `source-out`, `source-atop`
+- `destination-over`, `destination-in`, `destination-out`, `destination-atop`
+- `copy`, `xor`
+- `hue`, `saturation`, `color`, `luminosity`
 
 ### RenderSlave Class
 
@@ -189,8 +227,17 @@ function step5ApplyMask(ctx: PipelineContext, assets: LayerAssets, placement: Re
 // Execute full pipeline
 function executeIntraLayerPipeline(ctx: PipelineContext, assets: LayerAssets, config: LayerConfig): AnyCanvas;
 
-// Convert results to segments
+// Convert results to segments (simple, no batching)
 function resultsToSegments(results: LayerResult[]): RenderSegment[];
+
+// Convert results to segments with batching optimization
+function batchSegmentResults(results: LayerResult[], width: number, height: number): Promise<RenderSegment[]>;
+
+// Check if a mode is combinable
+function isCombinableMode(mode: CanvasCompositeOperation): boolean;
+
+// Group layer results into segments
+function segmentLayerResults(results: LayerResult[]): PendingSegment[];
 ```
 
 ## Example Usage
@@ -274,6 +321,24 @@ const segments = resultsToSegments(results);
 slave.destroy();
 ```
 
+### Using Batch Segmentation
+
+```typescript
+import { RenderSlave } from './render-slave';
+import { batchSegmentResults } from './render-slave/batch-segmenter';
+
+// Create slave and render batch
+const slave = new RenderSlave();
+// ... register assets ...
+const results = await slave.renderBatch(layers, 1000, 800);
+
+// Convert to optimized segments (reduces segment count)
+const segments = await batchSegmentResults(results, 1000, 800);
+
+// segments.length <= results.length
+// Consecutive combinable layers are merged into single segments
+```
+
 ## Tests
 
 The module includes comprehensive unit tests:
@@ -295,6 +360,14 @@ The module includes comprehensive unit tests:
 - **resultsToSegments**: Conversion to render segments
 - **LayerDescriptor handling**: Required and optional fields
 
+### batch-segmenter.test.ts
+- **COMBINABLE_MODES**: Correct set of combinable modes
+- **isCombinableMode**: Mode classification
+- **segmentLayerResults**: Grouping logic for various sequences
+- **batchSegmentResults**: Full segmentation with composition
+- **Edge cases**: Empty input, zero alpha, large batches, alternating modes
+- **Optimization verification**: Segment count reduction
+
 ## Design Decisions
 
 1. **Reusable Pipeline Context**: The `PipelineContext` is designed to be reused across multiple layer renders within a batch, minimizing canvas creation overhead.
@@ -310,7 +383,10 @@ The module includes comprehensive unit tests:
 
 5. **Asset ID System**: Assets are identified by numeric IDs rather than URLs, enabling efficient worker communication without string passing.
 
+6. **Batch Segmentation**: Consecutive layers with combinable composite modes are merged into single segments before transfer to master. This reduces the number of composition operations in the final pass and minimizes ImageBitmap transfers.
+
 ## Reference Files
 
 - **Legacy Implementation**: `old-src-ref/src/renderer/index.ts` - `drawPimcoStack()` function (lines 120-221)
 - **Transform Handling**: `old-src-ref/src/renderer/index.ts` - `derivePlacement()` (lines 1863-1913), `applyTransformSequence()` (lines 1956-1983)
+- **Combinable Modes**: `spec.md` - Combinable Composite Modes section

@@ -268,17 +268,18 @@ Implement the 5-step intra-layer rendering pipeline for standard layers.
 
 ---
 
-### [ ] Step: Batch Segmentation
+### [x] Step: Batch Segmentation
+<!-- chat-id: 283353cc-dc1b-4262-a15f-a975a8646abf -->
 
 Implement batch segmentation logic for optimized composition.
 
 **Tasks:**
-- [ ] Create `src/js/render-slave/batch-segmenter.ts`
+- [x] Create `src/js/render-slave/batch-segmenter.ts`
   - Group consecutive combinable modes (source-over, screen, lighten, lighter)
   - Produce standalone segments for non-combinable modes
   - Return typed RenderSegment arrays
-- [ ] Add unit tests for segmentation logic
-- [ ] Update render-slave docs.md
+- [x] Add unit tests for segmentation logic
+- [x] Update render-slave docs.md
 
 **Verification:**
 - Combinable modes correctly grouped
