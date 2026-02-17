@@ -18,12 +18,7 @@ import { RenderSlave } from '../js/render-slave';
 import { batchSegmentResults } from '../js/render-slave/batch-segmenter';
 import { probeCapabilities } from '../js/renderer/capability-probe';
 import { wrapError } from '../js/errors';
-import {
-  isInitMessage,
-  isBatchMessage,
-  isAbortMessage,
-  isAssetDataMessage,
-} from '../js/types';
+import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../js/types';
 import type {
   MasterToSlaveMessage,
   AssetManagerToSlaveMessage,

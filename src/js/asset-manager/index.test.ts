@@ -364,9 +364,7 @@ describe('AssetManager', () => {
       for (let i = 1; i <= 5; i++) {
         await smallCacheManager.handleMessage({
           type: 'fetch',
-          assets: [
-            { id: i, url: `https://example.com/img${String(i)}.png`, assetType: 'image' },
-          ],
+          assets: [{ id: i, url: `https://example.com/img${String(i)}.png`, assetType: 'image' }],
         });
       }
 

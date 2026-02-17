@@ -199,7 +199,9 @@ export function getMaskUrl(layer: ProductImageComponent): string | undefined {
  * @param layer - The layer to get the mask data from
  * @returns The mask data, or undefined if not a text layer
  */
-export function getMaskData(layer: ProductImageComponent): PimcoMaskSubstitutionCompiled | undefined {
+export function getMaskData(
+  layer: ProductImageComponent
+): PimcoMaskSubstitutionCompiled | undefined {
   if (!isTextLayerMask(layer.mask)) {
     return undefined;
   }

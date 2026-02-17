@@ -327,10 +327,7 @@ describe('batchSegmentResults', () => {
   });
 
   it('should create separate segments for non-combinable layers', async () => {
-    const results = [
-      createLayerResult(0, 'multiply'),
-      createLayerResult(1, 'overlay'),
-    ];
+    const results = [createLayerResult(0, 'multiply'), createLayerResult(1, 'overlay')];
     const segments = await batchSegmentResults(results, 100, 100);
 
     expect(segments.length).toBe(2);

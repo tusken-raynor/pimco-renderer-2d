@@ -339,7 +339,9 @@ describe('intra-layer-pipeline', () => {
 
     it('should apply rotation transform', () => {
       const ctx = createMockContext();
-      const transforms: ImagePlacementTransform<number>[] = [{ type: 'rotate', angle: Math.PI / 2 }];
+      const transforms: ImagePlacementTransform<number>[] = [
+        { type: 'rotate', angle: Math.PI / 2 },
+      ];
 
       applyTransformSequence(ctx as unknown as CanvasRenderingContext2D, transforms);
 

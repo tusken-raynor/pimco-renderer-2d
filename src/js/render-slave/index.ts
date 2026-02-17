@@ -137,7 +137,8 @@ export class RenderSlave {
    */
   private buildLayerAssets(layer: LayerDescriptor): LayerAssets | null {
     const image = this.assets.get(layer.assetIds.image);
-    const mask = layer.assetIds.mask !== undefined ? this.assets.get(layer.assetIds.mask) : undefined;
+    const mask =
+      layer.assetIds.mask !== undefined ? this.assets.get(layer.assetIds.mask) : undefined;
 
     // For standard layers, both image and mask are required
     if (!image || !mask) {

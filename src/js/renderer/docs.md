@@ -134,10 +134,10 @@ Edge cases:
 
 The layer classifier determines how each layer should be rendered based on its `mask` field type:
 
-| Mask Type                        | Layer Type | Renderer            | Description                              |
-| -------------------------------- | ---------- | ------------------- | ---------------------------------------- |
-| String (URL)                     | Standard   | Standard Slave      | Uses image mask for compositing          |
-| Object (PimcoMaskSubstitutionCompiled) | Text       | Text Render Slave   | Uses effect pipeline with text rasterization |
+| Mask Type                              | Layer Type | Renderer          | Description                                  |
+| -------------------------------------- | ---------- | ----------------- | -------------------------------------------- |
+| String (URL)                           | Standard   | Standard Slave    | Uses image mask for compositing              |
+| Object (PimcoMaskSubstitutionCompiled) | Text       | Text Render Slave | Uses effect pipeline with text rasterization |
 
 **Classification Logic:**
 
@@ -188,17 +188,17 @@ type LayerType = 'standard' | 'text';
 
 interface LayerClassification {
   type: LayerType;
-  index: number;                              // Original index in layer array
-  layer: ProductImageComponent;               // Reference to original layer
-  effect?: PimcoMaskSubstitutionEffect;      // For text layers only
-  maskData?: PimcoMaskSubstitutionCompiled;  // For text layers only
-  maskUrl?: string;                           // For standard layers only
+  index: number; // Original index in layer array
+  layer: ProductImageComponent; // Reference to original layer
+  effect?: PimcoMaskSubstitutionEffect; // For text layers only
+  maskData?: PimcoMaskSubstitutionCompiled; // For text layers only
+  maskUrl?: string; // For standard layers only
 }
 
 interface ClassificationResult {
-  all: LayerClassification[];      // All classifications in order
+  all: LayerClassification[]; // All classifications in order
   standard: LayerClassification[]; // Standard layers only
-  text: LayerClassification[];     // Text layers only
+  text: LayerClassification[]; // Text layers only
   total: number;
   standardCount: number;
   textCount: number;
@@ -262,3 +262,249 @@ Unit tests in `layer-classifier.test.ts` cover:
    - Complex mask data with all optional fields
    - Large numbers of layers (100+)
    - Layers with all optional ProductImageComponent fields
+
+---
+
+## RenderMaster (`index.ts`)
+
+The RenderMaster is the orchestrator of the multi-threaded rendering pipeline. It coordinates Web Workers (Asset Manager, Standard Slaves, and Text Slaves) to process layers and produce a final composited `ImageBitmap`.
+
+### Responsibilities
+
+- Spawn and manage Web Workers
+- Perform capability detection on initialization
+- Maintain URL-to-numeric-ID asset mapping
+- Classify layers (standard vs text)
+- Distribute work to slaves
+- Collect and compose final output via MasterCompositor
+- Handle abort-on-reentry (cancel in-progress render when new render requested)
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        RenderMaster                              │
+│                                                                  │
+│  ┌─────────────┐    ┌───────────────────────────────────────┐  │
+│  │   Asset     │    │           Standard Slaves              │  │
+│  │   Manager   │    │  ┌──────┐ ┌──────┐ ┌──────┐           │  │
+│  │   Worker    │───▶│  │Slave1│ │Slave2│ │SlaveN│           │  │
+│  │             │    │  └──────┘ └──────┘ └──────┘           │  │
+│  └─────────────┘    └───────────────────────────────────────┘  │
+│         │                         │                             │
+│         │         MessageChannel  │                             │
+│         │           (per slave)   │                             │
+│         └─────────────────────────┘                             │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    MasterCompositor                          ││
+│  │  - Final composition of slave results                        ││
+│  │  - Maintains original layer order                            ││
+│  │  - Applies compositealpha per segment                        ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Public API
+
+```typescript
+class RenderMaster {
+  constructor(options?: RenderMasterOptions);
+
+  // Main render method - returns composited ImageBitmap
+  render(layers: ProductImageComponent[], width?: number, height?: number): Promise<ImageBitmap>;
+
+  // Preload assets for faster subsequent renders
+  preload(urls: string[]): Promise<void>;
+
+  // Get the detected fallback scenario
+  getScenario(): FallbackScenario;
+
+  // Get detected capabilities
+  getCapabilities(): { offscreenCanvas: boolean; webgl2: boolean; scenario: FallbackScenario };
+
+  // Get the number of active slaves
+  getSlaveCount(): number;
+
+  // Cleanup all workers and resources
+  destroy(): void;
+}
+
+interface RenderMasterOptions {
+  width?: number; // Default output width (1024)
+  height?: number; // Default output height (1024)
+  slaveCount?: number; // Number of standard slaves (navigator.hardwareConcurrency)
+  textSlaveCount?: number; // Number of text slaves (2)
+}
+```
+
+### Render Flow
+
+1. **Initialization**: Spawn Asset Manager and Standard Slaves based on capability detection
+2. **Layer Classification**: Classify layers as standard (string mask) or text (object mask)
+3. **Asset Extraction**: Extract all unique URLs from layers (images, masks, textures, highlights)
+4. **Asset Fetching**: Send fetch request to Asset Manager, wait for completion
+5. **Asset Distribution**: Distribute assets to slaves that need them
+6. **Work Distribution**: Distribute layers round-robin to slaves
+7. **Batch Rendering**: Send batch messages to slaves, collect results
+8. **Final Composition**: Use MasterCompositor to compose results in correct order
+9. **Cleanup**: Close segment bitmaps after composition
+
+### Abort Handling
+
+The RenderMaster supports abort-on-reentry:
+
+- If `render()` is called while a previous render is in progress, the previous render is aborted
+- Slaves receive abort messages and cancel their current work
+- The pending promise is rejected with an `AbortError`
+
+### Example Usage
+
+```typescript
+import { RenderMaster } from './renderer';
+
+// Create render master
+const master = new RenderMaster({
+  width: 1920,
+  height: 1080,
+  slaveCount: 4,
+});
+
+// Render layers
+const layers = [
+  {
+    id: 'bg',
+    mode: 'image',
+    alpha: 1,
+    blend: 'normal',
+    mask: '/masks/bg.png',
+    image: '/images/bg.png',
+  },
+  {
+    id: 'logo',
+    mode: 'color',
+    alpha: 0.8,
+    blend: 'multiply',
+    mask: '/masks/logo.png',
+    image: '/images/logo.png',
+    color: '#ff0000',
+  },
+];
+
+const bitmap = await master.render(layers);
+
+// Use the bitmap (draw to canvas, etc.)
+const canvas = document.getElementById('output') as HTMLCanvasElement;
+const ctx = canvas.getContext('2d');
+ctx.drawImage(bitmap, 0, 0);
+
+// Cleanup when done
+master.destroy();
+```
+
+---
+
+## MasterCompositor (`master-compositor.ts`)
+
+The MasterCompositor handles final composition of render segments received from slaves.
+
+### Responsibilities
+
+- Compose segments in correct order (sorted by originalIndex)
+- Apply composite operations and alpha values per segment
+- Produce final `ImageBitmap` output
+- Manage reusable canvas context for efficiency
+
+### Interface
+
+```typescript
+// Functional API
+function composeSegments(
+  segments: RenderSegment[],
+  width: number,
+  height: number
+): Promise<ImageBitmap>;
+function composeOrderedLayers(
+  layers: ComposedLayer[],
+  width: number,
+  height: number
+): Promise<ImageBitmap>;
+function composeSlaveResults(
+  slaveResults: Map<number, ComposedLayer[]>,
+  width: number,
+  height: number
+): Promise<ImageBitmap>;
+function closeSegments(segments: RenderSegment[]): void;
+
+// Context management
+function createCompositorContext(width: number, height: number): CompositorContext;
+function ensureCompositorContext(
+  ctx: CompositorContext | null,
+  width: number,
+  height: number
+): CompositorContext;
+
+// Class API (recommended for repeated compositions)
+class MasterCompositor {
+  compose(segments: RenderSegment[], width: number, height: number): Promise<ImageBitmap>;
+  composeOrdered(layers: ComposedLayer[], width: number, height: number): Promise<ImageBitmap>;
+  destroy(): void;
+}
+
+// Types
+interface ComposedLayer {
+  segment: RenderSegment;
+  originalIndex: number;
+}
+
+interface CompositorContext {
+  canvas: AnyCanvas;
+  ctx: Canvas2DContext;
+  width: number;
+  height: number;
+}
+```
+
+### Composition Logic
+
+1. Sort layers by `originalIndex` (ascending)
+2. For each segment:
+   - Set `globalCompositeOperation` to segment's `compositemode`
+   - Set `globalAlpha` to segment's `compositealpha`
+   - Draw segment's `bitmap` to canvas
+3. Reset context state
+4. Convert canvas to `ImageBitmap`
+
+### Memory Management
+
+- Call `closeSegments()` after composition to free ImageBitmap resources
+- The `MasterCompositor.destroy()` method releases internal canvas resources
+- Segments with already-closed bitmaps are handled gracefully
+
+---
+
+## Tests
+
+Unit tests in `index.test.ts` cover:
+
+1. **MasterCompositor**:
+   - Context creation with correct dimensions
+   - Context reuse for same dimensions
+   - New context creation for different dimensions
+   - Empty segment composition
+   - Single and multiple segment composition
+   - Layer ordering and sorting
+   - Slave result aggregation
+   - Bitmap cleanup
+
+2. **RenderMaster Concepts**:
+   - Color resolution (string, array, record)
+   - Asset ID mapping (unique IDs, URL-to-ID and ID-to-URL)
+   - Layer classification (standard vs text)
+   - Round-robin layer distribution
+   - Abort controller behavior
+   - Capability detection scenarios
+
+3. **Error Handling**:
+   - AbortError creation and properties
+   - WorkerError handling

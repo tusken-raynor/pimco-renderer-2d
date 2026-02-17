@@ -5,6 +5,7 @@
 The Render Slave module provides the core rendering logic for **standard layers** in the multi-threaded 2D product image renderer. Standard layers are those where the `mask` field is a URL string (as opposed to text layers where `mask` is a `PimcoMaskSubstitutionCompiled` object).
 
 The module consists of three main components:
+
 1. **Intra-Layer Pipeline** - The 5-step rendering process for a single layer
 2. **RenderSlave Class** - Asset management and batch rendering coordination
 3. **Batch Segmenter** - Groups consecutive combinable layers to reduce composition overhead
@@ -37,24 +38,29 @@ The intra-layer pipeline renders a single standard layer through 5 sequential st
 ```
 
 #### Step 1: Draw Base Image
+
 - Clears the work canvas
 - Applies placement transforms (position, size, rotation, scale, skew)
 - Draws the base image at the calculated position
 
 #### Step 2: Apply Color or Texture
+
 - For **color mode**: Fills with solid color using specified blend mode and alpha
 - For **image mode**: Draws texture image using specified blend mode and alpha
 
 #### Step 3: Apply Highlight 1
+
 - Draws the first highlight image (if defined)
 - Uses `hlblend1` and `hlalpha1` for blend mode and opacity
 
 #### Step 4: Apply Highlight 2
+
 - Draws the second highlight image (if defined)
 - Falls back to highlight 1's image/blend if not specified
 - Uses `hlblend2` and `hlalpha2` for blend mode and opacity
 
 #### Step 5: Apply Mask
+
 - Applies the mask image using `destination-in` composite operation
 - Only areas where the mask is opaque remain visible
 
@@ -64,22 +70,24 @@ The placement system converts percentage-based values to pixel coordinates:
 
 ```typescript
 interface ImagePlacementDefinition {
-  left?: number;    // X position as percentage (0-1)
-  top?: number;     // Y position as percentage (0-1)
-  width?: number;   // Width as percentage (0-1)
-  height?: number;  // Height as percentage (0-1)
-  fit?: 'contain' | 'cover' | 'fill';  // Fit mode
-  position?: [number, number];  // Anchor for fit modes
+  left?: number; // X position as percentage (0-1)
+  top?: number; // Y position as percentage (0-1)
+  width?: number; // Width as percentage (0-1)
+  height?: number; // Height as percentage (0-1)
+  fit?: 'contain' | 'cover' | 'fill'; // Fit mode
+  position?: [number, number]; // Anchor for fit modes
   transform?: ImagePlacementTransform[] | FixedSizeArray<number, 6>;
 }
 ```
 
 **Fit Modes:**
+
 - `contain`: Fit inside bounds, maintaining aspect ratio (may have letterboxing)
 - `cover`: Fill bounds, maintaining aspect ratio (may crop)
 - `fill`: Stretch to fill bounds (may distort)
 
 **Transform Types:**
+
 - `rotate`: Rotation by angle (radians)
 - `scale`: Scale by x/y factors
 - `translate`: Translation by x/y pixels or percentages
@@ -108,6 +116,7 @@ Layer Sequence:                          Resulting Segments:
 
 **Combinable Modes:**
 These modes can be batched together because they are associative:
+
 - `source-over`: Standard alpha compositing
 - `screen`: Lightening blend
 - `lighten`: Take lighter of each channel
@@ -115,6 +124,7 @@ These modes can be batched together because they are associative:
 
 **Non-Combinable Modes:**
 All other modes require standalone segments to preserve correct visual output:
+
 - `multiply`, `overlay`, `darken`, `color-dodge`, `color-burn`
 - `hard-light`, `soft-light`, `difference`, `exclusion`
 - `source-in`, `source-out`, `source-atop`
@@ -140,7 +150,12 @@ class RenderSlave {
   isAborted(): boolean;
 
   // Rendering
-  renderLayer(layer: LayerDescriptor, width: number, height: number, index: number): Promise<LayerResult | null>;
+  renderLayer(
+    layer: LayerDescriptor,
+    width: number,
+    height: number,
+    index: number
+  ): Promise<LayerResult | null>;
   renderBatch(layers: LayerDescriptor[], width: number, height: number): Promise<LayerResult[]>;
 
   // Cleanup
@@ -218,20 +233,51 @@ function derivePlacement(
 ): ResolvedPlacement;
 
 // Individual pipeline steps
-function step1DrawBaseImage(ctx: PipelineContext, assets: LayerAssets, placement: ResolvedPlacement): void;
-function step2ApplyColorOrTexture(ctx: PipelineContext, assets: LayerAssets, config: LayerConfig, placement: ResolvedPlacement): void;
-function step3ApplyHighlight1(ctx: PipelineContext, assets: LayerAssets, config: LayerConfig, placement: ResolvedPlacement): void;
-function step4ApplyHighlight2(ctx: PipelineContext, assets: LayerAssets, config: LayerConfig, placement: ResolvedPlacement): void;
-function step5ApplyMask(ctx: PipelineContext, assets: LayerAssets, placement: ResolvedPlacement): void;
+function step1DrawBaseImage(
+  ctx: PipelineContext,
+  assets: LayerAssets,
+  placement: ResolvedPlacement
+): void;
+function step2ApplyColorOrTexture(
+  ctx: PipelineContext,
+  assets: LayerAssets,
+  config: LayerConfig,
+  placement: ResolvedPlacement
+): void;
+function step3ApplyHighlight1(
+  ctx: PipelineContext,
+  assets: LayerAssets,
+  config: LayerConfig,
+  placement: ResolvedPlacement
+): void;
+function step4ApplyHighlight2(
+  ctx: PipelineContext,
+  assets: LayerAssets,
+  config: LayerConfig,
+  placement: ResolvedPlacement
+): void;
+function step5ApplyMask(
+  ctx: PipelineContext,
+  assets: LayerAssets,
+  placement: ResolvedPlacement
+): void;
 
 // Execute full pipeline
-function executeIntraLayerPipeline(ctx: PipelineContext, assets: LayerAssets, config: LayerConfig): AnyCanvas;
+function executeIntraLayerPipeline(
+  ctx: PipelineContext,
+  assets: LayerAssets,
+  config: LayerConfig
+): AnyCanvas;
 
 // Convert results to segments (simple, no batching)
 function resultsToSegments(results: LayerResult[]): RenderSegment[];
 
 // Convert results to segments with batching optimization
-function batchSegmentResults(results: LayerResult[], width: number, height: number): Promise<RenderSegment[]>;
+function batchSegmentResults(
+  results: LayerResult[],
+  width: number,
+  height: number
+): Promise<RenderSegment[]>;
 
 // Check if a mode is combinable
 function isCombinableMode(mode: CanvasCompositeOperation): boolean;
@@ -344,6 +390,7 @@ const segments = await batchSegmentResults(results, 1000, 800);
 The module includes comprehensive unit tests:
 
 ### intra-layer-pipeline.test.ts
+
 - **derivePlacement**: Tests placement calculation with percentages, fit modes, transforms
 - **placementTransformUnits**: Tests unit conversion for transforms
 - **applyTransformSequence**: Tests transform application (rotate, scale, translate, skew)
@@ -355,12 +402,14 @@ The module includes comprehensive unit tests:
 - **Edge cases**: Zero dimensions, missing colors, empty transforms
 
 ### index.test.ts
+
 - **Asset management**: Register, retrieve, clear assets
 - **Abort handling**: Abort flag set/reset
 - **resultsToSegments**: Conversion to render segments
 - **LayerDescriptor handling**: Required and optional fields
 
 ### batch-segmenter.test.ts
+
 - **COMBINABLE_MODES**: Correct set of combinable modes
 - **isCombinableMode**: Mode classification
 - **segmentLayerResults**: Grouping logic for various sequences
@@ -414,17 +463,20 @@ The `render-slave.worker.ts` file provides the Web Worker entry point for the St
 ### Message Types
 
 **Master → Slave:**
+
 - `init`: Initialize the worker, triggers capability probe and ready signal
 - `batch`: Render a batch of layers with given dimensions
 - `abort`: Cancel current rendering operation
 
 **Slave → Master:**
+
 - `capabilities`: Report OffscreenCanvas and WebGL2 support
 - `ready`: Signal worker is ready to receive work
 - `result`: Return rendered segments with transferable ImageBitmaps
 - `error`: Report rendering errors
 
 **Asset Manager → Slave (via MessagePort):**
+
 - `asset-data`: Receive image assets for rendering
 
 ### Worker Lifecycle
@@ -439,6 +491,7 @@ The `render-slave.worker.ts` file provides the Web Worker entry point for the St
 ### Abort Handling
 
 The worker checks the abort flag at multiple points:
+
 - Between each layer render in a batch
 - After batch rendering completes
 - After batch segmentation completes
@@ -458,11 +511,13 @@ self.postMessage({ type: 'result', segments }, transferables);
 ### Error Handling
 
 Errors are wrapped in AppError and sent to the master with:
+
 - Error message
 - Error code
 - Additional context
 
 The worker also handles:
+
 - Global `onerror` events
 - Unhandled promise rejections
 

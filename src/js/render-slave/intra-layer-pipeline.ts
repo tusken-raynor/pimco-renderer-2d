@@ -511,13 +511,7 @@ export function step5ApplyMask(
 
   work.ctx.globalCompositeOperation = 'destination-in';
   work.ctx.globalAlpha = 1.0;
-  work.ctx.drawImage(
-    assets.mask,
-    placement.left,
-    placement.top,
-    placement.width,
-    placement.height
-  );
+  work.ctx.drawImage(assets.mask, placement.left, placement.top, placement.width, placement.height);
 }
 
 /**

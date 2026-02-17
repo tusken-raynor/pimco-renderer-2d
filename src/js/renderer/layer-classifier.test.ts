@@ -225,9 +225,7 @@ describe('layer-classifier', () => {
     });
 
     it('should include effect in text layer classifications', () => {
-      const layers = [
-        createTextLayer({ content: 'Text', effect: 'foil' }),
-      ];
+      const layers = [createTextLayer({ content: 'Text', effect: 'foil' })];
 
       const result = classifyLayers(layers);
 
@@ -236,9 +234,7 @@ describe('layer-classifier', () => {
     });
 
     it('should include maskUrl in standard layer classifications', () => {
-      const layers = [
-        createStandardLayer({ mask: '/custom/mask.png' }),
-      ];
+      const layers = [createStandardLayer({ mask: '/custom/mask.png' })];
 
       const result = classifyLayers(layers);
 
@@ -358,10 +354,7 @@ describe('layer-classifier', () => {
     });
 
     it('should return all layers when all are standard', () => {
-      const layers = [
-        createStandardLayer({ id: 'std-1' }),
-        createStandardLayer({ id: 'std-2' }),
-      ];
+      const layers = [createStandardLayer({ id: 'std-1' }), createStandardLayer({ id: 'std-2' })];
 
       const result = filterStandardLayers(layers);
 
@@ -386,10 +379,7 @@ describe('layer-classifier', () => {
     });
 
     it('should return empty array when no text layers', () => {
-      const layers = [
-        createStandardLayer({ id: 'std-1' }),
-        createStandardLayer({ id: 'std-2' }),
-      ];
+      const layers = [createStandardLayer({ id: 'std-1' }), createStandardLayer({ id: 'std-2' })];
 
       const result = filterTextLayers(layers);
 
