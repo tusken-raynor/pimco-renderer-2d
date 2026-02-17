@@ -85,20 +85,21 @@ Set up the project infrastructure with Vite, TypeScript strict mode, ESLint, Pre
 
 ---
 
-### [ ] Step: Type Definitions and Error Infrastructure
+### [x] Step: Type Definitions and Error Infrastructure
+<!-- chat-id: e39c7b4e-4eaf-497c-bd67-58d5fe9490de -->
 
 Create the shared type definitions and error handling infrastructure.
 
 **Tasks:**
-- [ ] Create `src/js/types/index.ts` - export barrel
-- [ ] Create `src/js/types/pimco.ts` - ProductImageComponent, PimcoMaskSubstitutionCompiled, BlendMode, etc.
+- [x] Create `src/js/types/index.ts` - export barrel
+- [x] Create `src/js/types/pimco.ts` - ProductImageComponent, PimcoMaskSubstitutionCompiled, BlendMode, etc.
   - Add `compositealpha?: number` to ProductImageComponent
   - Add `"shadow"` to PimcoMaskSubstitutionEffect union
-- [ ] Create `src/js/types/messages.ts` - All worker message types (InitMessage, BatchMessage, AbortMessage, ReadyMessage, CapabilitiesMessage, ResultMessage, ErrorMessage, RenderSegment, etc.)
-- [ ] Create `src/js/types/docs.md` - Document all types
-- [ ] Create `src/js/errors/index.ts` - AppError, ValidationError, NotFoundError, RenderError classes
-- [ ] Create `src/js/errors/index.test.ts` - Unit tests for error classes
-- [ ] Create `src/js/errors/docs.md` - Document error handling patterns
+- [x] Create `src/js/types/messages.ts` - All worker message types (InitMessage, BatchMessage, AbortMessage, ReadyMessage, CapabilitiesMessage, ResultMessage, ErrorMessage, RenderSegment, etc.)
+- [x] Create `src/js/types/docs.md` - Document all types
+- [x] Create `src/js/errors/index.ts` - AppError, ValidationError, NotFoundError, RenderError classes
+- [x] Create `src/js/errors/index.test.ts` - Unit tests for error classes
+- [x] Create `src/js/errors/docs.md` - Document error handling patterns
 
 **Verification:**
 - `npm run type-check` passes
