@@ -89,11 +89,90 @@ Tests the rendering workflow from JSON layers to final ImageBitmap, including bo
    - Text transform (uppercase, lowercase, capitalize) supported
    - Alignment (left, center, right) supported
 
+### fallback-scenarios.test.ts
+
+Tests all six fallback scenarios (A-F) for browser capability detection and appropriate slave/compositor selection.
+
+**Test Coverage:**
+
+#### Fallback Scenario Determination
+
+1. **Scenario Detection (determineScenario)**
+   - Scenario A: Main-thread with OffscreenCanvas + WebGL2
+   - Scenario B: Main-thread with OffscreenCanvas, no WebGL2
+   - Scenario C: Main-thread without OffscreenCanvas
+   - Scenario D: Worker with OffscreenCanvas + WebGL2
+   - Scenario E: Worker with OffscreenCanvas, no WebGL2
+   - Scenario F: Worker without OffscreenCanvas
+
+2. **Slave Type Mapping**
+   - Standard workers: A, B, D, E (has OffscreenCanvas)
+   - Text workers: A, D only (requires WebGL2)
+   - Virtual standard slaves: C, F (no OffscreenCanvas)
+   - Virtual text slaves: B, C, E, F (no WebGL2 or no OffscreenCanvas)
+   - Software compositor: F only (worker without OffscreenCanvas)
+
+#### Software Compositor
+
+1. **Pixel Blending Operations**
+   - Source-over (Porter-Duff)
+   - Multiply blend mode
+   - Screen blend mode
+   - Difference blend mode
+   - Lighter (additive) blend mode
+
+2. **Pixel Buffer Operations**
+   - Buffer creation with correct dimensions
+   - Initialization to transparent black
+   - Float-to-byte conversion
+   - Value clamping (0-1 range)
+
+#### Virtual Slave Integration
+
+1. **VirtualSlavePort Interface Compliance**
+   - postMessage method
+   - terminate method
+   - addEventListener/removeEventListener
+   - onmessage handler assignment
+
+2. **Message Protocol**
+   - Init message → capabilities + ready response
+   - Abort message handling
+   - Batch message → result response
+
+#### Scenario-Specific Configuration
+
+1. **Scenario A (Full Worker Support)**
+   - Workers for both standard and text slaves
+   - Canvas-based compositor
+
+2. **Scenario B (No WebGL2)**
+   - Workers for standard, virtual for text
+   - WebGL2-dependent effects fall back to no-effect
+
+3. **Scenario C (No OffscreenCanvas, Main Thread)**
+   - Virtual slaves for both types
+   - Canvas-based compositor (HTMLCanvasElement available)
+
+4. **Scenario D (Worker with Full Support)**
+   - Workers for both standard and text slaves
+
+5. **Scenario E (Worker without WebGL2)**
+   - Workers for standard, virtual for text
+
+6. **Scenario F (Worker without OffscreenCanvas)**
+   - Virtual slaves for both types
+   - Software compositor (ImageData-based)
+
+#### Execution Context Detection
+
+- Main thread vs worker context distinction
+- Context + capabilities → scenario mapping (all 8 combinations)
+
 ## Planned Tests
 
 - **asset-loading.test.ts**: Asset Manager fetch/distribute cycle
 - **worker-communication.test.ts**: Message protocol compliance
-- **fallback-scenarios.test.ts**: All 6 fallback scenarios
 
 ## Running Tests
 
@@ -142,4 +221,21 @@ abortController.signal.addEventListener('abort', () => {
   // Handle abort
 });
 abortController.abort();
+```
+
+### Scenario Testing
+
+```typescript
+import { determineScenario } from '../../js/renderer/capability-probe';
+
+// Test all scenario combinations
+const scenarios = [
+  { context: 'main-thread', offscreen: true, webgl2: true, expected: 'A' },
+  { context: 'main-thread', offscreen: true, webgl2: false, expected: 'B' },
+  // ... etc
+];
+
+for (const { context, offscreen, webgl2, expected } of scenarios) {
+  expect(determineScenario(context, offscreen, webgl2)).toBe(expected);
+}
 ```

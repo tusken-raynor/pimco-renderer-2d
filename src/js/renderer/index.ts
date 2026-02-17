@@ -2,17 +2,25 @@
  * RenderMaster Module.
  *
  * The RenderMaster is the orchestrator of the multi-threaded rendering pipeline.
- * It coordinates Web Workers (Asset Manager, Standard Slaves) to process layers
+ * It coordinates Web Workers (Asset Manager, Standard Slaves, Text Slaves) to process layers
  * and produce a final composited ImageBitmap.
  *
  * Responsibilities:
- * - Spawn and manage Web Workers
- * - Perform capability detection
+ * - Spawn and manage Web Workers or virtual slaves based on capability detection
+ * - Perform capability detection and determine fallback scenario (A-F)
  * - Maintain URL-to-numeric-ID asset mapping
  * - Classify layers (standard vs text)
  * - Distribute work to slaves
  * - Collect and compose final output
  * - Handle abort-on-reentry (cancel in-progress render when new render requested)
+ *
+ * Fallback Scenarios:
+ * - A: Main thread master, workers for both slave types (OffscreenCanvas + WebGL2)
+ * - B: Main thread master, workers for standard, virtual for text (OffscreenCanvas, no WebGL2)
+ * - C: Main thread master, virtual for both (no OffscreenCanvas)
+ * - D: Worker master, workers for both (OffscreenCanvas + WebGL2)
+ * - E: Worker master, workers for standard, virtual for text (OffscreenCanvas, no WebGL2)
+ * - F: Worker master, virtual for both, software compositor (no OffscreenCanvas)
  */
 
 import type {
@@ -39,9 +47,11 @@ import {
 } from '../types';
 import { isStandardLayerMask, isTextLayerMask } from '../types/pimco';
 import { classifyLayers, type ClassificationResult } from './layer-classifier';
-import { probeCapabilities, probeCapabilitiesForContext } from './capability-probe';
+import { probeCapabilities } from './capability-probe';
 import { MasterCompositor, type ComposedLayer, closeSegments } from './master-compositor';
+import { SoftwareCompositor } from './software-compositor';
 import { RenderError, AbortError, WorkerError, wrapError } from '../errors';
+import { VirtualStandardSlave, VirtualTextSlave } from '../virtual-slaves';
 
 // Worker URLs - Vite handles the bundling
 import AssetManagerWorkerUrl from '../../workers/asset-manager.worker.ts?worker&url';
@@ -70,21 +80,42 @@ export interface RenderMasterOptions {
 type SlaveType = 'standard' | 'text';
 
 /**
+ * Common slave interface to abstract workers and virtual slaves.
+ */
+interface SlaveInstance {
+  postMessage(message: unknown, transfer?: Transferable[]): void;
+  onmessage: ((event: MessageEvent<SlaveToMasterMessage>) => void) | null;
+  onerror: ((event: ErrorEvent | Event) => void) | null;
+  terminate(): void;
+  addEventListener(
+    type: 'message',
+    listener: (event: MessageEvent<SlaveToMasterMessage>) => void
+  ): void;
+  removeEventListener(
+    type: 'message',
+    listener: (event: MessageEvent<SlaveToMasterMessage>) => void
+  ): void;
+}
+
+/**
  * Internal slave state tracking.
+ * Supports both real workers and virtual slaves.
  */
 interface SlaveState {
-  /** Worker instance */
-  worker: Worker;
+  /** Worker or virtual slave instance */
+  worker: SlaveInstance;
   /** Unique slave ID */
   id: number;
   /** Slave type (standard or text) */
   type: SlaveType;
+  /** Whether this is a virtual slave (main thread) */
+  isVirtual: boolean;
   /** Whether slave has reported ready */
   ready: boolean;
   /** Reported capabilities */
   capabilities: CapabilitiesMessage | null;
-  /** MessageChannel for Asset Manager communication */
-  assetChannel: MessageChannel;
+  /** MessageChannel for Asset Manager communication (not used for virtual slaves) */
+  assetChannel: MessageChannel | null;
   /** Current render promise resolver */
   renderResolver: ((segments: RenderSegment[]) => void) | null;
   /** Current render promise rejecter */
@@ -142,8 +173,11 @@ export class RenderMaster {
   /** Text render slaves */
   private textSlaves: SlaveState[] = [];
 
-  /** Master compositor for final composition */
+  /** Master compositor for final composition (scenarios A-E) */
   private compositor: MasterCompositor;
+
+  /** Software compositor for Scenario F */
+  private softwareCompositor: SoftwareCompositor | null = null;
 
   /** Asset ID mapping */
   private assetMapping: AssetMapping;
@@ -195,9 +229,25 @@ export class RenderMaster {
 
   /**
    * Initialize workers and wait for them to be ready.
+   *
+   * Spawns the appropriate combination of workers and virtual slaves
+   * based on the detected fallback scenario:
+   * - A: Workers for standard + text
+   * - B: Workers for standard, virtual for text
+   * - C: Virtual for both
+   * - D: Workers for standard + text
+   * - E: Workers for standard, virtual for text
+   * - F: Virtual for both, software compositor
    */
   private async initialize(): Promise<void> {
-    // Spawn Asset Manager
+    const scenario = this.capabilities.scenario;
+
+    // Initialize software compositor for Scenario F
+    if (scenario === 'F') {
+      this.softwareCompositor = new SoftwareCompositor();
+    }
+
+    // Spawn Asset Manager (always needed)
     this.assetManager = new Worker(AssetManagerWorkerUrl, { type: 'module' });
 
     // Handle Asset Manager messages
@@ -209,38 +259,37 @@ export class RenderMaster {
       console.error('Asset Manager error:', event.message);
     };
 
-    // Spawn slaves based on scenario
-    const slaveCapabilities = probeCapabilitiesForContext('worker');
-
-    // Standard slaves: scenarios A, B, D, E use workers
-    const shouldUseStandardWorkers =
-      slaveCapabilities.scenario === 'A' ||
-      slaveCapabilities.scenario === 'B' ||
-      slaveCapabilities.scenario === 'D' ||
-      slaveCapabilities.scenario === 'E';
-
-    // Text slaves: scenarios A and D use workers (require WebGL2)
-    // Scenarios B and E fall back to virtual text slaves (implemented in Phase 4)
-    const shouldUseTextWorkers =
-      slaveCapabilities.scenario === 'A' || slaveCapabilities.scenario === 'D';
-
     const initPromises: Promise<void>[] = [];
 
-    if (shouldUseStandardWorkers) {
-      initPromises.push(this.spawnSlaves());
-    }
-    // In scenarios C and F, virtual slaves would be used (implemented in Phase 4)
+    // Determine which slave types to use based on scenario
+    // Standard slaves: A, B, D, E use workers; C, F use virtual
+    const useStandardWorkers =
+      scenario === 'A' || scenario === 'B' || scenario === 'D' || scenario === 'E';
 
-    if (shouldUseTextWorkers) {
-      initPromises.push(this.spawnTextSlaves());
+    // Text slaves: A, D use workers; B, C, E, F use virtual
+    const useTextWorkers = scenario === 'A' || scenario === 'D';
+
+    // Spawn standard slaves
+    if (useStandardWorkers) {
+      initPromises.push(this.spawnSlaves());
+    } else {
+      // Scenarios C and F: use virtual standard slaves
+      initPromises.push(this.spawnVirtualStandardSlaves());
     }
-    // In scenarios B, C, E, F, virtual text slaves would be used (implemented in Phase 4)
+
+    // Spawn text slaves
+    if (useTextWorkers) {
+      initPromises.push(this.spawnTextSlaves());
+    } else {
+      // Scenarios B, C, E, F: use virtual text slaves
+      initPromises.push(this.spawnVirtualTextSlaves());
+    }
 
     await Promise.all(initPromises);
   }
 
   /**
-   * Spawn standard render slaves.
+   * Spawn standard render slaves (real workers).
    */
   private async spawnSlaves(): Promise<void> {
     const readyPromises: Promise<void>[] = [];
@@ -251,9 +300,10 @@ export class RenderMaster {
       const assetChannel = new MessageChannel();
 
       const slaveState: SlaveState = {
-        worker,
+        worker: worker as SlaveInstance,
         id: slaveId,
         type: 'standard',
+        isVirtual: false,
         ready: false,
         capabilities: null,
         assetChannel,
@@ -307,7 +357,76 @@ export class RenderMaster {
   }
 
   /**
-   * Spawn text render slaves.
+   * Spawn virtual standard slaves (main-thread fallback for scenarios C and F).
+   */
+  private async spawnVirtualStandardSlaves(): Promise<void> {
+    const readyPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < this.slaveCount; i++) {
+      const slaveId = this.nextSlaveId++;
+      const virtualSlave = new VirtualStandardSlave({ deferMessages: true });
+      const assetChannel = new MessageChannel();
+
+      const slaveState: SlaveState = {
+        worker: virtualSlave as unknown as SlaveInstance,
+        id: slaveId,
+        type: 'standard',
+        isVirtual: true,
+        ready: false,
+        capabilities: null,
+        assetChannel,
+        renderResolver: null,
+        renderRejecter: null,
+      };
+
+      // Create ready promise
+      const readyPromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new WorkerError('Virtual slave initialization timeout', slaveId));
+        }, 10000);
+
+        virtualSlave.onmessage = (event: MessageEvent<SlaveToMasterMessage>) => {
+          this.handleSlaveMessage(slaveState, event.data);
+
+          if (isReadyMessage(event.data)) {
+            slaveState.ready = true;
+            clearTimeout(timeout);
+            resolve();
+          }
+        };
+
+        virtualSlave.onerror = (event: ErrorEvent | Event) => {
+          clearTimeout(timeout);
+          const message = event instanceof ErrorEvent ? event.message : 'Virtual slave error';
+          reject(new WorkerError(message, slaveId));
+        };
+      });
+
+      readyPromises.push(readyPromise);
+      this.slaves.push(slaveState);
+
+      // Register virtual slave with Asset Manager
+      if (this.assetManager) {
+        this.assetManager.postMessage(
+          {
+            type: 'register-slave',
+            slaveId,
+            port: assetChannel.port1,
+          },
+          [assetChannel.port1]
+        );
+      }
+
+      // Send init message with asset port
+      virtualSlave.postMessage({ type: 'init' }, [assetChannel.port2]);
+    }
+
+    // Wait for all virtual slaves to be ready
+    await Promise.all(readyPromises);
+  }
+
+  /**
+   * Spawn text render slaves (real workers).
    */
   private async spawnTextSlaves(): Promise<void> {
     const readyPromises: Promise<void>[] = [];
@@ -318,9 +437,10 @@ export class RenderMaster {
       const assetChannel = new MessageChannel();
 
       const slaveState: SlaveState = {
-        worker,
+        worker: worker as SlaveInstance,
         id: slaveId,
         type: 'text',
+        isVirtual: false,
         ready: false,
         capabilities: null,
         assetChannel,
@@ -370,6 +490,75 @@ export class RenderMaster {
     }
 
     // Wait for all text slaves to be ready
+    await Promise.all(readyPromises);
+  }
+
+  /**
+   * Spawn virtual text slaves (main-thread fallback for scenarios B, C, E, F).
+   */
+  private async spawnVirtualTextSlaves(): Promise<void> {
+    const readyPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < this.textSlaveCount; i++) {
+      const slaveId = this.nextSlaveId++;
+      const virtualSlave = new VirtualTextSlave({ deferMessages: true });
+      const assetChannel = new MessageChannel();
+
+      const slaveState: SlaveState = {
+        worker: virtualSlave as unknown as SlaveInstance,
+        id: slaveId,
+        type: 'text',
+        isVirtual: true,
+        ready: false,
+        capabilities: null,
+        assetChannel,
+        renderResolver: null,
+        renderRejecter: null,
+      };
+
+      // Create ready promise
+      const readyPromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new WorkerError('Virtual text slave initialization timeout', slaveId));
+        }, 10000);
+
+        virtualSlave.onmessage = (event: MessageEvent<SlaveToMasterMessage>) => {
+          this.handleSlaveMessage(slaveState, event.data);
+
+          if (isReadyMessage(event.data)) {
+            slaveState.ready = true;
+            clearTimeout(timeout);
+            resolve();
+          }
+        };
+
+        virtualSlave.onerror = (event: ErrorEvent | Event) => {
+          clearTimeout(timeout);
+          const message = event instanceof ErrorEvent ? event.message : 'Virtual text slave error';
+          reject(new WorkerError(message, slaveId));
+        };
+      });
+
+      readyPromises.push(readyPromise);
+      this.textSlaves.push(slaveState);
+
+      // Register virtual text slave with Asset Manager
+      if (this.assetManager) {
+        this.assetManager.postMessage(
+          {
+            type: 'register-slave',
+            slaveId,
+            port: assetChannel.port1,
+          },
+          [assetChannel.port1]
+        );
+      }
+
+      // Send init message with asset port
+      virtualSlave.postMessage({ type: 'init' }, [assetChannel.port2]);
+    }
+
+    // Wait for all virtual text slaves to be ready
     await Promise.all(readyPromises);
   }
 
@@ -1013,12 +1202,16 @@ export class RenderMaster {
         }
       }
 
-      // Compose final result
-      const result = await this.compositor.composeOrdered(
-        composedLayers,
-        renderWidth,
-        renderHeight
-      );
+      // Compose final result - use software compositor for Scenario F
+      let result: ImageBitmap;
+      if (this.capabilities.scenario === 'F' && this.softwareCompositor) {
+        // Sort layers by original index for software composition
+        const sorted = [...composedLayers].sort((a, b) => a.originalIndex - b.originalIndex);
+        const segments = sorted.map((l) => l.segment);
+        result = await this.softwareCompositor.compose(segments, renderWidth, renderHeight);
+      } else {
+        result = await this.compositor.composeOrdered(composedLayers, renderWidth, renderHeight);
+      }
 
       // Clean up segment bitmaps after composition
       for (const layer of composedLayers) {
@@ -1142,18 +1335,22 @@ export class RenderMaster {
       this.pendingRender = null;
     }
 
-    // Terminate standard slaves
+    // Terminate standard slaves (workers or virtual)
     for (const slave of this.slaves) {
-      slave.assetChannel.port1.close();
-      slave.assetChannel.port2.close();
+      if (slave.assetChannel) {
+        slave.assetChannel.port1.close();
+        slave.assetChannel.port2.close();
+      }
       slave.worker.terminate();
     }
     this.slaves = [];
 
-    // Terminate text slaves
+    // Terminate text slaves (workers or virtual)
     for (const textSlave of this.textSlaves) {
-      textSlave.assetChannel.port1.close();
-      textSlave.assetChannel.port2.close();
+      if (textSlave.assetChannel) {
+        textSlave.assetChannel.port1.close();
+        textSlave.assetChannel.port2.close();
+      }
       textSlave.worker.terminate();
     }
     this.textSlaves = [];
@@ -1164,8 +1361,12 @@ export class RenderMaster {
       this.assetManager = null;
     }
 
-    // Destroy compositor
+    // Destroy compositors
     this.compositor.destroy();
+    if (this.softwareCompositor) {
+      this.softwareCompositor.destroy();
+      this.softwareCompositor = null;
+    }
 
     // Clear asset mapping
     this.assetMapping.urlToId.clear();
@@ -1177,3 +1378,4 @@ export class RenderMaster {
 export * from './capability-probe';
 export * from './layer-classifier';
 export * from './master-compositor';
+export * from './software-compositor';

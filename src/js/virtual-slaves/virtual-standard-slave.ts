@@ -53,7 +53,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   /** Whether the slave has been terminated */
   private terminated = false;
 
-
   constructor(options: VirtualSlaveOptions = {}) {
     this.deferMessages = options.deferMessages ?? true;
     this.renderSlave = new RenderSlave();

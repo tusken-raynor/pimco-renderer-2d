@@ -12,16 +12,17 @@ or WebGL2 is not available in the browser (scenarios B, C, E, and F).
 
 The renderer supports 6 fallback scenarios based on browser capabilities:
 
-| Scenario | Master Context | Standard Slaves | Text Slaves | When Used |
-|----------|---------------|-----------------|-------------|-----------|
-| A | Main thread | Workers | Workers | OffscreenCanvas + WebGL2 |
-| B | Main thread | Workers | Virtual | OffscreenCanvas, no WebGL2 |
-| C | Main thread | Virtual | Virtual | No OffscreenCanvas |
-| D | Worker | Workers | Workers | OffscreenCanvas + WebGL2, worker master |
-| E | Worker | Workers | Virtual | OffscreenCanvas, no WebGL2, worker master |
-| F | Worker | Virtual | Virtual | No OffscreenCanvas, worker master |
+| Scenario | Master Context | Standard Slaves | Text Slaves | When Used                                 |
+| -------- | -------------- | --------------- | ----------- | ----------------------------------------- |
+| A        | Main thread    | Workers         | Workers     | OffscreenCanvas + WebGL2                  |
+| B        | Main thread    | Workers         | Virtual     | OffscreenCanvas, no WebGL2                |
+| C        | Main thread    | Virtual         | Virtual     | No OffscreenCanvas                        |
+| D        | Worker         | Workers         | Workers     | OffscreenCanvas + WebGL2, worker master   |
+| E        | Worker         | Workers         | Virtual     | OffscreenCanvas, no WebGL2, worker master |
+| F        | Worker         | Virtual         | Virtual     | No OffscreenCanvas, worker master         |
 
 Virtual slaves are used when:
+
 - **Standard slaves**: OffscreenCanvas is not available (scenarios C, F)
 - **Text slaves**: WebGL2 is not available or OffscreenCanvas is not available (scenarios B, C, E, F)
 
@@ -107,20 +108,20 @@ Virtual slaves implement the same message protocol as real workers:
 
 ### Incoming Messages (Master → Slave)
 
-| Message Type | Description |
-|--------------|-------------|
-| `init` | Initialize the slave, triggers capabilities and ready responses |
-| `batch` | Process a batch of layers |
-| `abort` | Cancel current rendering operation |
+| Message Type | Description                                                     |
+| ------------ | --------------------------------------------------------------- |
+| `init`       | Initialize the slave, triggers capabilities and ready responses |
+| `batch`      | Process a batch of layers                                       |
+| `abort`      | Cancel current rendering operation                              |
 
 ### Outgoing Messages (Slave → Master)
 
-| Message Type | Description |
-|--------------|-------------|
-| `capabilities` | Reports OffscreenCanvas and WebGL2 availability |
-| `ready` | Slave is ready to receive work |
-| `result` | Rendering complete, contains RenderSegment array |
-| `error` | Error occurred during rendering |
+| Message Type   | Description                                      |
+| -------------- | ------------------------------------------------ |
+| `capabilities` | Reports OffscreenCanvas and WebGL2 availability  |
+| `ready`        | Slave is ready to receive work                   |
+| `result`       | Rendering complete, contains RenderSegment array |
+| `error`        | Error occurred during rendering                  |
 
 ## Direct Asset Registration
 
@@ -139,17 +140,17 @@ textSlave.registerFontDirect(fontId, 'FontFamily', fontArrayBuffer);
 
 The VirtualTextSlave handles all supported effects, with WebGL2 fallbacks:
 
-| Effect | WebGL2 Required | Fallback |
-|--------|-----------------|----------|
-| no-effect | No | N/A |
-| shadow | No | N/A |
-| engraving | No | N/A |
-| hotstamp | No | N/A |
-| metal | No | N/A |
-| painted | No | N/A |
-| embroidery | Yes | no-effect |
-| foil | Yes | no-effect |
-| normal | Yes | no-effect |
+| Effect     | WebGL2 Required | Fallback  |
+| ---------- | --------------- | --------- |
+| no-effect  | No              | N/A       |
+| shadow     | No              | N/A       |
+| engraving  | No              | N/A       |
+| hotstamp   | No              | N/A       |
+| metal      | No              | N/A       |
+| painted    | No              | N/A       |
+| embroidery | Yes             | no-effect |
+| foil       | Yes             | no-effect |
+| normal     | Yes             | no-effect |
 
 When WebGL2 is not available, effects that require it fall back to the simpler
 no-effect pipeline with a console warning.
@@ -171,6 +172,7 @@ if (shouldUseVirtualStandardSlaves) {
 ## Testing
 
 Unit tests cover:
+
 - Initialization and capability reporting
 - Termination and resource cleanup
 - Event listener management (addEventListener/removeEventListener)
@@ -180,6 +182,7 @@ Unit tests cover:
 - Empty batch handling
 
 Run tests with:
+
 ```bash
 npm run test:unit -- src/js/virtual-slaves/
 ```

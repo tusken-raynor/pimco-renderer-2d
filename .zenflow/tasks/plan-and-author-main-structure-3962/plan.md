@@ -684,7 +684,8 @@ Create virtual slave class for main-thread fallback.
 
 ---
 
-### [ ] Step: Fallback Scenarios A-F Implementation
+### [x] Step: Fallback Scenarios A-F Implementation
+<!-- chat-id: 8d8b8fbb-9ea1-4e10-b2d5-77a90cdc2424 -->
 
 Implement all six fallback scenarios.
 

@@ -225,7 +225,14 @@ export class VirtualTextSlave implements VirtualSlavePort {
           console.warn('WebGL2 not available, falling back to no-effect for embroidery');
           return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
         }
-        return processEmbroideryEffectLayer(layer, width, height, rasterizedMask, textHeight, texture);
+        return processEmbroideryEffectLayer(
+          layer,
+          width,
+          height,
+          rasterizedMask,
+          textHeight,
+          texture
+        );
 
       case 'engraving':
         return processEngravingEffectLayer(layer, width, height, rasterizedMask, textHeight);

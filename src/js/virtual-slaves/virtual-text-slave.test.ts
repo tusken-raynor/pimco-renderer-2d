@@ -4,10 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { VirtualTextSlave } from './virtual-text-slave';
-import type {
-  SlaveToMasterMessage,
-  CapabilitiesMessage,
-} from '../types/messages';
+import type { SlaveToMasterMessage, CapabilitiesMessage } from '../types/messages';
 
 describe('VirtualTextSlave', () => {
   let slave: VirtualTextSlave;
