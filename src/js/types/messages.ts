@@ -288,6 +288,40 @@ export interface LayerDescriptor {
 }
 
 /**
+ * Text layer descriptor with asset IDs resolved.
+ * This is a specialized version of LayerDescriptor for text layers.
+ */
+export interface TextLayerDescriptor {
+  /** Layer identifier */
+  id: string;
+  /** Asset IDs for text layer resources */
+  assetIds: {
+    /** Base image asset ID */
+    image: number;
+    /** Texture asset ID (optional, for effects) */
+    texture?: number;
+    /** Post-mask asset ID (optional) */
+    postmask?: number;
+    /** Font asset ID (optional) */
+    font?: number;
+  };
+  /** Color mode */
+  mode: 'color' | 'image';
+  /** Color value (resolved to single string for rendering) */
+  color?: string;
+  /** Intra-layer opacity */
+  alpha: number;
+  /** Intra-layer blend mode */
+  blend: BlendMode;
+  /** Inter-layer composite operation */
+  compositemode: CanvasCompositeOperation;
+  /** Inter-layer composite opacity */
+  compositealpha: number;
+  /** Text layer mask data (required for text layers) */
+  maskData: PimcoMaskSubstitutionCompiled;
+}
+
+/**
  * Browser capability detection result.
  */
 export interface CapabilityResult {
