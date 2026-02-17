@@ -366,39 +366,36 @@ describe('processFoilEffectLayer', () => {
     expect(result).not.toBeNull();
   });
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should process layer with custom erosion radius',
-    async () => {
-      const { processFoilEffectLayer } = await import('./foil');
+  it.skipIf(!hasOffscreenCanvas())('should process layer with custom erosion radius', async () => {
+    const { processFoilEffectLayer } = await import('./foil');
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(25, 25, 50, 50);
-      }
-
-      const layer = {
-        id: 'test-layer',
-        assetIds: { image: 1 },
-        mode: 'color' as const,
-        color: '#ffd700',
-        alpha: 1.0,
-        blend: 'normal' as const,
-        compositemode: 'source-over' as const,
-        compositealpha: 1.0,
-        maskData: {
-          effectparams: {
-            AlphaErosionRadius: 2.5,
-          },
-        },
-      };
-
-      const result = processFoilEffectLayer(layer, 100, 100, mockMask, 50);
-
-      expect(result).not.toBeNull();
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(25, 25, 50, 50);
     }
-  );
+
+    const layer = {
+      id: 'test-layer',
+      assetIds: { image: 1 },
+      mode: 'color' as const,
+      color: '#ffd700',
+      alpha: 1.0,
+      blend: 'normal' as const,
+      compositemode: 'source-over' as const,
+      compositealpha: 1.0,
+      maskData: {
+        effectparams: {
+          AlphaErosionRadius: 2.5,
+        },
+      },
+    };
+
+    const result = processFoilEffectLayer(layer, 100, 100, mockMask, 50);
+
+    expect(result).not.toBeNull();
+  });
 
   it.skipIf(!hasOffscreenCanvas())('should process layer with texture', async () => {
     const { processFoilEffectLayer } = await import('./foil');

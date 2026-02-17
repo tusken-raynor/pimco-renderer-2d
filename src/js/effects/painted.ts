@@ -91,11 +91,7 @@ export function extractPaintedParams(maskData: PimcoMaskSubstitutionCompiled): {
 
   let paintedInsetShrink = DEFAULT_INSET_SHRINK;
 
-  if (
-    params &&
-    'PaintedInsetShrink' in params &&
-    typeof params.PaintedInsetShrink === 'number'
-  ) {
+  if (params && 'PaintedInsetShrink' in params && typeof params.PaintedInsetShrink === 'number') {
     paintedInsetShrink = params.PaintedInsetShrink;
   }
 

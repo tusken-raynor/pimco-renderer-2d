@@ -593,7 +593,11 @@ Creates a painted/printed appearance for text layers with a slight inset and edg
 **Usage:**
 
 ```typescript
-import { applyPaintedEffect, extractPaintedParams, getPaintedEffectInfo } from '@/js/effects/painted';
+import {
+  applyPaintedEffect,
+  extractPaintedParams,
+  getPaintedEffectInfo,
+} from '@/js/effects/painted';
 
 // Apply painted effect pipeline
 const result = applyPaintedEffect({
@@ -662,7 +666,11 @@ The light direction determines where the virtual light source is positioned:
 **Usage:**
 
 ```typescript
-import { applyNormalEffect, extractNormalParams, getValidLightDirections } from '@/js/effects/normal';
+import {
+  applyNormalEffect,
+  extractNormalParams,
+  getValidLightDirections,
+} from '@/js/effects/normal';
 
 // Apply normal effect pipeline
 const result = applyNormalEffect({

@@ -201,7 +201,8 @@ export function createColoredTextContent(
     const tiled = tile(texture, width, height);
     if (tiled) {
       ctx.drawImage(tiled, 0, 0);
-      ctx.globalCompositeOperation = blend === 'normal' ? 'multiply' : blendModeToCompositeOp(blend);
+      ctx.globalCompositeOperation =
+        blend === 'normal' ? 'multiply' : blendModeToCompositeOp(blend);
     }
   } else {
     // If no texture, just use source-over
@@ -267,8 +268,18 @@ export function createNormalMapInput(
  * @returns Result with canvas and context
  */
 export function applyNormalEffect(params: NormalEffectParams): NormalEffectResult {
-  const { width, height, color, alpha, blend, texture, mask, roundness, intensity, lightDirection } =
-    params;
+  const {
+    width,
+    height,
+    color,
+    alpha,
+    blend,
+    texture,
+    mask,
+    roundness,
+    intensity,
+    lightDirection,
+  } = params;
 
   // Scale roundness to canvas resolution
   // The legacy code uses: 6 * targetWidth / 2048 as the scale factor for roundness
@@ -316,19 +327,11 @@ export function applyNormalEffect(params: NormalEffectParams): NormalEffectResul
 
   // Draw the normal map, accounting for roundness offset
   outputCtx.globalCompositeOperation = 'source-over';
-  outputCtx.drawImage(
-    normalCanvas,
-    -roundnessResult.offsetX,
-    -roundnessResult.offsetY
-  );
+  outputCtx.drawImage(normalCanvas, -roundnessResult.offsetX, -roundnessResult.offsetY);
 
   // Apply original mask to clean up edges
   outputCtx.globalCompositeOperation = 'destination-in';
-  outputCtx.drawImage(
-    roundnessResult.canvas,
-    -roundnessResult.offsetX,
-    -roundnessResult.offsetY
-  );
+  outputCtx.drawImage(roundnessResult.canvas, -roundnessResult.offsetX, -roundnessResult.offsetY);
 
   // Reset context state
   outputCtx.globalCompositeOperation = 'source-over';

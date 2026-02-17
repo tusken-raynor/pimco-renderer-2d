@@ -15,9 +15,11 @@ Integration tests verify that multiple modules work together correctly. These te
 
 ### render-pipeline.test.ts
 
-Tests the standard rendering workflow from JSON layers to final ImageBitmap.
+Tests the rendering workflow from JSON layers to final ImageBitmap, including both standard and text layer rendering.
 
 **Test Coverage:**
+
+#### Standard Rendering Pipeline Integration
 
 1. **Layer Classification**
    - Standard layers (string mask) correctly identified
@@ -51,6 +53,41 @@ Tests the standard rendering workflow from JSON layers to final ImageBitmap.
    - JSON parsing and validation
    - ImageBitmap to canvas drawing
    - Timing measurement
+
+#### Text Rendering Pipeline Integration
+
+1. **Mixed Layer Classification**
+   - Standard and text layers correctly separated
+   - Original indices preserved for text layers
+   - Effect type extracted from text layers
+   - Mask data (content, transforms, etc.) extracted
+
+2. **Text Layer Asset Extraction**
+   - Image URLs extracted from text layers
+   - Postmask URLs extracted when present
+   - Texture URLs extracted for effects
+   - Mask object not treated as URL
+
+3. **Text Layer Distribution**
+   - Round-robin distribution to text slaves
+   - Handles case with no text slaves (fallback scenario)
+
+4. **Text Layer Composition**
+   - Mixed standard and text segments composed correctly
+   - Layers composed in correct original order across slave types
+   - Text layers with different composite modes handled
+   - Text-only renders (no standard layers) work correctly
+
+5. **Text Effect Parameters**
+   - Embroidery, engraving, metal, painted, hotstamp, foil, normal effects supported
+   - Transform parameters (rotation, translation, scale) extracted
+   - Effect-less text layers handled (no-effect)
+
+6. **Text Typography Settings**
+   - Font family, weight, size extracted
+   - Letter spacing, line height handled
+   - Text transform (uppercase, lowercase, capitalize) supported
+   - Alignment (left, center, right) supported
 
 ## Planned Tests
 

@@ -282,28 +282,48 @@ The RenderMaster is the orchestrator of the multi-threaded rendering pipeline. I
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        RenderMaster                              │
-│                                                                  │
-│  ┌─────────────┐    ┌───────────────────────────────────────┐  │
-│  │   Asset     │    │           Standard Slaves              │  │
-│  │   Manager   │    │  ┌──────┐ ┌──────┐ ┌──────┐           │  │
-│  │   Worker    │───▶│  │Slave1│ │Slave2│ │SlaveN│           │  │
-│  │             │    │  └──────┘ └──────┘ └──────┘           │  │
-│  └─────────────┘    └───────────────────────────────────────┘  │
-│         │                         │                             │
-│         │         MessageChannel  │                             │
-│         │           (per slave)   │                             │
-│         └─────────────────────────┘                             │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │                    MasterCompositor                          ││
-│  │  - Final composition of slave results                        ││
-│  │  - Maintains original layer order                            ││
-│  │  - Applies compositealpha per segment                        ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                           RenderMaster                                │
+│                                                                       │
+│  ┌──────────────┐                                                    │
+│  │    Asset     │                                                    │
+│  │   Manager    │                                                    │
+│  │   Worker     │                                                    │
+│  └───────┬──────┘                                                    │
+│          │                                                           │
+│          │ MessageChannel (per slave)                                │
+│          │                                                           │
+│  ┌───────┴────────────────────────────────────────────────────────┐ │
+│  │                                                                 │ │
+│  │  ┌────────────────────────────────┐  ┌───────────────────────┐ │ │
+│  │  │      Standard Slaves           │  │     Text Slaves       │ │ │
+│  │  │  ┌──────┐ ┌──────┐ ┌──────┐   │  │  ┌──────┐ ┌──────┐   │ │ │
+│  │  │  │Std 1 │ │Std 2 │ │Std N │   │  │  │Text 1│ │Text 2│   │ │ │
+│  │  │  └──────┘ └──────┘ └──────┘   │  │  └──────┘ └──────┘   │ │ │
+│  │  │  (string mask layers)         │  │  (object mask layers) │ │ │
+│  │  └────────────────────────────────┘  └───────────────────────┘ │ │
+│  │                                                                 │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                    │                                  │
+│                                    ▼                                  │
+│  ┌─────────────────────────────────────────────────────────────────┐ │
+│  │                      MasterCompositor                            │ │
+│  │  - Collects results from standard AND text slaves                │ │
+│  │  - Sorts layers by original index (maintains layer order)        │ │
+│  │  - Applies compositealpha per segment                            │ │
+│  │  - Produces final ImageBitmap                                    │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
 ```
+
+### Layer Routing
+
+Layers are classified and routed to the appropriate slave type:
+
+- **Standard Layers** (mask is a string URL): Routed to standard render slaves
+- **Text Layers** (mask is a PimcoMaskSubstitutionCompiled object): Routed to text render slaves
+
+Both layer types are distributed round-robin across their respective slave pools.
 
 ### Public API
 
@@ -323,8 +343,11 @@ class RenderMaster {
   // Get detected capabilities
   getCapabilities(): { offscreenCanvas: boolean; webgl2: boolean; scenario: FallbackScenario };
 
-  // Get the number of active slaves
+  // Get the number of active standard slaves
   getSlaveCount(): number;
+
+  // Get the number of active text slaves
+  getTextSlaveCount(): number;
 
   // Cleanup all workers and resources
   destroy(): void;
@@ -340,14 +363,14 @@ interface RenderMasterOptions {
 
 ### Render Flow
 
-1. **Initialization**: Spawn Asset Manager and Standard Slaves based on capability detection
+1. **Initialization**: Spawn Asset Manager, Standard Slaves, and Text Slaves based on capability detection
 2. **Layer Classification**: Classify layers as standard (string mask) or text (object mask)
-3. **Asset Extraction**: Extract all unique URLs from layers (images, masks, textures, highlights)
+3. **Asset Extraction**: Extract all unique URLs from layers (images, masks, textures, highlights, postmasks)
 4. **Asset Fetching**: Send fetch request to Asset Manager, wait for completion
-5. **Asset Distribution**: Distribute assets to slaves that need them
-6. **Work Distribution**: Distribute layers round-robin to slaves
-7. **Batch Rendering**: Send batch messages to slaves, collect results
-8. **Final Composition**: Use MasterCompositor to compose results in correct order
+5. **Asset Distribution**: Distribute assets to both standard and text slaves
+6. **Work Distribution**: Distribute standard layers to standard slaves and text layers to text slaves (round-robin)
+7. **Batch Rendering**: Send batch messages to all slaves in parallel, collect results
+8. **Final Composition**: Use MasterCompositor to compose results from both slave types in correct order
 9. **Cleanup**: Close segment bitmaps after composition
 
 ### Abort Handling
@@ -355,7 +378,7 @@ interface RenderMasterOptions {
 The RenderMaster supports abort-on-reentry:
 
 - If `render()` is called while a previous render is in progress, the previous render is aborted
-- Slaves receive abort messages and cancel their current work
+- Both standard and text slaves receive abort messages and cancel their current work
 - The pending promise is rejected with an `AbortError`
 
 ### Example Usage

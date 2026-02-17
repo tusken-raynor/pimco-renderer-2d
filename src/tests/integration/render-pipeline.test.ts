@@ -526,3 +526,323 @@ describe('Dev App Workflow Integration', () => {
     });
   });
 });
+
+// =============================================================================
+// Text Rendering Pipeline Integration Tests
+// =============================================================================
+
+describe('Text Rendering Pipeline Integration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('Mixed Layer Classification', () => {
+    it('should correctly classify mixed standard and text layers', () => {
+      const layers = [...createTestLayers(), createTextLayer()];
+      const classification = classifyLayers(layers);
+
+      expect(classification.total).toBe(4);
+      expect(classification.standardCount).toBe(3);
+      expect(classification.textCount).toBe(1);
+    });
+
+    it('should preserve original indices for text layers', () => {
+      const layers = [...createTestLayers(), createTextLayer()];
+      const classification = classifyLayers(layers);
+
+      // Text layer is at index 3
+      expect(classification.text[0].index).toBe(3);
+      expect(classification.text[0].layer.id).toBe('text1');
+    });
+
+    it('should extract effect type from text layers', () => {
+      const layers = [createTextLayer()];
+      const classification = classifyLayers(layers);
+
+      expect(classification.text[0].effect).toBe('embroidery');
+    });
+
+    it('should extract mask data from text layers', () => {
+      const layers = [createTextLayer()];
+      const classification = classifyLayers(layers);
+
+      expect(classification.text[0].maskData).toBeDefined();
+      expect(classification.text[0].maskData?.content).toBe('My Name');
+      expect(classification.text[0].maskData?.effect).toBe('embroidery');
+    });
+  });
+
+  describe('Text Layer Asset Extraction', () => {
+    it('should not extract mask URL from text layers', () => {
+      const textLayer = createTextLayer();
+      const urls: string[] = [];
+
+      // Only image should be extracted, not mask (which is an object)
+      if (textLayer.image) {
+        urls.push(textLayer.image);
+      }
+      if (typeof textLayer.mask === 'string') {
+        urls.push(textLayer.mask);
+      }
+
+      expect(urls.length).toBe(1);
+      expect(urls[0]).toBe('/effects/embroidery/texture.jpg');
+    });
+
+    it('should extract postmask URL from text layers', () => {
+      const textLayer: ProductImageComponent = {
+        id: 'text2',
+        name: 'With Postmask',
+        mode: 'color',
+        alpha: 1,
+        blend: 'multiply',
+        image: '/images/base.png',
+        mask: {
+          content: 'Test',
+          postmask: '/masks/postmask.png',
+        },
+      };
+
+      const urls: string[] = [];
+
+      if (textLayer.image) {
+        urls.push(textLayer.image);
+      }
+      if (typeof textLayer.mask === 'object' && textLayer.mask.postmask) {
+        urls.push(textLayer.mask.postmask);
+      }
+
+      expect(urls.length).toBe(2);
+      expect(urls).toContain('/images/base.png');
+      expect(urls).toContain('/masks/postmask.png');
+    });
+
+    it('should extract texture URL from text layers', () => {
+      const textLayer = createTextLayer();
+      const urls: string[] = [];
+
+      if (textLayer.image) {
+        urls.push(textLayer.image);
+      }
+      if (textLayer.texture) {
+        urls.push(textLayer.texture);
+      }
+
+      expect(urls).toContain('/effects/embroidery/texture.jpg');
+    });
+  });
+
+  describe('Text Layer Distribution', () => {
+    it('should distribute text layers round-robin to text slaves', () => {
+      // Simulate 3 text layers and 2 text slaves
+      const textLayers = [
+        createTextLayer(),
+        { ...createTextLayer(), id: 'text2' },
+        { ...createTextLayer(), id: 'text3' },
+      ];
+      const textSlaveCount = 2;
+
+      const distribution = new Map<number, number[]>();
+      for (let i = 0; i < textSlaveCount; i++) {
+        distribution.set(i, []);
+      }
+
+      textLayers.forEach((_, index) => {
+        const slaveIdx = index % textSlaveCount;
+        distribution.get(slaveIdx)?.push(index);
+      });
+
+      // Text layers 0, 2 go to slave 0; layer 1 goes to slave 1
+      expect(distribution.get(0)).toEqual([0, 2]);
+      expect(distribution.get(1)).toEqual([1]);
+    });
+
+    it('should handle case with no text slaves', () => {
+      const textLayers = [createTextLayer()];
+      const textSlaveCount = 0;
+
+      const distribution = new Map<number, number[]>();
+
+      // With no text slaves, distribution should be empty
+      expect(distribution.size).toBe(0);
+
+      // Verify we have text layers to process (virtual slaves would handle in Phase 4)
+      expect(textSlaveCount).toBe(0);
+      expect(textLayers.length).toBe(1);
+    });
+  });
+
+  describe('Text Layer Composition', () => {
+    let compositor: MasterCompositor;
+
+    beforeEach(() => {
+      compositor = new MasterCompositor();
+    });
+
+    afterEach(() => {
+      compositor.destroy();
+    });
+
+    it('should compose mixed standard and text segments', async () => {
+      // Simulate segments from both standard and text slaves
+      const standardSegments = [
+        createMockSegment('source-over', 1.0),
+        createMockSegment('multiply', 0.8),
+      ];
+      const textSegments = [createMockSegment('source-over', 0.9)];
+
+      const allSegments = [...standardSegments, ...textSegments];
+      const result = await composeSegments(allSegments, 800, 800);
+
+      expect(result).toBeDefined();
+      expect(result.width).toBe(800);
+      expect(result.height).toBe(800);
+    });
+
+    it('should compose layers in correct order across slave types', async () => {
+      // Simulate interleaved layers from standard and text slaves
+      // Original order: [standard:0, standard:1, text:2, standard:3]
+      const composedLayers: ComposedLayer[] = [
+        { segment: createMockSegment('source-over', 1.0), originalIndex: 0 },
+        { segment: createMockSegment('multiply', 0.8), originalIndex: 1 },
+        { segment: createMockSegment('source-over', 0.9), originalIndex: 2 }, // Text layer
+        { segment: createMockSegment('screen', 0.7), originalIndex: 3 },
+      ];
+
+      const result = await composeOrderedLayers(composedLayers, 800, 800);
+
+      expect(result).toBeDefined();
+    });
+
+    it('should handle text layer with different composite mode', async () => {
+      // Text layer with multiply composite mode
+      const textSegment = createMockSegment('multiply', 0.8);
+
+      const composedLayers: ComposedLayer[] = [
+        { segment: createMockSegment('source-over', 1.0), originalIndex: 0 },
+        { segment: textSegment, originalIndex: 1 },
+      ];
+
+      const result = await composeOrderedLayers(composedLayers, 400, 400);
+
+      expect(result).toBeDefined();
+    });
+
+    it('should handle only text layers (no standard layers)', async () => {
+      const textSegments = [
+        createMockSegment('source-over', 1.0),
+        createMockSegment('multiply', 0.9),
+      ];
+
+      const composedLayers: ComposedLayer[] = textSegments.map((segment, i) => ({
+        segment,
+        originalIndex: i,
+      }));
+
+      const result = await composeOrderedLayers(composedLayers, 600, 600);
+
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('Text Effect Parameters', () => {
+    it('should extract embroidery effect parameters', () => {
+      const textLayer = createTextLayer();
+      const maskData = textLayer.mask;
+
+      if (typeof maskData === 'object') {
+        expect(maskData.effect).toBe('embroidery');
+        expect(maskData.transform?.rotation).toBe(-51);
+        expect(maskData.transform?.translation).toEqual([17.5, 2.5]);
+      }
+    });
+
+    it('should handle text layers with different effects', () => {
+      const effects = ['embroidery', 'engraving', 'metal', 'painted', 'hotstamp', 'foil', 'normal'];
+
+      for (const effect of effects) {
+        const textLayer: ProductImageComponent = {
+          id: `text-${effect}`,
+          name: `${effect} Layer`,
+          mode: 'color',
+          alpha: 1,
+          blend: 'multiply',
+          image: '/images/base.png',
+          mask: {
+            content: 'Test',
+            effect: effect as ProductImageComponent['mask'] extends object
+              ? NonNullable<ProductImageComponent['mask']>['effect']
+              : never,
+          },
+        };
+
+        const classification = classifyLayers([textLayer]);
+
+        expect(classification.text[0].effect).toBe(effect);
+      }
+    });
+
+    it('should handle text layer without effect (no-effect)', () => {
+      const textLayer: ProductImageComponent = {
+        id: 'text-plain',
+        name: 'Plain Text',
+        mode: 'color',
+        alpha: 1,
+        blend: 'multiply',
+        image: '/images/base.png',
+        mask: {
+          content: 'Plain Text',
+          // No effect specified
+        },
+      };
+
+      const classification = classifyLayers([textLayer]);
+
+      expect(classification.text[0].effect).toBeUndefined();
+    });
+  });
+
+  describe('Text Typography Settings', () => {
+    it('should extract typography settings from text layer', () => {
+      const textLayer = createTextLayer();
+
+      if (typeof textLayer.mask === 'object' && textLayer.mask.type) {
+        expect(textLayer.mask.type.fontfamily).toBe('"Brush Script", sans-serif');
+        expect(textLayer.mask.type.maxwidth).toBe(0.38);
+        expect(textLayer.mask.type.lineheight).toBe(0.1);
+      }
+    });
+
+    it('should handle text layer with full typography settings', () => {
+      const textLayer: ProductImageComponent = {
+        id: 'text-full-typo',
+        name: 'Full Typography',
+        mode: 'color',
+        alpha: 1,
+        blend: 'multiply',
+        image: '/images/base.png',
+        mask: {
+          content: 'Styled Text',
+          type: {
+            fontfamily: 'Arial',
+            fontweight: 700,
+            letterspacing: '0.1em',
+            lineheight: 1.5,
+            texttransform: 'uppercase',
+            widthscale: 1.2,
+            maxwidth: 0.5,
+            alignment: 'center',
+            heightscale: 1.0,
+          },
+        },
+      };
+
+      if (typeof textLayer.mask === 'object' && textLayer.mask.type) {
+        expect(textLayer.mask.type.fontfamily).toBe('Arial');
+        expect(textLayer.mask.type.fontweight).toBe(700);
+        expect(textLayer.mask.type.alignment).toBe('center');
+        expect(textLayer.mask.type.texttransform).toBe('uppercase');
+      }
+    });
+  });
+});

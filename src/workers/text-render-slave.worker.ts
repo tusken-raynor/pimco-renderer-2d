@@ -46,7 +46,11 @@ import { processNormalEffectLayer } from '../js/effects/normal';
 
 import { canvasToImageBitmap, createCanvas, getContext2D } from '../js/utils/canvas';
 import type { AnyCanvas } from '../js/utils/canvas';
-import { applyTransformAndDraw, hasActiveTransform, type TextAlignment } from '../js/text-render-slave/transforms';
+import {
+  applyTransformAndDraw,
+  hasActiveTransform,
+  type TextAlignment,
+} from '../js/text-render-slave/transforms';
 
 // Create the text render slave instance
 const textRenderSlave = new TextRenderSlave();
@@ -180,7 +184,14 @@ function applyEffect(
         console.warn('WebGL2 not available, falling back to no-effect for embroidery');
         return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
       }
-      return processEmbroideryEffectLayer(layer, width, height, rasterizedMask, textHeight, texture);
+      return processEmbroideryEffectLayer(
+        layer,
+        width,
+        height,
+        rasterizedMask,
+        textHeight,
+        texture
+      );
 
     case 'engraving':
       return processEngravingEffectLayer(layer, width, height, rasterizedMask, textHeight);
@@ -237,7 +248,12 @@ async function renderTextLayer(
   width: number,
   height: number,
   index: number
-): Promise<{ bitmap: ImageBitmap; index: number; compositemode: string; compositealpha: number } | null> {
+): Promise<{
+  bitmap: ImageBitmap;
+  index: number;
+  compositemode: string;
+  compositealpha: number;
+} | null> {
   // Check for abort
   if (textRenderSlave.isAborted()) {
     return null;
@@ -292,14 +308,7 @@ async function renderTextLayer(
   // Apply transforms and draw
   if (hasActiveTransform(maskData.transform)) {
     // Use transform-based drawing
-    applyTransformAndDraw(
-      outputCtx,
-      effectCanvas,
-      maskData.transform,
-      width,
-      height,
-      alignment
-    );
+    applyTransformAndDraw(outputCtx, effectCanvas, maskData.transform, width, height, alignment);
   } else {
     // No transforms: draw at origin (effect canvas is already full-size)
     outputCtx.drawImage(effectCanvas, 0, 0);
@@ -405,7 +414,11 @@ self.onmessage = async (event: MessageEvent<MasterToSlaveMessage>) => {
     } else if (isBatchMessage(message)) {
       // The batch message contains layers, but for text slaves these should be TextLayerDescriptors
       // The master is responsible for routing the correct layer type to the correct slave
-      await handleBatch(message.layers as unknown as TextLayerDescriptor[], message.width, message.height);
+      await handleBatch(
+        message.layers as unknown as TextLayerDescriptor[],
+        message.width,
+        message.height
+      );
     } else if (isAbortMessage(message)) {
       handleAbort();
     }

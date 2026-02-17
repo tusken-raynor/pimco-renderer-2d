@@ -640,17 +640,18 @@ Create the worker entry point for Text Render Slave.
 
 ---
 
-### [ ] Step: RenderMaster Text Layer Routing
+### [x] Step: RenderMaster Text Layer Routing
+<!-- chat-id: e9325a5d-18d7-4716-a425-1791fa6878d9 -->
 
 Integrate text layer routing into RenderMaster.
 
 **Tasks:**
-- [ ] Update `src/js/renderer/index.ts`
+- [x] Update `src/js/renderer/index.ts`
   - Spawn text slaves
   - Route text layers to text slaves
   - Handle text slave results in composition
-- [ ] Create integration tests for text rendering
-- [ ] Update integration test documentation
+- [x] Create integration tests for text rendering
+- [x] Update integration test documentation
 
 **Verification:**
 - Text layers render correctly

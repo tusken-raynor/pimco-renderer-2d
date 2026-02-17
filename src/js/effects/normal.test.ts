@@ -408,106 +408,97 @@ describe('applyNormalEffect', () => {
     }
   );
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should work with various light directions',
-    async () => {
-      const { applyNormalEffect } = await import('./normal');
+  it.skipIf(!hasOffscreenCanvas())('should work with various light directions', async () => {
+    const { applyNormalEffect } = await import('./normal');
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = getOffscreenContext(mockMask);
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = getOffscreenContext(mockMask);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(25, 25, 50, 50);
 
-      const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
+    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
 
-      for (const direction of directions) {
-        const result = applyNormalEffect({
-          width: 100,
-          height: 100,
-          color: '#ffffff',
-          alpha: 1.0,
-          blend: 'normal',
-          mask: mockMask,
-          roundness: 0,
-          intensity: 1.0,
-          lightDirection: direction,
-        });
-
-        expect(result.canvas).toBeDefined();
-        expect(result.ctx).toBeDefined();
-      }
-    }
-  );
-
-  it.skipIf(!hasOffscreenCanvas())(
-    'should work with various intensity values',
-    async () => {
-      const { applyNormalEffect } = await import('./normal');
-
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = getOffscreenContext(mockMask);
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-
-      const intensities = [0.5, 1.0, 1.5, 2.0, 3.0];
-
-      for (const intensity of intensities) {
-        const result = applyNormalEffect({
-          width: 100,
-          height: 100,
-          color: '#ffffff',
-          alpha: 1.0,
-          blend: 'normal',
-          mask: mockMask,
-          roundness: 0,
-          intensity,
-          lightDirection: 'N',
-        });
-
-        expect(result.canvas).toBeDefined();
-        expect(result.ctx).toBeDefined();
-      }
-    }
-  );
-
-  it.skipIf(!hasOffscreenCanvas())(
-    'should work with texture',
-    async () => {
-      const { applyNormalEffect } = await import('./normal');
-
-      const mockMask = new OffscreenCanvas(100, 100);
-      const maskCtx = getOffscreenContext(mockMask);
-      maskCtx.fillStyle = '#000000';
-      maskCtx.fillRect(25, 25, 50, 50);
-
-      // Create a mock texture
-      const mockTexture = new OffscreenCanvas(20, 20);
-      const texCtx = getOffscreenContext(mockTexture);
-      texCtx.fillStyle = '#cccccc';
-      texCtx.fillRect(0, 0, 20, 20);
-
-      // Convert to ImageBitmap
-      const imageBitmap = await createImageBitmap(mockTexture);
-
+    for (const direction of directions) {
       const result = applyNormalEffect({
         width: 100,
         height: 100,
         color: '#ffffff',
         alpha: 1.0,
-        blend: 'multiply',
+        blend: 'normal',
         mask: mockMask,
         roundness: 0,
         intensity: 1.0,
-        lightDirection: 'N',
-        texture: imageBitmap,
+        lightDirection: direction,
       });
 
       expect(result.canvas).toBeDefined();
       expect(result.ctx).toBeDefined();
-
-      imageBitmap.close();
     }
-  );
+  });
+
+  it.skipIf(!hasOffscreenCanvas())('should work with various intensity values', async () => {
+    const { applyNormalEffect } = await import('./normal');
+
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = getOffscreenContext(mockMask);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(25, 25, 50, 50);
+
+    const intensities = [0.5, 1.0, 1.5, 2.0, 3.0];
+
+    for (const intensity of intensities) {
+      const result = applyNormalEffect({
+        width: 100,
+        height: 100,
+        color: '#ffffff',
+        alpha: 1.0,
+        blend: 'normal',
+        mask: mockMask,
+        roundness: 0,
+        intensity,
+        lightDirection: 'N',
+      });
+
+      expect(result.canvas).toBeDefined();
+      expect(result.ctx).toBeDefined();
+    }
+  });
+
+  it.skipIf(!hasOffscreenCanvas())('should work with texture', async () => {
+    const { applyNormalEffect } = await import('./normal');
+
+    const mockMask = new OffscreenCanvas(100, 100);
+    const maskCtx = getOffscreenContext(mockMask);
+    maskCtx.fillStyle = '#000000';
+    maskCtx.fillRect(25, 25, 50, 50);
+
+    // Create a mock texture
+    const mockTexture = new OffscreenCanvas(20, 20);
+    const texCtx = getOffscreenContext(mockTexture);
+    texCtx.fillStyle = '#cccccc';
+    texCtx.fillRect(0, 0, 20, 20);
+
+    // Convert to ImageBitmap
+    const imageBitmap = await createImageBitmap(mockTexture);
+
+    const result = applyNormalEffect({
+      width: 100,
+      height: 100,
+      color: '#ffffff',
+      alpha: 1.0,
+      blend: 'multiply',
+      mask: mockMask,
+      roundness: 0,
+      intensity: 1.0,
+      lightDirection: 'N',
+      texture: imageBitmap,
+    });
+
+    expect(result.canvas).toBeDefined();
+    expect(result.ctx).toBeDefined();
+
+    imageBitmap.close();
+  });
 });
 
 // ============================================================================
@@ -515,30 +506,27 @@ describe('applyNormalEffect', () => {
 // ============================================================================
 
 describe('processNormalEffectLayer', () => {
-  it.skipIf(!hasOffscreenCanvas())(
-    'should process layer with default parameters',
-    async () => {
-      const { processNormalEffectLayer } = await import('./normal');
+  it.skipIf(!hasOffscreenCanvas())('should process layer with default parameters', async () => {
+    const { processNormalEffectLayer } = await import('./normal');
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = getOffscreenContext(mockMask);
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = getOffscreenContext(mockMask);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(25, 25, 50, 50);
 
-      const layer = {
-        color: '#ffffff',
-        alpha: 1.0,
-        blend: 'normal' as const,
-        maskData: {},
-      };
+    const layer = {
+      color: '#ffffff',
+      alpha: 1.0,
+      blend: 'normal' as const,
+      maskData: {},
+    };
 
-      const result = processNormalEffectLayer(layer as never, 100, 100, mockMask);
+    const result = processNormalEffectLayer(layer as never, 100, 100, mockMask);
 
-      expect(result).not.toBeNull();
-      expect(result?.width).toBe(100);
-      expect(result?.height).toBe(100);
-    }
-  );
+    expect(result).not.toBeNull();
+    expect(result?.width).toBe(100);
+    expect(result?.height).toBe(100);
+  });
 
   it.skipIf(!hasOffscreenCanvas())(
     'should process layer with custom effect parameters',

@@ -19,6 +19,7 @@ import type {
   ProductImageComponent,
   RenderSegment,
   LayerDescriptor,
+  TextLayerDescriptor,
   AssetRequest,
   AssetDelivery,
   FallbackScenario,
@@ -26,6 +27,7 @@ import type {
   ErrorMessage,
   SlaveToMasterMessage,
   AssetManagerToMasterMessage,
+  PimcoMaskSubstitutionCompiled,
 } from '../types';
 import {
   isReadyMessage,
@@ -35,7 +37,7 @@ import {
   isFetchCompleteMessage,
   isDistributeCompleteMessage,
 } from '../types';
-import { isStandardLayerMask } from '../types/pimco';
+import { isStandardLayerMask, isTextLayerMask } from '../types/pimco';
 import { classifyLayers, type ClassificationResult } from './layer-classifier';
 import { probeCapabilities, probeCapabilitiesForContext } from './capability-probe';
 import { MasterCompositor, type ComposedLayer, closeSegments } from './master-compositor';
@@ -44,6 +46,7 @@ import { RenderError, AbortError, WorkerError, wrapError } from '../errors';
 // Worker URLs - Vite handles the bundling
 import AssetManagerWorkerUrl from '../../workers/asset-manager.worker.ts?worker&url';
 import RenderSlaveWorkerUrl from '../../workers/render-slave.worker.ts?worker&url';
+import TextRenderSlaveWorkerUrl from '../../workers/text-render-slave.worker.ts?worker&url';
 
 /**
  * Options for RenderMaster initialization.
@@ -55,11 +58,16 @@ export interface RenderMasterOptions {
   height?: number;
   /** Number of standard render slaves (default: navigator.hardwareConcurrency or 4) */
   slaveCount?: number;
-  /** Number of text render slaves (default: 2) - for future use */
+  /** Number of text render slaves (default: 2) */
   textSlaveCount?: number;
   /** Optional MessagePort for when master runs in worker (scenarios D-F) */
   mainThreadPort?: MessagePort;
 }
+
+/**
+ * Slave type identifier.
+ */
+type SlaveType = 'standard' | 'text';
 
 /**
  * Internal slave state tracking.
@@ -69,6 +77,8 @@ interface SlaveState {
   worker: Worker;
   /** Unique slave ID */
   id: number;
+  /** Slave type (standard or text) */
+  type: SlaveType;
   /** Whether slave has reported ready */
   ready: boolean;
   /** Reported capabilities */
@@ -107,8 +117,10 @@ interface PendingRender {
   classification: ClassificationResult;
   /** Collected results from slaves (keyed by slave ID) */
   results: Map<number, RenderSegment[]>;
-  /** Layers assigned to each slave (for tracking) */
+  /** Layers assigned to each standard slave (for tracking) */
   slaveAssignments: Map<number, number[]>;
+  /** Layers assigned to each text slave (for tracking) */
+  textSlaveAssignments: Map<number, number[]>;
   /** Promise resolver */
   resolve: (bitmap: ImageBitmap) => void;
   /** Promise rejecter */
@@ -126,6 +138,9 @@ export class RenderMaster {
 
   /** Standard render slaves */
   private slaves: SlaveState[] = [];
+
+  /** Text render slaves */
+  private textSlaves: SlaveState[] = [];
 
   /** Master compositor for final composition */
   private compositor: MasterCompositor;
@@ -145,6 +160,7 @@ export class RenderMaster {
 
   /** Configuration */
   private slaveCount: number;
+  private textSlaveCount: number;
 
   /** Initialization promise */
   private initPromise: Promise<void> | null = null;
@@ -160,6 +176,8 @@ export class RenderMaster {
     this.defaultHeight = options.height ?? 1024;
     const hardwareConcurrency = navigator.hardwareConcurrency || 4;
     this.slaveCount = options.slaveCount ?? Math.min(hardwareConcurrency, 8);
+    // Text slaves default to 2 - text rendering with effects is more intensive
+    this.textSlaveCount = options.textSlaveCount ?? 2;
 
     this.compositor = new MasterCompositor();
     this.assetMapping = {
@@ -191,18 +209,34 @@ export class RenderMaster {
       console.error('Asset Manager error:', event.message);
     };
 
-    // Spawn Standard Slaves based on scenario
+    // Spawn slaves based on scenario
     const slaveCapabilities = probeCapabilitiesForContext('worker');
-    const shouldUseWorkers =
+
+    // Standard slaves: scenarios A, B, D, E use workers
+    const shouldUseStandardWorkers =
       slaveCapabilities.scenario === 'A' ||
       slaveCapabilities.scenario === 'B' ||
       slaveCapabilities.scenario === 'D' ||
       slaveCapabilities.scenario === 'E';
 
-    if (shouldUseWorkers) {
-      await this.spawnSlaves();
+    // Text slaves: scenarios A and D use workers (require WebGL2)
+    // Scenarios B and E fall back to virtual text slaves (implemented in Phase 4)
+    const shouldUseTextWorkers =
+      slaveCapabilities.scenario === 'A' || slaveCapabilities.scenario === 'D';
+
+    const initPromises: Promise<void>[] = [];
+
+    if (shouldUseStandardWorkers) {
+      initPromises.push(this.spawnSlaves());
     }
     // In scenarios C and F, virtual slaves would be used (implemented in Phase 4)
+
+    if (shouldUseTextWorkers) {
+      initPromises.push(this.spawnTextSlaves());
+    }
+    // In scenarios B, C, E, F, virtual text slaves would be used (implemented in Phase 4)
+
+    await Promise.all(initPromises);
   }
 
   /**
@@ -219,6 +253,7 @@ export class RenderMaster {
       const slaveState: SlaveState = {
         worker,
         id: slaveId,
+        type: 'standard',
         ready: false,
         capabilities: null,
         assetChannel,
@@ -268,6 +303,73 @@ export class RenderMaster {
     }
 
     // Wait for all slaves to be ready
+    await Promise.all(readyPromises);
+  }
+
+  /**
+   * Spawn text render slaves.
+   */
+  private async spawnTextSlaves(): Promise<void> {
+    const readyPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < this.textSlaveCount; i++) {
+      const slaveId = this.nextSlaveId++;
+      const worker = new Worker(TextRenderSlaveWorkerUrl, { type: 'module' });
+      const assetChannel = new MessageChannel();
+
+      const slaveState: SlaveState = {
+        worker,
+        id: slaveId,
+        type: 'text',
+        ready: false,
+        capabilities: null,
+        assetChannel,
+        renderResolver: null,
+        renderRejecter: null,
+      };
+
+      // Create ready promise
+      const readyPromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new WorkerError('Text slave initialization timeout', slaveId));
+        }, 10000);
+
+        worker.onmessage = (event: MessageEvent<SlaveToMasterMessage>) => {
+          this.handleSlaveMessage(slaveState, event.data);
+
+          if (isReadyMessage(event.data)) {
+            slaveState.ready = true;
+            clearTimeout(timeout);
+            resolve();
+          }
+        };
+
+        worker.onerror = (event: ErrorEvent) => {
+          clearTimeout(timeout);
+          reject(new WorkerError(event.message || 'Text slave worker error', slaveId));
+        };
+      });
+
+      readyPromises.push(readyPromise);
+      this.textSlaves.push(slaveState);
+
+      // Register text slave with Asset Manager
+      if (this.assetManager) {
+        this.assetManager.postMessage(
+          {
+            type: 'register-slave',
+            slaveId,
+            port: assetChannel.port1,
+          },
+          [assetChannel.port1]
+        );
+      }
+
+      // Send init message with asset port
+      worker.postMessage({ type: 'init' }, [assetChannel.port2]);
+    }
+
+    // Wait for all text slaves to be ready
     await Promise.all(readyPromises);
   }
 
@@ -385,9 +487,13 @@ export class RenderMaster {
     for (const layer of layers) {
       addImageRequest(layer.image);
 
-      // Only add mask URL for standard layers
+      // Handle mask based on layer type
       if (isStandardLayerMask(layer.mask)) {
+        // Standard layer: mask is a URL
         addImageRequest(layer.mask);
+      } else if (isTextLayerMask(layer.mask)) {
+        // Text layer: extract postmask URL if present
+        addImageRequest(layer.mask.postmask);
       }
 
       addImageRequest(layer.texture);
@@ -463,6 +569,52 @@ export class RenderMaster {
   }
 
   /**
+   * Convert a ProductImageComponent with text mask to a TextLayerDescriptor.
+   *
+   * @param layer - The layer to convert (must have PimcoMaskSubstitutionCompiled mask)
+   * @param maskData - The already-extracted mask data
+   * @returns TextLayerDescriptor for text slave communication
+   */
+  private textLayerToDescriptor(
+    layer: ProductImageComponent,
+    maskData: PimcoMaskSubstitutionCompiled
+  ): TextLayerDescriptor {
+    const assetIds: TextLayerDescriptor['assetIds'] = {
+      image: this.getAssetId(layer.image),
+    };
+
+    // Add optional asset IDs
+    if (layer.texture) {
+      assetIds.texture = this.getAssetId(layer.texture);
+    }
+
+    if (maskData.postmask) {
+      assetIds.postmask = this.getAssetId(maskData.postmask);
+    }
+
+    // Note: Font asset ID handling would be added when font URL extraction is implemented
+
+    const descriptor: TextLayerDescriptor = {
+      id: layer.id,
+      assetIds,
+      mode: layer.mode,
+      alpha: layer.alpha,
+      blend: layer.blend,
+      compositemode: layer.compositemode ?? 'source-over',
+      compositealpha: layer.compositealpha ?? 1.0,
+      maskData,
+    };
+
+    // Add optional color field
+    const color = this.resolveColor(layer.color, layer.coloridx);
+    if (color !== undefined) {
+      descriptor.color = color;
+    }
+
+    return descriptor;
+  }
+
+  /**
    * Send fetch request to Asset Manager and wait for completion.
    */
   private async fetchAssets(requests: AssetRequest[]): Promise<number[]> {
@@ -507,7 +659,7 @@ export class RenderMaster {
   }
 
   /**
-   * Distribute layers across available slaves.
+   * Distribute standard layers across available standard slaves.
    * Returns a map of slave ID to layer descriptors and original indices.
    */
   private distributeLayersToSlaves(
@@ -515,7 +667,7 @@ export class RenderMaster {
   ): Map<number, { descriptors: LayerDescriptor[]; indices: number[] }> {
     const distribution = new Map<number, { descriptors: LayerDescriptor[]; indices: number[] }>();
 
-    // Initialize distribution for all slaves
+    // Initialize distribution for all standard slaves
     for (const slave of this.slaves) {
       distribution.set(slave.id, { descriptors: [], indices: [] });
     }
@@ -535,13 +687,59 @@ export class RenderMaster {
       }
     }
 
-    // Note: Text layers would be distributed to text slaves when implemented
+    return distribution;
+  }
+
+  /**
+   * Distribute text layers across available text slaves.
+   * Returns a map of slave ID to text layer descriptors and original indices.
+   */
+  private distributeTextLayersToSlaves(
+    classification: ClassificationResult
+  ): Map<number, { descriptors: TextLayerDescriptor[]; indices: number[] }> {
+    const distribution = new Map<
+      number,
+      { descriptors: TextLayerDescriptor[]; indices: number[] }
+    >();
+
+    // If no text slaves available, return empty distribution
+    if (this.textSlaves.length === 0) {
+      return distribution;
+    }
+
+    // Initialize distribution for all text slaves
+    for (const slave of this.textSlaves) {
+      distribution.set(slave.id, { descriptors: [], indices: [] });
+    }
+
+    // Distribute text layers round-robin
+    const textLayers = classification.text;
+    for (let i = 0; i < textLayers.length; i++) {
+      const slaveIdx = i % this.textSlaves.length;
+      const slave = this.textSlaves[slaveIdx];
+      const layerInfo = textLayers[i];
+
+      // Text layers have maskData in the classification result
+      const maskData = layerInfo.maskData;
+      if (!maskData) {
+        console.warn(`Text layer ${layerInfo.layer.id} missing maskData, skipping`);
+        continue;
+      }
+
+      const descriptor = this.textLayerToDescriptor(layerInfo.layer, maskData);
+
+      const slaveData = distribution.get(slave.id);
+      if (slaveData) {
+        slaveData.descriptors.push(descriptor);
+        slaveData.indices.push(layerInfo.index);
+      }
+    }
 
     return distribution;
   }
 
   /**
-   * Collect asset IDs needed by each slave.
+   * Collect asset IDs needed by each standard slave.
    */
   private collectSlaveAssetIds(
     distribution: Map<number, { descriptors: LayerDescriptor[]; indices: number[] }>
@@ -564,6 +762,36 @@ export class RenderMaster {
         }
         if (descriptor.assetIds.hlimage2 !== undefined) {
           assetIds.add(descriptor.assetIds.hlimage2);
+        }
+      }
+
+      slaveAssets.set(slaveId, Array.from(assetIds));
+    }
+
+    return slaveAssets;
+  }
+
+  /**
+   * Collect asset IDs needed by each text slave.
+   */
+  private collectTextSlaveAssetIds(
+    distribution: Map<number, { descriptors: TextLayerDescriptor[]; indices: number[] }>
+  ): Map<number, number[]> {
+    const slaveAssets = new Map<number, number[]>();
+
+    for (const [slaveId, { descriptors }] of distribution) {
+      const assetIds = new Set<number>();
+
+      for (const descriptor of descriptors) {
+        assetIds.add(descriptor.assetIds.image);
+        if (descriptor.assetIds.texture !== undefined) {
+          assetIds.add(descriptor.assetIds.texture);
+        }
+        if (descriptor.assetIds.postmask !== undefined) {
+          assetIds.add(descriptor.assetIds.postmask);
+        }
+        if (descriptor.assetIds.font !== undefined) {
+          assetIds.add(descriptor.assetIds.font);
         }
       }
 
@@ -625,13 +853,20 @@ export class RenderMaster {
 
     // Distribute layers to slaves
     const distribution = this.distributeLayersToSlaves(classification);
+    const textDistribution = this.distributeTextLayersToSlaves(classification);
 
     // Collect asset IDs for each slave
     const slaveAssetIds = this.collectSlaveAssetIds(distribution);
+    const textSlaveAssetIds = this.collectTextSlaveAssetIds(textDistribution);
 
-    // Distribute assets to slaves
+    // Distribute assets to all slaves (standard and text)
     const deliveries: AssetDelivery[] = [];
     for (const [slaveId, assetIds] of slaveAssetIds) {
+      if (assetIds.length > 0) {
+        deliveries.push({ slaveId, assetIds });
+      }
+    }
+    for (const [slaveId, assetIds] of textSlaveAssetIds) {
       if (assetIds.length > 0) {
         deliveries.push({ slaveId, assetIds });
       }
@@ -650,6 +885,11 @@ export class RenderMaster {
       slaveAssignments.set(slaveId, indices);
     }
 
+    const textSlaveAssignments = new Map<number, number[]>();
+    for (const [slaveId, { indices }] of textDistribution) {
+      textSlaveAssignments.set(slaveId, indices);
+    }
+
     // Set up pending render state
     this.pendingRender = {
       layers,
@@ -658,6 +898,7 @@ export class RenderMaster {
       classification,
       results: new Map(),
       slaveAssignments,
+      textSlaveAssignments,
       resolve: () => {
         /* Will be set below */
       },
@@ -667,8 +908,12 @@ export class RenderMaster {
       abortController,
     };
 
-    // Send batch messages to slaves
-    const slavePromises: Promise<{ slaveId: number; segments: RenderSegment[] }>[] = [];
+    // Send batch messages to standard slaves
+    const slavePromises: Promise<{
+      slaveId: number;
+      segments: RenderSegment[];
+      isTextSlave: boolean;
+    }>[] = [];
 
     for (const slave of this.slaves) {
       const slaveData = distribution.get(slave.id);
@@ -676,19 +921,50 @@ export class RenderMaster {
         continue;
       }
 
-      const slavePromise = new Promise<{ slaveId: number; segments: RenderSegment[] }>(
-        (resolve, reject) => {
-          slave.renderResolver = (segments) => {
-            resolve({ slaveId: slave.id, segments });
-          };
-          slave.renderRejecter = reject;
-        }
-      );
+      const slavePromise = new Promise<{
+        slaveId: number;
+        segments: RenderSegment[];
+        isTextSlave: boolean;
+      }>((resolve, reject) => {
+        slave.renderResolver = (segments) => {
+          resolve({ slaveId: slave.id, segments, isTextSlave: false });
+        };
+        slave.renderRejecter = reject;
+      });
 
       slavePromises.push(slavePromise);
 
       // Send batch to slave
       slave.worker.postMessage({
+        type: 'batch',
+        layers: slaveData.descriptors,
+        width: renderWidth,
+        height: renderHeight,
+      });
+    }
+
+    // Send batch messages to text slaves
+    for (const textSlave of this.textSlaves) {
+      const slaveData = textDistribution.get(textSlave.id);
+      if (!slaveData || slaveData.descriptors.length === 0) {
+        continue;
+      }
+
+      const slavePromise = new Promise<{
+        slaveId: number;
+        segments: RenderSegment[];
+        isTextSlave: boolean;
+      }>((resolve, reject) => {
+        textSlave.renderResolver = (segments) => {
+          resolve({ slaveId: textSlave.id, segments, isTextSlave: true });
+        };
+        textSlave.renderRejecter = reject;
+      });
+
+      slavePromises.push(slavePromise);
+
+      // Send batch to text slave (text slaves expect TextLayerDescriptor array)
+      textSlave.worker.postMessage({
         type: 'batch',
         layers: slaveData.descriptors,
         width: renderWidth,
@@ -719,8 +995,11 @@ export class RenderMaster {
       // Build composed layers with original indices
       const composedLayers: ComposedLayer[] = [];
 
-      for (const { slaveId, segments } of slaveResults) {
-        const indices = slaveAssignments.get(slaveId) ?? [];
+      for (const { slaveId, segments, isTextSlave } of slaveResults) {
+        // Get the correct assignments based on slave type
+        const indices = isTextSlave
+          ? (textSlaveAssignments.get(slaveId) ?? [])
+          : (slaveAssignments.get(slaveId) ?? []);
 
         // Each segment corresponds to one or more original layers
         // Since we use batch segmentation, segments may be grouped
@@ -774,7 +1053,7 @@ export class RenderMaster {
     // Signal abort
     this.pendingRender.abortController.abort();
 
-    // Send abort message to all slaves
+    // Send abort message to all standard slaves
     for (const slave of this.slaves) {
       slave.worker.postMessage({ type: 'abort' });
       // Clear pending render state for this slave
@@ -782,6 +1061,17 @@ export class RenderMaster {
         slave.renderRejecter(new AbortError('Render aborted'));
         slave.renderResolver = null;
         slave.renderRejecter = null;
+      }
+    }
+
+    // Send abort message to all text slaves
+    for (const textSlave of this.textSlaves) {
+      textSlave.worker.postMessage({ type: 'abort' });
+      // Clear pending render state for this slave
+      if (textSlave.renderRejecter) {
+        textSlave.renderRejecter(new AbortError('Render aborted'));
+        textSlave.renderResolver = null;
+        textSlave.renderRejecter = null;
       }
     }
 
@@ -822,10 +1112,17 @@ export class RenderMaster {
   }
 
   /**
-   * Get the number of active slaves.
+   * Get the number of active standard slaves.
    */
   getSlaveCount(): number {
     return this.slaves.length;
+  }
+
+  /**
+   * Get the number of active text slaves.
+   */
+  getTextSlaveCount(): number {
+    return this.textSlaves.length;
   }
 
   /**
@@ -845,13 +1142,21 @@ export class RenderMaster {
       this.pendingRender = null;
     }
 
-    // Terminate slaves
+    // Terminate standard slaves
     for (const slave of this.slaves) {
       slave.assetChannel.port1.close();
       slave.assetChannel.port2.close();
       slave.worker.terminate();
     }
     this.slaves = [];
+
+    // Terminate text slaves
+    for (const textSlave of this.textSlaves) {
+      textSlave.assetChannel.port1.close();
+      textSlave.assetChannel.port2.close();
+      textSlave.worker.terminate();
+    }
+    this.textSlaves = [];
 
     // Terminate Asset Manager
     if (this.assetManager) {

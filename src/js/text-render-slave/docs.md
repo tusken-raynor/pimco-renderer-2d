@@ -399,17 +399,17 @@ The Text Render Slave Worker (`src/workers/text-render-slave.worker.ts`) provide
 
 **Effect Routing Matrix:**
 
-| Effect | WebGL2 Required | Fallback Behavior |
-|--------|----------------|-------------------|
-| (none) | No | Basic color/texture |
-| shadow | No | Full support |
-| embroidery | Yes (fuzz) | Falls back to no-effect |
-| engraving | No | Full support |
-| hotstamp | No | Full support |
-| metal | No | Full support |
-| foil | Yes (alphaErode) | Falls back to no-effect |
-| painted | No | Full support |
-| normal | Yes (colorScale, normalMap) | Falls back to no-effect |
+| Effect     | WebGL2 Required             | Fallback Behavior       |
+| ---------- | --------------------------- | ----------------------- |
+| (none)     | No                          | Basic color/texture     |
+| shadow     | No                          | Full support            |
+| embroidery | Yes (fuzz)                  | Falls back to no-effect |
+| engraving  | No                          | Full support            |
+| hotstamp   | No                          | Full support            |
+| metal      | No                          | Full support            |
+| foil       | Yes (alphaErode)            | Falls back to no-effect |
+| painted    | No                          | Full support            |
+| normal     | Yes (colorScale, normalMap) | Falls back to no-effect |
 
 ### Worker Rendering Pipeline
 
@@ -452,14 +452,17 @@ The worker implements a full rendering pipeline for each text layer:
 ### Worker Message Protocol
 
 **Incoming (from Master):**
+
 - `init`: Initialize worker, probe capabilities, send ready
 - `batch`: Render array of TextLayerDescriptor, return RenderSegment[]
 - `abort`: Cancel current rendering, discard results
 
 **Incoming (from Asset Manager via MessagePort):**
+
 - `asset-data`: Receive ImageBitmap (images) or ArrayBuffer (fonts)
 
 **Outgoing (to Master):**
+
 - `capabilities`: Report offscreenCanvas and webgl2 support
 - `ready`: Worker is initialized and ready for work
 - `result`: Array of RenderSegment with transferred bitmaps
