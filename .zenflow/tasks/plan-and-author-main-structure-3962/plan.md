@@ -661,18 +661,19 @@ Integrate text layer routing into RenderMaster.
 
 ## Phase 4: Fallback & Polish
 
-### [ ] Step: Virtual Slave Implementation
+### [x] Step: Virtual Slave Implementation
+<!-- chat-id: 4f6f2d9d-c0d4-461f-bd48-6eba73f4d7ee -->
 
 Create virtual slave class for main-thread fallback.
 
 **Tasks:**
-- [ ] Create `src/virtual-slaves.ts`
+- [x] Create `src/js/virtual-slaves/index.ts`
   - VirtualStandardSlave class with MessagePort interface
   - VirtualTextSlave class with MessagePort interface
   - Use HTMLCanvasElement instead of OffscreenCanvas
   - Same message protocol as real workers
-- [ ] Add unit tests for virtual slaves
-- [ ] Document virtual slave architecture
+- [x] Add unit tests for virtual slaves
+- [x] Document virtual slave architecture
 
 **Verification:**
 - Virtual slaves respond to same messages as real workers
