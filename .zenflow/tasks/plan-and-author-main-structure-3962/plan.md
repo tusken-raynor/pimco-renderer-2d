@@ -591,18 +591,19 @@ Implement foil and painted effect pipelines.
 
 ---
 
-### [ ] Step: Normal Effect
+### [x] Step: Normal Effect
+<!-- chat-id: 004e4e70-8478-4929-84a6-a72bc9cbc92c -->
 
 Implement normal effect pipeline.
 
 **Tasks:**
-- [ ] Create `src/js/effects/normal.ts`
+- [x] Create `src/js/effects/normal.ts`
   - Roundness blur
   - Color scale
   - Normal map generation
   - Directional lighting
-- [ ] Add unit tests
-- [ ] Update effects docs.md
+- [x] Add unit tests
+- [x] Update effects docs.md
 
 **Verification:**
 - Normal map generation works

@@ -26,6 +26,7 @@ src/
     ├── metal.ts                 # Metal effect pipeline implementation
     ├── foil.ts                  # Foil effect pipeline implementation
     ├── painted.ts               # Painted effect pipeline implementation
+    ├── normal.ts                # Normal effect pipeline implementation
     ├── no-effect.test.ts        # Unit tests for no-effect
     ├── shadow.test.ts           # Unit tests for shadow effect
     ├── engraving.test.ts        # Unit tests for engraving effect
@@ -34,6 +35,7 @@ src/
     ├── metal.test.ts            # Unit tests for metal effect
     ├── foil.test.ts             # Unit tests for foil effect
     ├── painted.test.ts          # Unit tests for painted effect
+    ├── normal.test.ts           # Unit tests for normal effect
     └── docs.md                  # This documentation
 ```
 
@@ -623,16 +625,77 @@ const info = getPaintedEffectInfo(1.5);
 - `extractPaintedParams(maskData)`: Extract PaintedInsetShrink from effectparams
 - `getPaintedEffectInfo(paintedInsetShrink)`: Get effect parameters for debugging/preview
 
-## Future Effect Pipelines
+### Normal (`normal.ts`)
 
-The following pipelines are planned for future implementation:
+Creates a normal-mapped 3D lighting effect for text layers. Uses Sobel operator to generate normals from a height map for directional lighting simulation.
 
-### Normal
+**Pipeline:**
 
-1. Roundness blur
-2. Color scale
-3. Normal map generation
-4. Directional lighting
+1. Apply roundness blur to mask (creates smoother height map edges, optional)
+2. Tile texture pattern (if provided)
+3. Apply color multiply
+4. Apply mask to create colored shape (height map)
+5. Apply color scale for intensity adjustment
+6. Generate normal map using Sobel operator
+7. Apply final mask
+
+**Effect Parameters (from `maskData.effectparams`):**
+
+- `NormalRoundness`: Blur radius for smoother height map edges (default: 0)
+- `NormalIntensity`: Strength of the normal mapping effect (default: 1.0)
+- `NormalLightDir`: Light direction ('N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW') (default: 'N')
+
+**Light Direction Values:**
+
+The light direction determines where the virtual light source is positioned:
+| Direction | Angle | Description |
+|-----------|-------|-------------|
+| N | 0° | Light from top (north) |
+| NE | 45° | Light from top-right |
+| E | 90° | Light from right (east) |
+| SE | 135° | Light from bottom-right |
+| S | 180° | Light from bottom (south) |
+| SW | 225° | Light from bottom-left |
+| W | 270° | Light from left (west) |
+| NW | 315° | Light from top-left |
+
+**Usage:**
+
+```typescript
+import { applyNormalEffect, extractNormalParams, getValidLightDirections } from '@/js/effects/normal';
+
+// Apply normal effect pipeline
+const result = applyNormalEffect({
+  width: 1024,
+  height: 1024,
+  color: '#ffffff',
+  alpha: 1.0,
+  blend: 'normal',
+  mask: textMask,
+  texture: textureImageBitmap, // Optional
+  roundness: 3,
+  intensity: 1.5,
+  lightDirection: 'NE',
+});
+
+// Result contains { canvas, ctx }
+
+// Get valid light directions
+const directions = getValidLightDirections();
+// Returns: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+```
+
+**Key Functions:**
+
+- `applyNormalEffect(params)`: Main pipeline function
+- `processNormalEffectLayer(layer, width, height, mask, texture?)`: Convenience wrapper for TextLayerDescriptor
+- `extractNormalParams(maskData)`: Extract NormalRoundness, NormalIntensity, NormalLightDir from effectparams
+- `scaleToResolution(value, targetWidth)`: Scale parameters from base resolution (2048px)
+- `applyRoundnessBlur(source, roundness)`: Apply blur + contrast for rounded edges
+- `createColoredTextContent(mask, width, height, color, alpha, blend, texture?)`: Create colored height map
+- `createNormalMapInput(textContent, width, height)`: Create black background input for normal map
+- `getValidLightDirections()`: Get array of valid light direction values
+- `getNormalEffectInfo(roundness, intensity, lightDirection)`: Get effect parameters for debugging/preview
 
 ## Memory Management
 
@@ -652,6 +715,7 @@ Unit tests for effect pipelines are located alongside the modules:
 - `metal.test.ts`: Tests for metal effect pipeline
 - `foil.test.ts`: Tests for foil effect pipeline
 - `painted.test.ts`: Tests for painted effect pipeline
+- `normal.test.ts`: Tests for normal effect pipeline
 
 Tests are structured in two categories:
 
