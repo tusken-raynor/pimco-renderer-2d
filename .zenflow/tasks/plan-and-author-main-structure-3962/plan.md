@@ -59,19 +59,20 @@ Save to `{@artifacts_path}/plan.md`.
 
 ## Phase 1: Foundation & Dev App
 
-### [ ] Step: Project Setup and Tooling Configuration
+### [x] Step: Project Setup and Tooling Configuration
+<!-- chat-id: a96027c5-556b-49f0-bee1-9d3efbe7c768 -->
 
 Set up the project infrastructure with Vite, TypeScript strict mode, ESLint, Prettier, and Vitest.
 
 **Tasks:**
-- [ ] Initialize package.json with project metadata
-- [ ] Install and configure Vite with TypeScript support
-- [ ] Configure tsconfig.json with strict mode settings per spec
-- [ ] Set up ESLint with TypeScript rules (no `any`, 2-space indent, single quotes, semicolons)
-- [ ] Configure Prettier (.prettierrc with 2-space, single quotes, trailing commas, 100 char width)
-- [ ] Set up Vitest and Playwright
-- [ ] Add all npm scripts per requirements (test, lint, format, type-check, validate)
-- [ ] Verify .gitignore includes all necessary patterns (already present)
+- [x] Initialize package.json with project metadata
+- [x] Install and configure Vite with TypeScript support
+- [x] Configure tsconfig.json with strict mode settings per spec
+- [x] Set up ESLint with TypeScript rules (no `any`, 2-space indent, single quotes, semicolons)
+- [x] Configure Prettier (.prettierrc with 2-space, single quotes, trailing commas, 100 char width)
+- [x] Set up Vitest and Playwright
+- [x] Add all npm scripts per requirements (test, lint, format, type-check, validate)
+- [x] Verify .gitignore includes all necessary patterns (already present)
 
 **Verification:**
 - `npm run lint` passes with no errors

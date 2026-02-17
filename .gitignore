@@ -37,3 +37,11 @@ coverage
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Playwright
+playwright-report
+playwright/.cache
+test-results
+
+# Vitest
+.vitest
