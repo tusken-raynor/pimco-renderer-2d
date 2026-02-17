@@ -291,19 +291,20 @@ Implement batch segmentation logic for optimized composition.
 
 ---
 
-### [ ] Step: Standard Render Slave Worker
+### [x] Step: Standard Render Slave Worker
+<!-- chat-id: 9b4b21b5-8c0b-4e1e-b3ed-1bd3e7bce7a0 -->
 
 Create the worker entry point for Standard Render Slave.
 
 **Tasks:**
-- [ ] Create `src/workers/render-slave.worker.ts`
+- [x] Create `src/workers/render-slave.worker.ts`
   - Message handler for init, batch, abort
   - Capability probe on init
   - Asset reception handling
   - Layer rendering using intra-layer pipeline
   - Result segmentation and transfer
-- [ ] Add integration with Asset Manager for asset delivery
-- [ ] Update render-slave docs.md
+- [x] Add integration with Asset Manager for asset delivery
+- [x] Update render-slave docs.md
 
 **Verification:**
 - Worker starts and responds to messages

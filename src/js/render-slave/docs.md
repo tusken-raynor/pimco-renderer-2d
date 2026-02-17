@@ -385,8 +385,91 @@ The module includes comprehensive unit tests:
 
 6. **Batch Segmentation**: Consecutive layers with combinable composite modes are merged into single segments before transfer to master. This reduces the number of composition operations in the final pass and minimizes ImageBitmap transfers.
 
+## Worker Entry Point
+
+The `render-slave.worker.ts` file provides the Web Worker entry point for the Standard Render Slave. It handles communication with the Master and Asset Manager.
+
+### Worker Message Protocol
+
+```
+┌─────────────┐                      ┌─────────────────┐
+│   Master    │                      │  Render Slave   │
+│             │────── init ─────────▶│     Worker      │
+│             │◀── capabilities ─────│                 │
+│             │◀───── ready ─────────│                 │
+│             │                      │                 │
+│             │────── batch ────────▶│                 │
+│             │◀───── result ────────│                 │
+│             │                      │                 │
+│             │────── abort ────────▶│                 │
+└─────────────┘                      └─────────────────┘
+
+┌─────────────┐                      ┌─────────────────┐
+│   Asset     │                      │  Render Slave   │
+│  Manager    │──── asset-data ─────▶│     Worker      │
+│             │  (via MessagePort)   │                 │
+└─────────────┘                      └─────────────────┘
+```
+
+### Message Types
+
+**Master → Slave:**
+- `init`: Initialize the worker, triggers capability probe and ready signal
+- `batch`: Render a batch of layers with given dimensions
+- `abort`: Cancel current rendering operation
+
+**Slave → Master:**
+- `capabilities`: Report OffscreenCanvas and WebGL2 support
+- `ready`: Signal worker is ready to receive work
+- `result`: Return rendered segments with transferable ImageBitmaps
+- `error`: Report rendering errors
+
+**Asset Manager → Slave (via MessagePort):**
+- `asset-data`: Receive image assets for rendering
+
+### Worker Lifecycle
+
+1. **Initialization**: Master sends `init` message
+2. **Capability Probe**: Worker detects OffscreenCanvas and WebGL2 support
+3. **Ready Signal**: Worker sends `capabilities` then `ready` messages
+4. **Asset Registration**: Master registers slave with Asset Manager, which sends assets via MessagePort
+5. **Batch Rendering**: Master sends `batch` messages, worker renders and returns segments
+6. **Abort Handling**: Master can send `abort` to cancel in-progress rendering
+
+### Abort Handling
+
+The worker checks the abort flag at multiple points:
+- Between each layer render in a batch
+- After batch rendering completes
+- After batch segmentation completes
+
+If aborted, the worker silently discards partial results without sending an error.
+
+### Result Transfer
+
+Results are sent using `postMessage` with transferable ImageBitmaps to avoid copying:
+
+```typescript
+const segments: RenderSegment[] = [...];
+const transferables = segments.map(s => s.bitmap);
+self.postMessage({ type: 'result', segments }, transferables);
+```
+
+### Error Handling
+
+Errors are wrapped in AppError and sent to the master with:
+- Error message
+- Error code
+- Additional context
+
+The worker also handles:
+- Global `onerror` events
+- Unhandled promise rejections
+
 ## Reference Files
 
 - **Legacy Implementation**: `old-src-ref/src/renderer/index.ts` - `drawPimcoStack()` function (lines 120-221)
 - **Transform Handling**: `old-src-ref/src/renderer/index.ts` - `derivePlacement()` (lines 1863-1913), `applyTransformSequence()` (lines 1956-1983)
 - **Combinable Modes**: `spec.md` - Combinable Composite Modes section
+- **Worker Entry Point**: `src/workers/render-slave.worker.ts`
+- **Asset Manager Worker**: `src/workers/asset-manager.worker.ts` - Similar worker pattern
