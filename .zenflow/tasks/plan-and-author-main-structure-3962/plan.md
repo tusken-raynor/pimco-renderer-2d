@@ -446,19 +446,20 @@ Implement 2D transform (translation, rotation, scale) for text layers.
 
 ---
 
-### [ ] Step: WebGL PostProcessor Integration and Shaders
+### [x] Step: WebGL PostProcessor Integration and Shaders
+<!-- chat-id: 6a5d79ac-bc75-4b58-a9ce-544f68932ccf -->
 
 Set up WebGL postprocessor integration and create internal shader files.
 
 **Tasks:**
-- [ ] Create `src/shaders/passthrough.vert.glsl` - Default vertex shader
-- [ ] Create `src/shaders/alpha-erode.frag.glsl` - Alpha erosion shader
-- [ ] Create `src/shaders/emboss.frag.glsl` - Emboss/deboss convolution shader
-- [ ] Create `src/shaders/fuzz.frag.glsl` - Fuzz/blur shader for embroidery
-- [ ] Create `src/shaders/normal-map.frag.glsl` - Normal map generation
-- [ ] Create `src/shaders/color-scale.frag.glsl` - Color scaling/tinting
-- [ ] Create `src/js/effects/index.ts` - Effects module entry point with webgl-postprocessor integration
-- [ ] Create `src/js/effects/docs.md` - Document effect architecture
+- [x] Create `src/shaders/passthrough.vert.glsl` - Default vertex shader
+- [x] Create `src/shaders/alpha-erode.frag.glsl` - Alpha erosion shader
+- [x] Create `src/shaders/emboss.frag.glsl` - Emboss/deboss convolution shader
+- [x] Create `src/shaders/fuzz.frag.glsl` - Fuzz/blur shader for embroidery
+- [x] Create `src/shaders/normal-map.frag.glsl` - Normal map generation
+- [x] Create `src/shaders/color-scale.frag.glsl` - Color scaling/tinting
+- [x] Create `src/js/effects/index.ts` - Effects module entry point with webgl-postprocessor integration
+- [x] Create `src/js/effects/docs.md` - Document effect architecture
 
 **Verification:**
 - Shaders compile without errors
