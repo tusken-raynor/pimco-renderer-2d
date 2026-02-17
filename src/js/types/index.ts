@@ -52,6 +52,7 @@ export type {
   AssetDelivery,
   RenderSegment,
   LayerDescriptor,
+  TextLayerDescriptor,
   CapabilityResult,
   FallbackScenario,
 } from './messages';

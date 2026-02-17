@@ -615,19 +615,20 @@ Implement normal effect pipeline.
 
 ---
 
-### [ ] Step: Text Render Slave Worker
+### [x] Step: Text Render Slave Worker
+<!-- chat-id: 40148628-133f-4118-ba13-eee77fc70f9c -->
 
 Create the worker entry point for Text Render Slave.
 
 **Tasks:**
-- [ ] Create `src/workers/text-render-slave.worker.ts`
+- [x] Create `src/workers/text-render-slave.worker.ts`
   - Message handler for init, batch, abort
   - Capability probe (WebGL2 required for effects)
   - Font loading and application
   - Effect routing and application
   - Transform/post-mask pipeline
   - Result transfer
-- [ ] Update text-render-slave docs.md
+- [x] Update text-render-slave docs.md
 
 **Verification:**
 - Worker handles all message types

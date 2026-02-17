@@ -11,8 +11,7 @@ This module provides:
 - **2D Transform Application**: Translation, rotation, and scale via DOMMatrix
 - **Asset Management**: Storing images and fonts received from the Asset Manager
 - **Post-Mask Application**: Applying optional masks after transforms (destination-in composite)
-
-Note: Effect application (embroidery, engraving, etc.) is implemented in the effects module and integrated in later phases.
+- **Effect Application**: Full effect pipeline routing (embroidery, engraving, metal, foil, hotstamp, painted, normal, shadow)
 
 ## How It Works
 
@@ -388,15 +387,88 @@ The TextRenderSlave is designed to run in a Web Worker context using OffscreenCa
 2. **Font Loading**: Uses FontFace API which works in both main thread and workers
 3. **Asset Transfer**: Assets are received via MessagePort from Asset Manager as ImageBitmaps
 
-### Future Integration
+### Worker Entry Point
 
-This module is part of Phase 3 implementation. Future steps will add:
+The Text Render Slave Worker (`src/workers/text-render-slave.worker.ts`) provides the Web Worker entry point for text layer rendering. It handles:
 
-1. **Effect Pipeline**: Integration with WebGL postprocessor for effects (embroidery, engraving, etc.)
-2. **Text Render Slave Worker**: Worker entry point (`text-render-slave.worker.ts`)
+1. **Message Protocol**: init, batch, abort messages from the Master
+2. **Capability Detection**: Probes for WebGL2 support on init
+3. **Asset Reception**: Receives images and fonts from Asset Manager via MessagePort
+4. **Effect Routing**: Routes layers to appropriate effect handlers based on `mask.effect`
+5. **Fallback Handling**: Falls back to no-effect for WebGL2-dependent effects when unsupported
+
+**Effect Routing Matrix:**
+
+| Effect | WebGL2 Required | Fallback Behavior |
+|--------|----------------|-------------------|
+| (none) | No | Basic color/texture |
+| shadow | No | Full support |
+| embroidery | Yes (fuzz) | Falls back to no-effect |
+| engraving | No | Full support |
+| hotstamp | No | Full support |
+| metal | No | Full support |
+| foil | Yes (alphaErode) | Falls back to no-effect |
+| painted | No | Full support |
+| normal | Yes (colorScale, normalMap) | Falls back to no-effect |
+
+### Worker Rendering Pipeline
+
+The worker implements a full rendering pipeline for each text layer:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Text Layer Pipeline                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. Font Loading (if needed)                                    │
+│     └── FontFace API: Load custom fonts into worker context     │
+│                                                                  │
+│  2. Text Rasterization                                          │
+│     └── Typography → Measurement → Canvas drawing               │
+│                                                                  │
+│  3. Effect Application (based on mask.effect)                   │
+│     ├── no-effect: Tile texture, color multiply, mask           │
+│     ├── shadow: Spread, white-to-alpha, color, blur             │
+│     ├── embroidery: Erode, texture, emboss, fuzz, shadow        │
+│     ├── engraving: Emboss shadow, color-distance, multiply      │
+│     ├── hotstamp: Dual emboss, color-distance, multiply         │
+│     ├── metal: Texture tile, color, dual emboss                 │
+│     ├── foil: Erode, texture, emboss, shadow                    │
+│     ├── painted: Edge expand, dual emboss, inset, texture       │
+│     └── normal: Roundness, texture, normal map, lighting        │
+│                                                                  │
+│  4. 2D Transform Application                                    │
+│     └── DOMMatrix: translation, rotation, scale                 │
+│                                                                  │
+│  5. Post-Mask Application                                       │
+│     └── destination-in composite for final clipping             │
+│                                                                  │
+│  6. ImageBitmap Creation                                        │
+│     └── Transfer to master via postMessage                      │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Worker Message Protocol
+
+**Incoming (from Master):**
+- `init`: Initialize worker, probe capabilities, send ready
+- `batch`: Render array of TextLayerDescriptor, return RenderSegment[]
+- `abort`: Cancel current rendering, discard results
+
+**Incoming (from Asset Manager via MessagePort):**
+- `asset-data`: Receive ImageBitmap (images) or ArrayBuffer (fonts)
+
+**Outgoing (to Master):**
+- `capabilities`: Report offscreenCanvas and webgl2 support
+- `ready`: Worker is initialized and ready for work
+- `result`: Array of RenderSegment with transferred bitmaps
+- `error`: Error message with code and context
 
 ### Reference Files
 
+- **Worker**: `src/workers/text-render-slave.worker.ts`
+- **Effects**: `src/js/effects/*.ts`
 - **Legacy code**: `old-src-ref/src/renderer/index.ts` (preEffect, drawSubstitutionMask, applyWithTransformation functions)
 - **Legacy transforms spec**: `old-src-ref/src/renderer/transforms.spec.ts` (transform calculation tests)
 - **Types**: `src/js/types/pimco.ts`, `src/js/types/messages.ts`
