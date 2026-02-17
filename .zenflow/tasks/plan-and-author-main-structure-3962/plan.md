@@ -471,23 +471,24 @@ Set up WebGL postprocessor integration and create internal shader files.
 
 ---
 
-### [ ] Step: No-Effect and Shadow Effects
+### [x] Step: No-Effect and Shadow Effects
+<!-- chat-id: f75f6fb4-23a8-41ca-9d09-d1960b519111 -->
 
 Implement no-effect (basic) and shadow effect pipelines.
 
 **Tasks:**
-- [ ] Create `src/js/effects/no-effect.ts`
+- [x] Create `src/js/effects/no-effect.ts`
   - Tile texture
   - Color multiply
   - Mask application
-- [ ] Create `src/js/effects/shadow.ts`
+- [x] Create `src/js/effects/shadow.ts`
   - Spread
   - White-to-alpha
   - Color fill
   - Blur
   - Multi-pass alpha
-- [ ] Add unit tests for effect parameter handling
-- [ ] Update effects docs.md
+- [x] Add unit tests for effect parameter handling
+- [x] Update effects docs.md
 
 **Verification:**
 - No-effect produces correct output

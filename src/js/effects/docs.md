@@ -2,7 +2,7 @@
 
 ## Overview
 
-The effects module provides GPU-accelerated image processing effects using WebGL2 shaders, with Canvas 2D fallbacks for environments where WebGL2 is not available.
+The effects module provides GPU-accelerated image processing effects using WebGL2 shaders, with Canvas 2D fallbacks for environments where WebGL2 is not available. It also includes high-level effect pipelines for text layer rendering.
 
 ## Architecture
 
@@ -17,7 +17,12 @@ src/
 │   └── color-scale.frag.glsl    # Color intensity adjustment
 │
 └── js/effects/
-    └── index.ts                 # Effects module entry point
+    ├── index.ts                 # Effects module entry point (primitives)
+    ├── no-effect.ts             # No-effect pipeline implementation
+    ├── shadow.ts                # Shadow effect pipeline implementation
+    ├── no-effect.test.ts        # Unit tests for no-effect
+    ├── shadow.test.ts           # Unit tests for shadow effect
+    └── docs.md                  # This documentation
 ```
 
 ## Dependencies
@@ -158,21 +163,92 @@ Additional Canvas 2D-only effects:
 - `colorBurn()`: Color saturation with multiply
 - `tile()`: Pattern tiling
 
-## Effect Pipelines (Future Implementation)
+## Implemented Effect Pipelines
 
-Each text layer effect type uses a combination of these primitives:
+Each text layer effect type uses a combination of primitives. The following pipelines are implemented:
 
-### No-Effect
-1. Tile texture
-2. Color multiply
-3. Apply mask
+### No-Effect (`no-effect.ts`)
 
-### Shadow
-1. Spread
-2. White-to-alpha
-3. Color fill
-4. Blur
-5. Multi-pass alpha
+The simplest effect pipeline for text layers with no special effects.
+
+**Pipeline:**
+1. Tile texture (if provided)
+2. Color multiply with blend mode
+3. Apply mask (destination-in composite)
+
+**Usage:**
+```typescript
+import { applyNoEffect, extractDefaultColorCode } from '@/js/effects/no-effect';
+
+// Apply no-effect pipeline
+const result = applyNoEffect({
+  width: 1024,
+  height: 1024,
+  color: '#ff0000',
+  alpha: 1.0,
+  blend: 'normal',
+  texture: textureImageBitmap, // optional
+  mask: maskCanvas,
+});
+
+// Result contains { canvas, ctx }
+```
+
+**Key Functions:**
+- `applyNoEffect(params)`: Main pipeline function
+- `processNoEffectLayer(layer, width, height, mask, texture?)`: Convenience wrapper for TextLayerDescriptor
+- `extractDefaultColorCode(color, backup?)`: Extract color from various formats (string, array, object)
+- `blendModeToCompositeOp(blend)`: Convert BlendMode to GlobalCompositeOperation
+- `applyColorAndMask(ctx, color, alpha, blend, mask)`: Apply color and mask to existing canvas
+
+### Shadow (`shadow.ts`)
+
+Creates a drop shadow effect for text layers.
+
+**Pipeline:**
+1. Create mask canvas with white background
+2. Apply spread (blur + brightness/contrast expansion)
+3. Convert white to alpha
+4. Fill with shadow color (source-in composite)
+5. Apply blur
+6. Draw with multi-pass alpha for intensity control
+
+**Effect Parameters (from `maskData.effectparams`):**
+- `ShadowSpread`: Spread radius in pixels (scaled to canvas size)
+- `ShadowBlur`: Blur radius in pixels (scaled to canvas size)
+
+**Usage:**
+```typescript
+import { applyShadowEffect, extractShadowParams } from '@/js/effects/shadow';
+
+// Apply shadow effect pipeline
+const result = applyShadowEffect({
+  width: 1024,
+  height: 1024,
+  color: '#000000',
+  alpha: 1.5, // > 1.0 for multiple passes
+  spread: 10,
+  blur: 5,
+  mask: textMask,
+});
+
+// Result contains { canvas, ctx }
+```
+
+**Key Functions:**
+- `applyShadowEffect(params)`: Main pipeline function
+- `processShadowEffectLayer(layer, width, height, mask)`: Convenience wrapper for TextLayerDescriptor
+- `extractShadowParams(maskData)`: Extract ShadowSpread/ShadowBlur from effectparams
+- `scaleToResolution(value, targetWidth)`: Scale parameters from base resolution (2048px)
+- `applySpread(ctx, spread)`: Expand shape using blur + brightness/contrast
+- `applyColorFill(ctx, color)`: Fill opaque pixels with color
+- `applyBlur(source, blur)`: Apply Gaussian blur
+- `applyMultiPassAlpha(targetCtx, source, alpha, offsetX?, offsetY?)`: Draw with multiple passes for intensity
+- `createShadow(mask, color, spread, blur, alpha)`: Create standalone shadow
+
+## Future Effect Pipelines
+
+The following pipelines are planned for future implementation:
 
 ### Engraving
 1. Emboss (shadow)
@@ -231,11 +307,21 @@ Each text layer effect type uses a combination of these primitives:
 
 ## Testing
 
-Unit tests should verify:
-1. WebGL effects produce expected output when WebGL2 is available
-2. Canvas 2D fallbacks produce equivalent results
-3. Effect parameters are handled correctly
-4. Memory cleanup occurs after each effect
+Unit tests for effect pipelines are located alongside the modules:
+- `no-effect.test.ts`: Tests for no-effect pipeline
+- `shadow.test.ts`: Tests for shadow effect pipeline
+
+Tests are structured in two categories:
+1. **Pure function tests** - Test parameter extraction, scaling, and helper functions (run in Node.js)
+2. **Canvas-dependent tests** - Test actual canvas operations (skipped in Node.js, run in browser/E2E)
+
+Unit tests verify:
+1. Effect parameters are extracted correctly from various input formats
+2. Resolution scaling works correctly for different canvas sizes
+3. Canvas operations produce expected state changes
+4. WebGL effects produce expected output when WebGL2 is available
+5. Canvas 2D fallbacks produce equivalent results
+6. Memory cleanup occurs after each effect
 
 ## References
 
