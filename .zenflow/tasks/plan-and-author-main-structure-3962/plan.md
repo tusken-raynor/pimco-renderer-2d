@@ -241,20 +241,21 @@ Implement layer classification logic (standard vs text layers).
 
 ---
 
-### [ ] Step: Intra-Layer Pipeline
+### [x] Step: Intra-Layer Pipeline
+<!-- chat-id: 3227aaa9-ad65-44ed-bbda-82a168837be1 -->
 
 Implement the 5-step intra-layer rendering pipeline for standard layers.
 
 **Tasks:**
-- [ ] Create `src/js/render-slave/intra-layer-pipeline.ts`
+- [x] Create `src/js/render-slave/intra-layer-pipeline.ts`
   - Step 1: Draw base image with placement transforms
   - Step 2: Apply color/texture with blend mode and alpha
   - Step 3: Apply highlight 1 (if defined)
   - Step 4: Apply highlight 2 (if defined)
   - Step 5: Apply mask (destination-in composite)
-- [ ] Create `src/js/render-slave/index.ts` - RenderSlave class
-- [ ] Create unit tests for each pipeline step
-- [ ] Create `src/js/render-slave/docs.md`
+- [x] Create `src/js/render-slave/index.ts` - RenderSlave class
+- [x] Create unit tests for each pipeline step
+- [x] Create `src/js/render-slave/docs.md`
 
 **Verification:**
 - Each pipeline step tested independently
