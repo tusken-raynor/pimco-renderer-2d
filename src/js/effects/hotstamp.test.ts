@@ -131,51 +131,45 @@ describe('getHotstampFillColor', () => {
 // ============================================================================
 
 describe('createHotstampEmboss', () => {
-  it.skipIf(!hasOffscreenCanvas())(
-    'should create both highlight and shadow canvases',
-    async () => {
-      const { createHotstampEmboss } = await import('./hotstamp');
+  it.skipIf(!hasOffscreenCanvas())('should create both highlight and shadow canvases', async () => {
+    const { createHotstampEmboss } = await import('./hotstamp');
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(25, 25, 50, 50);
-      }
-
-      const result = createHotstampEmboss(mockMask, 100, 100);
-
-      expect(result.highlight.canvas.width).toBe(100);
-      expect(result.highlight.canvas.height).toBe(100);
-      expect(result.shadow.canvas.width).toBe(100);
-      expect(result.shadow.canvas.height).toBe(100);
-      expect(result.highlight.ctx).toBeDefined();
-      expect(result.shadow.ctx).toBeDefined();
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(25, 25, 50, 50);
     }
-  );
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should handle various canvas sizes',
-    async () => {
-      const { createHotstampEmboss } = await import('./hotstamp');
+    const result = createHotstampEmboss(mockMask, 100, 100);
 
-      const sizes = [
-        [50, 50],
-        [200, 100],
-        [100, 200],
-      ];
+    expect(result.highlight.canvas.width).toBe(100);
+    expect(result.highlight.canvas.height).toBe(100);
+    expect(result.shadow.canvas.width).toBe(100);
+    expect(result.shadow.canvas.height).toBe(100);
+    expect(result.highlight.ctx).toBeDefined();
+    expect(result.shadow.ctx).toBeDefined();
+  });
 
-      for (const [width, height] of sizes) {
-        const mockMask = new OffscreenCanvas(width, height);
-        const result = createHotstampEmboss(mockMask, width, height);
+  it.skipIf(!hasOffscreenCanvas())('should handle various canvas sizes', async () => {
+    const { createHotstampEmboss } = await import('./hotstamp');
 
-        expect(result.highlight.canvas.width).toBe(width);
-        expect(result.highlight.canvas.height).toBe(height);
-        expect(result.shadow.canvas.width).toBe(width);
-        expect(result.shadow.canvas.height).toBe(height);
-      }
+    const sizes = [
+      [50, 50],
+      [200, 100],
+      [100, 200],
+    ];
+
+    for (const [width, height] of sizes) {
+      const mockMask = new OffscreenCanvas(width, height);
+      const result = createHotstampEmboss(mockMask, width, height);
+
+      expect(result.highlight.canvas.width).toBe(width);
+      expect(result.highlight.canvas.height).toBe(height);
+      expect(result.shadow.canvas.width).toBe(width);
+      expect(result.shadow.canvas.height).toBe(height);
     }
-  );
+  });
 });
 
 // ============================================================================
@@ -210,115 +204,103 @@ describe('applyHotstampEffect', () => {
     }
   );
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should skip embossing for small text',
-    async () => {
-      const { applyHotstampEffect } = await import('./hotstamp');
+  it.skipIf(!hasOffscreenCanvas())('should skip embossing for small text', async () => {
+    const { applyHotstampEffect } = await import('./hotstamp');
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(25, 25, 50, 50);
-      }
-
-      // textHeight <= 43.5 should skip embossing
-      const result = applyHotstampEffect({
-        width: 100,
-        height: 100,
-        color: '#333333',
-        alpha: 1.0,
-        mask: mockMask,
-        textHeight: 40, // Below threshold
-      });
-
-      expect(result.canvas).toBeDefined();
-      expect(result.ctx.globalCompositeOperation).toBe('source-over');
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(25, 25, 50, 50);
     }
-  );
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should apply dual embossing for large text',
-    async () => {
-      const { applyHotstampEffect } = await import('./hotstamp');
+    // textHeight <= 43.5 should skip embossing
+    const result = applyHotstampEffect({
+      width: 100,
+      height: 100,
+      color: '#333333',
+      alpha: 1.0,
+      mask: mockMask,
+      textHeight: 40, // Below threshold
+    });
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(25, 25, 50, 50);
-      }
+    expect(result.canvas).toBeDefined();
+    expect(result.ctx.globalCompositeOperation).toBe('source-over');
+  });
 
-      // textHeight > 43.5 should apply embossing
-      const result = applyHotstampEffect({
-        width: 100,
-        height: 100,
-        color: '#333333',
-        alpha: 1.0,
-        mask: mockMask,
-        textHeight: 50, // Above threshold
-      });
+  it.skipIf(!hasOffscreenCanvas())('should apply dual embossing for large text', async () => {
+    const { applyHotstampEffect } = await import('./hotstamp');
 
-      expect(result.canvas).toBeDefined();
-      expect(result.ctx.globalCompositeOperation).toBe('source-over');
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(25, 25, 50, 50);
     }
-  );
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should handle provided eindex',
-    async () => {
-      const { applyHotstampEffect } = await import('./hotstamp');
+    // textHeight > 43.5 should apply embossing
+    const result = applyHotstampEffect({
+      width: 100,
+      height: 100,
+      color: '#333333',
+      alpha: 1.0,
+      mask: mockMask,
+      textHeight: 50, // Above threshold
+    });
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(25, 25, 50, 50);
-      }
+    expect(result.canvas).toBeDefined();
+    expect(result.ctx.globalCompositeOperation).toBe('source-over');
+  });
 
+  it.skipIf(!hasOffscreenCanvas())('should handle provided eindex', async () => {
+    const { applyHotstampEffect } = await import('./hotstamp');
+
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(25, 25, 50, 50);
+    }
+
+    const result = applyHotstampEffect({
+      width: 100,
+      height: 100,
+      color: '#333333',
+      alpha: 1.0,
+      eindex: 0.25,
+      mask: mockMask,
+      textHeight: 50,
+    });
+
+    expect(result.canvas).toBeDefined();
+  });
+
+  it.skipIf(!hasOffscreenCanvas())('should handle various alpha values', async () => {
+    const { applyHotstampEffect } = await import('./hotstamp');
+
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(25, 25, 50, 50);
+    }
+
+    const alphaValues = [0.1, 0.5, 1.0];
+
+    for (const alpha of alphaValues) {
       const result = applyHotstampEffect({
         width: 100,
         height: 100,
         color: '#333333',
-        alpha: 1.0,
-        eindex: 0.25,
+        alpha,
         mask: mockMask,
         textHeight: 50,
       });
 
       expect(result.canvas).toBeDefined();
+      expect(result.ctx.globalAlpha).toBe(1); // Should be reset after effect
     }
-  );
-
-  it.skipIf(!hasOffscreenCanvas())(
-    'should handle various alpha values',
-    async () => {
-      const { applyHotstampEffect } = await import('./hotstamp');
-
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(25, 25, 50, 50);
-      }
-
-      const alphaValues = [0.1, 0.5, 1.0];
-
-      for (const alpha of alphaValues) {
-        const result = applyHotstampEffect({
-          width: 100,
-          height: 100,
-          color: '#333333',
-          alpha,
-          mask: mockMask,
-          textHeight: 50,
-        });
-
-        expect(result.canvas).toBeDefined();
-        expect(result.ctx.globalAlpha).toBe(1); // Should be reset after effect
-      }
-    }
-  );
+  });
 });
 
 // ============================================================================
@@ -326,71 +308,65 @@ describe('applyHotstampEffect', () => {
 // ============================================================================
 
 describe('processHotstampEffectLayer', () => {
-  it.skipIf(!hasOffscreenCanvas())(
-    'should process layer with default parameters',
-    async () => {
-      const { processHotstampEffectLayer } = await import('./hotstamp');
+  it.skipIf(!hasOffscreenCanvas())('should process layer with default parameters', async () => {
+    const { processHotstampEffectLayer } = await import('./hotstamp');
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(25, 25, 50, 50);
-      }
-
-      const layer = {
-        id: 'test-layer',
-        assetIds: { image: 1 },
-        mode: 'color' as const,
-        color: '#333333',
-        alpha: 1.0,
-        blend: 'normal' as const,
-        compositemode: 'source-over' as const,
-        compositealpha: 1.0,
-        maskData: {},
-      };
-
-      const result = processHotstampEffectLayer(layer, 100, 100, mockMask, 50);
-
-      expect(result).not.toBeNull();
-      if (result) {
-        expect(result.width).toBe(100);
-        expect(result.height).toBe(100);
-      }
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(25, 25, 50, 50);
     }
-  );
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should process layer with eindex in maskData',
-    async () => {
-      const { processHotstampEffectLayer } = await import('./hotstamp');
+    const layer = {
+      id: 'test-layer',
+      assetIds: { image: 1 },
+      mode: 'color' as const,
+      color: '#333333',
+      alpha: 1.0,
+      blend: 'normal' as const,
+      compositemode: 'source-over' as const,
+      compositealpha: 1.0,
+      maskData: {},
+    };
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(25, 25, 50, 50);
-      }
+    const result = processHotstampEffectLayer(layer, 100, 100, mockMask, 50);
 
-      const layer = {
-        id: 'test-layer',
-        assetIds: { image: 1 },
-        mode: 'color' as const,
-        color: '#333333',
-        alpha: 0.8,
-        blend: 'normal' as const,
-        compositemode: 'source-over' as const,
-        compositealpha: 1.0,
-        maskData: {
-          effectparams: { eindex: 0.3 },
-        },
-      };
-
-      const result = processHotstampEffectLayer(layer, 100, 100, mockMask, 50);
-
-      expect(result).not.toBeNull();
+    expect(result).not.toBeNull();
+    if (result) {
+      expect(result.width).toBe(100);
+      expect(result.height).toBe(100);
     }
-  );
+  });
+
+  it.skipIf(!hasOffscreenCanvas())('should process layer with eindex in maskData', async () => {
+    const { processHotstampEffectLayer } = await import('./hotstamp');
+
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(25, 25, 50, 50);
+    }
+
+    const layer = {
+      id: 'test-layer',
+      assetIds: { image: 1 },
+      mode: 'color' as const,
+      color: '#333333',
+      alpha: 0.8,
+      blend: 'normal' as const,
+      compositemode: 'source-over' as const,
+      compositealpha: 1.0,
+      maskData: {
+        effectparams: { eindex: 0.3 },
+      },
+    };
+
+    const result = processHotstampEffectLayer(layer, 100, 100, mockMask, 50);
+
+    expect(result).not.toBeNull();
+  });
 });
 
 // ============================================================================

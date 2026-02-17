@@ -528,12 +528,13 @@ Implement engraving and hotstamp effect pipelines.
 
 ---
 
-### [ ] Step: Embroidery and Metal Effects
+### [x] Step: Embroidery and Metal Effects
+<!-- chat-id: 9a8216cf-4b70-4439-8865-a7bfc330fabe -->
 
 Implement embroidery and metal effect pipelines.
 
 **Tasks:**
-- [ ] Create `src/js/effects/embroidery.ts`
+- [x] Create `src/js/effects/embroidery.ts`
   - Alpha erode
   - Tile texture
   - Color multiply
@@ -541,13 +542,13 @@ Implement embroidery and metal effect pipelines.
   - Fuzz
   - Mask
   - Shadow
-- [ ] Create `src/js/effects/metal.ts`
+- [x] Create `src/js/effects/metal.ts`
   - Dual emboss
   - Tile texture
   - Color multiply
   - Mask
-- [ ] Add unit tests
-- [ ] Update effects docs.md
+- [x] Add unit tests
+- [x] Update effects docs.md
 
 **Verification:**
 - Effects match legacy output

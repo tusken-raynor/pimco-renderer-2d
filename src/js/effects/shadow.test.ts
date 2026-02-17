@@ -138,39 +138,33 @@ describe('scaleToResolution', () => {
 // ============================================================================
 
 describe('applySpread', () => {
-  it.skipIf(!hasOffscreenCanvas())(
-    'should return original when spread is 0',
-    async () => {
-      const { applySpread } = await import('./shadow');
+  it.skipIf(!hasOffscreenCanvas())('should return original when spread is 0', async () => {
+    const { applySpread } = await import('./shadow');
 
-      const canvas = new OffscreenCanvas(100, 100);
-      const mockCtx = getOffscreenContext(canvas);
-      mockCtx.fillStyle = '#ffffff';
-      mockCtx.fillRect(25, 25, 50, 50);
+    const canvas = new OffscreenCanvas(100, 100);
+    const mockCtx = getOffscreenContext(canvas);
+    mockCtx.fillStyle = '#ffffff';
+    mockCtx.fillRect(25, 25, 50, 50);
 
-      const result = applySpread(mockCtx, 0);
-      expect(result.canvas).toBe(mockCtx.canvas);
-      expect(result.offsetX).toBe(0);
-      expect(result.offsetY).toBe(0);
-    }
-  );
+    const result = applySpread(mockCtx, 0);
+    expect(result.canvas).toBe(mockCtx.canvas);
+    expect(result.offsetX).toBe(0);
+    expect(result.offsetY).toBe(0);
+  });
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should return original when spread is negative',
-    async () => {
-      const { applySpread } = await import('./shadow');
+  it.skipIf(!hasOffscreenCanvas())('should return original when spread is negative', async () => {
+    const { applySpread } = await import('./shadow');
 
-      const canvas = new OffscreenCanvas(100, 100);
-      const mockCtx = getOffscreenContext(canvas);
-      mockCtx.fillStyle = '#ffffff';
-      mockCtx.fillRect(25, 25, 50, 50);
+    const canvas = new OffscreenCanvas(100, 100);
+    const mockCtx = getOffscreenContext(canvas);
+    mockCtx.fillStyle = '#ffffff';
+    mockCtx.fillRect(25, 25, 50, 50);
 
-      const result = applySpread(mockCtx, -5);
-      expect(result.canvas).toBe(mockCtx.canvas);
-      expect(result.offsetX).toBe(0);
-      expect(result.offsetY).toBe(0);
-    }
-  );
+    const result = applySpread(mockCtx, -5);
+    expect(result.canvas).toBe(mockCtx.canvas);
+    expect(result.offsetX).toBe(0);
+    expect(result.offsetY).toBe(0);
+  });
 
   it.skipIf(!hasOffscreenCanvas())(
     'should expand canvas dimensions for positive spread',
@@ -190,23 +184,20 @@ describe('applySpread', () => {
     }
   );
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should return correct offset for positive spread',
-    async () => {
-      const { applySpread } = await import('./shadow');
+  it.skipIf(!hasOffscreenCanvas())('should return correct offset for positive spread', async () => {
+    const { applySpread } = await import('./shadow');
 
-      const canvas = new OffscreenCanvas(100, 100);
-      const mockCtx = getOffscreenContext(canvas);
-      mockCtx.fillStyle = '#ffffff';
-      mockCtx.fillRect(25, 25, 50, 50);
+    const canvas = new OffscreenCanvas(100, 100);
+    const mockCtx = getOffscreenContext(canvas);
+    mockCtx.fillStyle = '#ffffff';
+    mockCtx.fillRect(25, 25, 50, 50);
 
-      const spread = 15;
-      const result = applySpread(mockCtx, spread);
+    const spread = 15;
+    const result = applySpread(mockCtx, spread);
 
-      expect(result.offsetX).toBe(spread);
-      expect(result.offsetY).toBe(spread);
-    }
-  );
+    expect(result.offsetX).toBe(spread);
+    expect(result.offsetY).toBe(spread);
+  });
 });
 
 // ============================================================================
@@ -239,44 +230,38 @@ describe('applyColorFill', () => {
 // ============================================================================
 
 describe('applyBlur', () => {
-  it.skipIf(!hasOffscreenCanvas())(
-    'should return original for zero blur',
-    async () => {
-      const { applyBlur } = await import('./shadow');
+  it.skipIf(!hasOffscreenCanvas())('should return original for zero blur', async () => {
+    const { applyBlur } = await import('./shadow');
 
-      const mockCanvas = new OffscreenCanvas(100, 100);
-      const ctx = mockCanvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(25, 25, 50, 50);
-      }
-
-      const result = applyBlur(mockCanvas, 0);
-      expect(result.canvas).toBe(mockCanvas);
-      expect(result.offsetX).toBe(0);
-      expect(result.offsetY).toBe(0);
+    const mockCanvas = new OffscreenCanvas(100, 100);
+    const ctx = mockCanvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(25, 25, 50, 50);
     }
-  );
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should expand canvas for positive blur',
-    async () => {
-      const { applyBlur } = await import('./shadow');
+    const result = applyBlur(mockCanvas, 0);
+    expect(result.canvas).toBe(mockCanvas);
+    expect(result.offsetX).toBe(0);
+    expect(result.offsetY).toBe(0);
+  });
 
-      const mockCanvas = new OffscreenCanvas(100, 100);
-      const ctx = mockCanvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(25, 25, 50, 50);
-      }
+  it.skipIf(!hasOffscreenCanvas())('should expand canvas for positive blur', async () => {
+    const { applyBlur } = await import('./shadow');
 
-      const blur = 10;
-      const result = applyBlur(mockCanvas, blur);
-
-      expect(result.canvas.width).toBe(100 + 2 * blur);
-      expect(result.canvas.height).toBe(100 + 2 * blur);
+    const mockCanvas = new OffscreenCanvas(100, 100);
+    const ctx = mockCanvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(25, 25, 50, 50);
     }
-  );
+
+    const blur = 10;
+    const result = applyBlur(mockCanvas, blur);
+
+    expect(result.canvas.width).toBe(100 + 2 * blur);
+    expect(result.canvas.height).toBe(100 + 2 * blur);
+  });
 });
 
 // ============================================================================

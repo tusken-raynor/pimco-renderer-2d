@@ -32,7 +32,10 @@ export interface FontLoadResult {
  * @returns Promise resolving to FontLoadResult
  * @throws AssetLoadError if loading fails
  */
-export async function loadFont(url: string, options: FontLoadOptions = {}): Promise<FontLoadResult> {
+export async function loadFont(
+  url: string,
+  options: FontLoadOptions = {}
+): Promise<FontLoadResult> {
   const { signal } = options;
 
   try {

@@ -98,116 +98,104 @@ describe('blendModeToCompositeOp', () => {
 // ============================================================================
 
 describe('applyNoEffect', () => {
-  it.skipIf(!hasOffscreenCanvas())(
-    'should create a canvas of correct dimensions',
-    async () => {
-      const { applyNoEffect } = await import('./no-effect');
+  it.skipIf(!hasOffscreenCanvas())('should create a canvas of correct dimensions', async () => {
+    const { applyNoEffect } = await import('./no-effect');
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(25, 25, 50, 50);
-      }
-
-      const result = applyNoEffect({
-        width: 200,
-        height: 150,
-        color: '#ff0000',
-        alpha: 1.0,
-        blend: 'normal',
-        mask: mockMask,
-      });
-
-      expect(result.canvas.width).toBe(200);
-      expect(result.canvas.height).toBe(150);
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(25, 25, 50, 50);
     }
-  );
 
-  it.skipIf(!hasOffscreenCanvas())(
-    'should apply color fill',
-    async () => {
-      const { applyNoEffect } = await import('./no-effect');
+    const result = applyNoEffect({
+      width: 200,
+      height: 150,
+      color: '#ff0000',
+      alpha: 1.0,
+      blend: 'normal',
+      mask: mockMask,
+    });
 
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(25, 25, 50, 50);
-      }
+    expect(result.canvas.width).toBe(200);
+    expect(result.canvas.height).toBe(150);
+  });
 
+  it.skipIf(!hasOffscreenCanvas())('should apply color fill', async () => {
+    const { applyNoEffect } = await import('./no-effect');
+
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(25, 25, 50, 50);
+    }
+
+    const result = applyNoEffect({
+      width: 100,
+      height: 100,
+      color: '#ff0000',
+      alpha: 1.0,
+      blend: 'normal',
+      mask: mockMask,
+    });
+
+    // The canvas should have content (not fully transparent)
+    const imageData = result.ctx.getImageData(50, 50, 1, 1);
+    // Should have some red color in the center where the mask is
+    expect(imageData.data[0]).toBeGreaterThan(0); // Red channel
+  });
+
+  it.skipIf(!hasOffscreenCanvas())('should respect alpha parameter', async () => {
+    const { applyNoEffect } = await import('./no-effect');
+
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(25, 25, 50, 50);
+    }
+
+    const result = applyNoEffect({
+      width: 100,
+      height: 100,
+      color: '#ff0000',
+      alpha: 0.5,
+      blend: 'normal',
+      mask: mockMask,
+    });
+
+    // Canvas should exist and have proper dimensions
+    expect(result.canvas.width).toBe(100);
+    expect(result.canvas.height).toBe(100);
+  });
+
+  it.skipIf(!hasOffscreenCanvas())('should handle different blend modes', async () => {
+    const { applyNoEffect } = await import('./no-effect');
+
+    const mockMask = new OffscreenCanvas(100, 100);
+    const ctx = mockMask.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(25, 25, 50, 50);
+    }
+
+    const modes: BlendMode[] = ['normal', 'multiply', 'screen', 'overlay'];
+
+    for (const blend of modes) {
       const result = applyNoEffect({
         width: 100,
         height: 100,
         color: '#ff0000',
         alpha: 1.0,
-        blend: 'normal',
+        blend,
         mask: mockMask,
       });
 
-      // The canvas should have content (not fully transparent)
-      const imageData = result.ctx.getImageData(50, 50, 1, 1);
-      // Should have some red color in the center where the mask is
-      expect(imageData.data[0]).toBeGreaterThan(0); // Red channel
+      // Should complete without error
+      expect(result.canvas).toBeDefined();
     }
-  );
-
-  it.skipIf(!hasOffscreenCanvas())(
-    'should respect alpha parameter',
-    async () => {
-      const { applyNoEffect } = await import('./no-effect');
-
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(25, 25, 50, 50);
-      }
-
-      const result = applyNoEffect({
-        width: 100,
-        height: 100,
-        color: '#ff0000',
-        alpha: 0.5,
-        blend: 'normal',
-        mask: mockMask,
-      });
-
-      // Canvas should exist and have proper dimensions
-      expect(result.canvas.width).toBe(100);
-      expect(result.canvas.height).toBe(100);
-    }
-  );
-
-  it.skipIf(!hasOffscreenCanvas())(
-    'should handle different blend modes',
-    async () => {
-      const { applyNoEffect } = await import('./no-effect');
-
-      const mockMask = new OffscreenCanvas(100, 100);
-      const ctx = mockMask.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(25, 25, 50, 50);
-      }
-
-      const modes: BlendMode[] = ['normal', 'multiply', 'screen', 'overlay'];
-
-      for (const blend of modes) {
-        const result = applyNoEffect({
-          width: 100,
-          height: 100,
-          color: '#ff0000',
-          alpha: 1.0,
-          blend,
-          mask: mockMask,
-        });
-
-        // Should complete without error
-        expect(result.canvas).toBeDefined();
-      }
-    }
-  );
+  });
 });
 
 // ============================================================================

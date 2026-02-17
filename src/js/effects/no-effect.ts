@@ -86,9 +86,7 @@ export function extractDefaultColorCode(
  * @param blend - Blend mode
  * @returns Valid canvas composite operation
  */
-export function blendModeToCompositeOp(
-  blend: BlendMode | undefined
-): GlobalCompositeOperation {
+export function blendModeToCompositeOp(blend: BlendMode | undefined): GlobalCompositeOperation {
   if (!blend || blend === 'normal') {
     return 'source-over';
   }

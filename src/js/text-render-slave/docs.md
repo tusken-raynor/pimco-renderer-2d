@@ -5,6 +5,7 @@
 The Text Render Slave module is responsible for processing text/effect layers in the multi-threaded 2D renderer. While Standard Render Slaves handle conventional image layers (where `mask` is a URL string), Text Render Slaves handle layers where `mask` is a `PimcoMaskSubstitutionCompiled` object containing text content and typography settings.
 
 This module provides:
+
 - **Text Rasterization**: Converting text content to canvas using font metrics
 - **Typography Support**: Font family, weight, size, letter spacing, text transforms
 - **2D Transform Application**: Translation, rotation, and scale via DOMMatrix
@@ -35,6 +36,7 @@ After text rasterization, transforms are applied in this order:
 5. **Apply Post-Mask**: If present, apply destination-in composite to clip result
 
 Transform coordinates use percentages:
+
 - `translation[0]` = X offset as percentage (-50 to 50 maps to canvas edges)
 - `translation[1]` = Y offset as percentage (-50 to 50 maps to canvas edges)
 - `rotation` = Rotation in degrees
@@ -43,26 +45,26 @@ Transform coordinates use percentages:
 ### Key Constants (from legacy renderer)
 
 ```typescript
-const DEFAULT_LINE_HEIGHT = 0.08;  // Font size = workWidth * lineHeight
-const DEFAULT_MAX_WIDTH = 0.85;    // Max text width = workWidth * maxWidth
-const OVERSCALE_FACTOR = 1.5;      // Canvas height multiplier for descenders
+const DEFAULT_LINE_HEIGHT = 0.08; // Font size = workWidth * lineHeight
+const DEFAULT_MAX_WIDTH = 0.85; // Max text width = workWidth * maxWidth
+const OVERSCALE_FACTOR = 1.5; // Canvas height multiplier for descenders
 ```
 
 ### Typography Configuration
 
 The module supports these typography settings:
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `fontfamily` | `'sans-serif'` | CSS font family |
-| `fontweight` | `'400'` | Font weight (100-900 or 'bold') |
-| `lineheight` | `0.08` | Ratio of workWidth for font size |
-| `letterspacing` | `''` | CSS letter-spacing value |
-| `texttransform` | `'none'` | Text case transformation |
-| `alignment` | `'center'` | Horizontal alignment |
-| `maxwidth` | `0.85` | Max width as ratio of workWidth |
-| `widthscale` | `1` | Width multiplier |
-| `heightscale` | `1` | Height multiplier |
+| Property        | Default        | Description                      |
+| --------------- | -------------- | -------------------------------- |
+| `fontfamily`    | `'sans-serif'` | CSS font family                  |
+| `fontweight`    | `'400'`        | Font weight (100-900 or 'bold')  |
+| `lineheight`    | `0.08`         | Ratio of workWidth for font size |
+| `letterspacing` | `''`           | CSS letter-spacing value         |
+| `texttransform` | `'none'`       | Text case transformation         |
+| `alignment`     | `'center'`     | Horizontal alignment             |
+| `maxwidth`      | `0.85`         | Max width as ratio of workWidth  |
+| `widthscale`    | `1`            | Width multiplier                 |
+| `heightscale`   | `1`            | Height multiplier                |
 
 ## Interface
 
@@ -99,7 +101,11 @@ function rasterizeText(options: TextRasterizerOptions): RasterizedText;
 
 ```typescript
 class TextRasterizer {
-  measure(content: string, type: PimcoMaskSubstitutionTypeDefinition | undefined, workWidth: number): TextMeasurement;
+  measure(
+    content: string,
+    type: PimcoMaskSubstitutionTypeDefinition | undefined,
+    workWidth: number
+  ): TextMeasurement;
   rasterize(options: TextRasterizerOptions): RasterizedText;
   transform(text: string, transform: 'uppercase' | 'lowercase' | 'capitalize' | 'none'): string;
   destroy(): void;
@@ -143,9 +149,7 @@ function applyTransformAndDraw(
 ): void;
 
 // Check if a transform has any non-identity values
-function hasActiveTransform(
-  transform: PimcoMaskSubstitutionTransformation | undefined
-): boolean;
+function hasActiveTransform(transform: PimcoMaskSubstitutionTransformation | undefined): boolean;
 ```
 
 ### TextRenderSlave Class
@@ -170,9 +174,22 @@ class TextRenderSlave {
   isAborted(): boolean;
 
   // Rendering
-  rasterizeText(maskData: PimcoMaskSubstitutionCompiled, width: number, height: number): RasterizedText;
-  renderLayer(layer: TextLayerDescriptor, width: number, height: number, index: number): Promise<TextLayerResult | null>;
-  renderBatch(layers: TextLayerDescriptor[], width: number, height: number): Promise<TextLayerResult[]>;
+  rasterizeText(
+    maskData: PimcoMaskSubstitutionCompiled,
+    width: number,
+    height: number
+  ): RasterizedText;
+  renderLayer(
+    layer: TextLayerDescriptor,
+    width: number,
+    height: number,
+    index: number
+  ): Promise<TextLayerResult | null>;
+  renderBatch(
+    layers: TextLayerDescriptor[],
+    width: number,
+    height: number
+  ): Promise<TextLayerResult[]>;
 
   // Cleanup
   destroy(): void;
@@ -187,11 +204,11 @@ function textResultsToSegments(results: TextLayerResult[]): RenderSegment[];
 ```typescript
 // 2D Transform Types
 interface ParsedTransform {
-  translateX: number;  // X translation in pixels
-  translateY: number;  // Y translation in pixels
-  rotation: number;    // Rotation in degrees
-  scaleX: number;      // X scale factor
-  scaleY: number;      // Y scale factor
+  translateX: number; // X translation in pixels
+  translateY: number; // Y translation in pixels
+  rotation: number; // Rotation in degrees
+  scaleX: number; // X scale factor
+  scaleY: number; // Y scale factor
 }
 
 type TextAlignment = 'left' | 'center' | 'right';
@@ -313,11 +330,15 @@ slave.destroy();
 ```typescript
 import { measureText } from './text-rasterizer';
 
-const measurement = measureText('Sample Text', {
-  fontfamily: 'Arial',
-  lineheight: 0.08,
-  maxwidth: 0.9,
-}, 1000);
+const measurement = measureText(
+  'Sample Text',
+  {
+    fontfamily: 'Arial',
+    lineheight: 0.08,
+    maxwidth: 0.9,
+  },
+  1000
+);
 
 console.log(`Dimensions: ${measurement.width}x${measurement.height}`);
 console.log(`Scale applied: ${measurement.scale}`);

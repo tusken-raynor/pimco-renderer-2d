@@ -119,7 +119,7 @@ export class TextRenderSlave {
 
       // Add to document fonts (works in both main thread and workers with FontFace support)
       if (typeof self !== 'undefined' && 'fonts' in self) {
-        (self.fonts).add(fontFace);
+        self.fonts.add(fontFace);
       }
 
       entry.loaded = true;

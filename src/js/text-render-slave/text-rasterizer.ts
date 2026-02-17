@@ -360,10 +360,7 @@ export class TextRasterizer {
    * @param transform - Transform type
    * @returns Transformed text
    */
-  transform(
-    text: string,
-    transform: 'uppercase' | 'lowercase' | 'capitalize' | 'none'
-  ): string {
+  transform(text: string, transform: 'uppercase' | 'lowercase' | 'capitalize' | 'none'): string {
     return applyTextTransform(text, transform);
   }
 

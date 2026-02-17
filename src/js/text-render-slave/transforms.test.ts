@@ -32,7 +32,7 @@ function createMockDOMMatrix(init?: string | number[]): DOMMatrix {
   if (typeof init === 'string') {
     // Parse transform string and apply transforms in order
     const transformRegex = /\w+\([^)]+\)/g;
-    const transforms = transformRegex.exec(init) ? init.match(/\w+\([^)]+\)/g) ?? [] : [];
+    const transforms = transformRegex.exec(init) ? (init.match(/\w+\([^)]+\)/g) ?? []) : [];
 
     for (const t of transforms) {
       if (t.startsWith('translate(')) {

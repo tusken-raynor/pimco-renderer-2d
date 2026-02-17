@@ -57,17 +57,7 @@ export function isWebGL2EffectsAvailable(): boolean {
 /**
  * 3x3 matrix tuple type for convolution kernels.
  */
-export type Mat3Tuple = [
-  number,
-  number,
-  number,
-  number,
-  number,
-  number,
-  number,
-  number,
-  number,
-];
+export type Mat3Tuple = [number, number, number, number, number, number, number, number, number];
 
 /**
  * Standard emboss matrix (raised effect - light from top-left).
@@ -440,10 +430,7 @@ export function colorBurn(
   const length = data.length;
 
   for (let idx = 0; idx < length; idx += 4) {
-    const color = highlightSaturateRGB(
-      [data[idx], data[idx + 1], data[idx + 2]],
-      colorArray
-    );
+    const color = highlightSaturateRGB([data[idx], data[idx + 1], data[idx + 2]], colorArray);
     data[idx] = color[0];
     data[idx + 1] = color[1];
     data[idx + 2] = color[2];

@@ -63,9 +63,10 @@ export interface ShadowEffectResult {
  * @param maskData - Compiled mask substitution data
  * @returns Shadow parameters (spread and blur)
  */
-export function extractShadowParams(
-  maskData: PimcoMaskSubstitutionCompiled
-): { spread: number; blur: number } {
+export function extractShadowParams(maskData: PimcoMaskSubstitutionCompiled): {
+  spread: number;
+  blur: number;
+} {
   const params = maskData.effectparams;
 
   let spread = 0;
