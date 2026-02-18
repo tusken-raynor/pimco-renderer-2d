@@ -208,6 +208,7 @@ describe('VirtualStandardSlave', () => {
       deferredSlave.postMessage({
         type: 'batch',
         layers: [],
+        indices: [],
         width: 100,
         height: 100,
       });

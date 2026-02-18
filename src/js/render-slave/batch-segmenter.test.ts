@@ -431,6 +431,95 @@ describe('edge cases', () => {
   });
 });
 
+describe('orderIndex tracking', () => {
+  it('should set orderIndex to layer index for single-layer segments', async () => {
+    const results = [createLayerResult(5, 'multiply')];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    expect(segments.length).toBe(1);
+    expect(segments[0].orderIndex).toBe(5);
+  });
+
+  it('should set orderIndex to highest layer index when layers are combined', async () => {
+    // Layers 0, 1, 2 combined into one segment - orderIndex should be 2 (the top layer)
+    const results = [
+      createLayerResult(0, 'source-over'),
+      createLayerResult(1, 'screen'),
+      createLayerResult(2, 'lighten'),
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    expect(segments.length).toBe(1);
+    expect(segments[0].orderIndex).toBe(2);
+  });
+
+  it('should track orderIndex correctly in mixed sequences', async () => {
+    // Scenario from bug report:
+    // [Layer 0 (source-over), Layer 1 (screen), Layer 2 (multiply), Layer 3 (lighten)]
+    // After batching: Segment 0 (0+1 combined), Segment 1 (2 alone), Segment 2 (3 alone)
+    const results = [
+      createLayerResult(0, 'source-over'),
+      createLayerResult(1, 'screen'),
+      createLayerResult(2, 'multiply'),
+      createLayerResult(3, 'lighten'),
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    expect(segments.length).toBe(3);
+    expect(segments[0].orderIndex).toBe(1); // Combined 0+1, top is 1
+    expect(segments[1].orderIndex).toBe(2); // Single layer 2
+    expect(segments[2].orderIndex).toBe(3); // Single layer 3
+  });
+
+  it('should handle non-sequential indices correctly', async () => {
+    // Simulate when slaves receive non-sequential layers (e.g., text layers filtered out)
+    const results = [
+      createLayerResult(0, 'source-over'),
+      createLayerResult(2, 'screen'), // Note: index 1 is missing (handled by text slave)
+      createLayerResult(4, 'lighten'),
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    expect(segments.length).toBe(1);
+    expect(segments[0].orderIndex).toBe(4); // Highest index in combined segment
+  });
+
+  it('should preserve orderIndex for each non-combinable layer', async () => {
+    const results = [
+      createLayerResult(10, 'multiply'),
+      createLayerResult(11, 'overlay'),
+      createLayerResult(12, 'difference'),
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    expect(segments.length).toBe(3);
+    expect(segments[0].orderIndex).toBe(10);
+    expect(segments[1].orderIndex).toBe(11);
+    expect(segments[2].orderIndex).toBe(12);
+  });
+
+  it('should handle complex mixed sequence with correct orderIndex values', async () => {
+    // This tests the full scenario from the bug report
+    const results = [
+      createLayerResult(0, 'source-over'), // group 1
+      createLayerResult(1, 'screen'), // group 1
+      createLayerResult(2, 'destination-in'), // standalone
+      createLayerResult(3, 'lighter'), // group 2
+      createLayerResult(4, 'lighten'), // group 2
+      createLayerResult(5, 'xor'), // standalone
+      createLayerResult(6, 'source-over'), // group 3 (single layer)
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    expect(segments.length).toBe(5);
+    expect(segments[0].orderIndex).toBe(1); // 0+1 combined, top is 1
+    expect(segments[1].orderIndex).toBe(2); // standalone
+    expect(segments[2].orderIndex).toBe(4); // 3+4 combined, top is 4
+    expect(segments[3].orderIndex).toBe(5); // standalone
+    expect(segments[4].orderIndex).toBe(6); // single layer
+  });
+});
+
 describe('segmentation optimization', () => {
   it('should reduce segment count for consecutive combinable modes', async () => {
     // Without batching: 5 segments

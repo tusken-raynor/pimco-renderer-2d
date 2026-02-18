@@ -48,6 +48,8 @@ export function isCombinableMode(mode: CanvasCompositeOperation): boolean {
 interface PendingSegment {
   /** Layer results in this segment */
   layers: LayerResult[];
+  /** Original layer indices included in this segment */
+  originalIndices: number[];
   /** Composite mode for this segment (from first layer) */
   compositemode: CanvasCompositeOperation;
   /** Composite alpha for this segment (from first layer) */
@@ -80,6 +82,7 @@ export function segmentLayerResults(results: LayerResult[]): PendingSegment[] {
       if (current && isCombinableMode(current.compositemode)) {
         // Extend current combinable segment
         current.layers.push(result);
+        current.originalIndices.push(result.index);
       } else {
         // Start new combinable segment
         if (current) {
@@ -87,6 +90,7 @@ export function segmentLayerResults(results: LayerResult[]): PendingSegment[] {
         }
         current = {
           layers: [result],
+          originalIndices: [result.index],
           compositemode: result.compositemode,
           compositealpha: result.compositealpha,
         };
@@ -99,6 +103,7 @@ export function segmentLayerResults(results: LayerResult[]): PendingSegment[] {
       // Create standalone segment for this layer
       current = {
         layers: [result],
+        originalIndices: [result.index],
         compositemode: result.compositemode,
         compositealpha: result.compositealpha,
       };
@@ -224,12 +229,16 @@ export async function batchSegmentResults(
   const ctx = createSegmentationContext(width, height);
 
   for (const pending of pendingSegments) {
+    // Use the highest original index as the orderIndex (topmost layer in segment)
+    const orderIndex = Math.max(...pending.originalIndices);
+
     if (pending.layers.length === 1) {
       // Single layer segment - no composition needed
       segments.push({
         bitmap: pending.layers[0].bitmap,
         compositemode: pending.compositemode,
         compositealpha: pending.compositealpha,
+        orderIndex,
       });
     } else {
       // Multi-layer segment - compose into single bitmap
@@ -238,6 +247,7 @@ export async function batchSegmentResults(
         bitmap: composedBitmap,
         compositemode: pending.compositemode,
         compositealpha: pending.compositealpha,
+        orderIndex,
       });
     }
   }

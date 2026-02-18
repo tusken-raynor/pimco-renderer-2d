@@ -1139,10 +1139,11 @@ export class RenderMaster {
 
       slavePromises.push(slavePromise);
 
-      // Send batch to slave
+      // Send batch to slave with original indices for ordering
       slave.worker.postMessage({
         type: 'batch',
         layers: slaveData.descriptors,
+        indices: slaveData.indices,
         width: renderWidth,
         height: renderHeight,
       });
@@ -1172,6 +1173,7 @@ export class RenderMaster {
       textSlave.worker.postMessage({
         type: 'batch',
         layers: slaveData.descriptors,
+        indices: slaveData.indices,
         width: renderWidth,
         height: renderHeight,
       });
@@ -1197,23 +1199,17 @@ export class RenderMaster {
         throw new AbortError('Render aborted');
       }
 
-      // Build composed layers with original indices
+      // Build composed layers with original indices from segments
       const composedLayers: ComposedLayer[] = [];
 
-      for (const { slaveId, segments, isTextSlave } of slaveResults) {
-        // Get the correct assignments based on slave type
-        const indices = isTextSlave
-          ? (textSlaveAssignments.get(slaveId) ?? [])
-          : (slaveAssignments.get(slaveId) ?? []);
-
-        // Each segment corresponds to one or more original layers
-        // Since we use batch segmentation, segments may be grouped
-        // For now, we assign segments sequentially to original indices
-        for (let i = 0; i < segments.length; i++) {
-          const originalIndex = indices[i] ?? i;
+      for (const { segments } of slaveResults) {
+        // Each segment carries its orderIndex - the highest original layer index
+        // in the segment. This correctly handles batch segmentation where multiple
+        // layers may be combined into one segment.
+        for (const segment of segments) {
           composedLayers.push({
-            segment: segments[i],
-            originalIndex,
+            segment,
+            originalIndex: segment.orderIndex,
           });
         }
       }

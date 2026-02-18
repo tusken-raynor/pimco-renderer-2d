@@ -115,17 +115,19 @@ function handleInit(): void {
 /**
  * Handle batch message - render all layers and return segments.
  * @param layers - Layer descriptors to render
+ * @param indices - Original layer indices for ordering
  * @param width - Canvas width
  * @param height - Canvas height
  */
 async function handleBatch(
   layers: LayerDescriptor[],
+  indices: number[],
   width: number,
   height: number
 ): Promise<void> {
   try {
-    // Render all layers in the batch
-    const results = await renderSlave.renderBatch(layers, width, height);
+    // Render all layers in the batch with original indices
+    const results = await renderSlave.renderBatch(layers, width, height, indices);
 
     // Check if we were aborted during rendering
     if (renderSlave.isAborted()) {
@@ -177,7 +179,7 @@ self.onmessage = async (event: MessageEvent<MasterToSlaveMessage>) => {
     if (isInitMessage(message)) {
       handleInit();
     } else if (isBatchMessage(message)) {
-      await handleBatch(message.layers, message.width, message.height);
+      await handleBatch(message.layers, message.indices, message.width, message.height);
     } else if (isAbortMessage(message)) {
       handleAbort();
     }

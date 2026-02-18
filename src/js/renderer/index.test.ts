@@ -82,12 +82,14 @@ import {
  */
 function createMockSegment(
   compositemode: GlobalCompositeOperation = 'source-over',
-  compositealpha = 1.0
+  compositealpha = 1.0,
+  orderIndex = 0
 ): RenderSegment {
   return {
     bitmap: createMockImageBitmap(),
     compositemode,
     compositealpha,
+    orderIndex,
   };
 }
 

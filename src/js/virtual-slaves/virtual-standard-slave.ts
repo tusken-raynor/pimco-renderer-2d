@@ -114,7 +114,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
         this.handleInit();
       } else if (isBatchMessage(message)) {
         // Handle async batch rendering
-        void this.handleBatch(message.layers, message.width, message.height);
+        void this.handleBatch(message.layers, message.indices, message.width, message.height);
       } else if (isAbortMessage(message)) {
         this.handleAbort();
       }
@@ -155,6 +155,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
    */
   private async handleBatch(
     layers: LayerDescriptor[],
+    indices: number[],
     width: number,
     height: number
   ): Promise<void> {
@@ -163,8 +164,8 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     }
 
     try {
-      // Render all layers in the batch
-      const results = await this.renderSlave.renderBatch(layers, width, height);
+      // Render all layers in the batch with original indices
+      const results = await this.renderSlave.renderBatch(layers, width, height, indices);
 
       // Check if we were aborted during async rendering
       // (state may change during await - disable lint)
