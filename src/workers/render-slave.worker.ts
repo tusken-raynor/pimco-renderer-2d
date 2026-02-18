@@ -22,6 +22,7 @@
 
 import { RenderSlave } from '../js/render-slave';
 import { batchSegmentResults } from '../js/render-slave/batch-segmenter';
+import { createStandardBatchCoordinator, type PendingBatch } from '../js/render-slave/batch-coordinator';
 import { probeCapabilities } from '../js/renderer/capability-probe';
 import { wrapError } from '../js/errors';
 import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../js/types';
@@ -42,13 +43,11 @@ const renderSlave = new RenderSlave();
 // Track the asset manager port for receiving assets
 let assetPort: MessagePort | null = null;
 
-// Pending batch state - stores batch info until assets are ready
-let pendingBatch: {
-  layers: LayerDescriptor[];
-  width: number;
-  height: number;
-  requiredAssetIds: Set<number>;
-} | null = null;
+// Create batch coordinator with render callback
+const batchCoordinator = createStandardBatchCoordinator(
+  renderSlave,
+  (batch) => void executeRender(batch)
+);
 
 /**
  * Send capabilities message to master.
@@ -104,54 +103,11 @@ function sendError(error: unknown): void {
 }
 
 /**
- * Extract all required asset IDs from layer descriptors.
- * @param layers - Layer descriptors
- * @returns Set of required asset IDs (excluding negative values which mean no asset)
+ * Execute rendering when batch and assets are ready.
+ * @param batch - Pending batch with all required assets available
  */
-function extractRequiredAssetIds(layers: LayerDescriptor[]): Set<number> {
-  const assetIds = new Set<number>();
-
-  for (const layer of layers) {
-    const ids = layer.assetIds;
-
-    // Add all non-negative asset IDs (id >= 0 means valid asset)
-    if (ids.image >= 0) assetIds.add(ids.image);
-    if (ids.mask !== undefined && ids.mask >= 0) assetIds.add(ids.mask);
-    if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
-    if (ids.hlimage1 !== undefined && ids.hlimage1 >= 0) assetIds.add(ids.hlimage1);
-    if (ids.hlimage2 !== undefined && ids.hlimage2 >= 0) assetIds.add(ids.hlimage2);
-  }
-
-  return assetIds;
-}
-
-/**
- * Check if all required assets for the pending batch are available.
- * @returns true if all required assets are registered
- */
-function hasAllRequiredAssets(): boolean {
-  if (!pendingBatch) return false;
-
-  for (const assetId of pendingBatch.requiredAssetIds) {
-    if (!renderSlave.hasAsset(assetId)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Try to render if we have both a pending batch and all required assets.
- * Called after receiving a batch message or an asset-data message.
- */
-async function tryRender(): Promise<void> {
-  if (!pendingBatch || !hasAllRequiredAssets()) {
-    return;
-  }
-
-  // Capture batch info and clear pending state
-  const { layers, width, height } = pendingBatch;
-  pendingBatch = null;
+async function executeRender(batch: PendingBatch<LayerDescriptor>): Promise<void> {
+  const { layers, width, height } = batch;
 
   try {
     // Render all layers in the batch
@@ -192,8 +148,8 @@ function handleAssetData(message: AssetManagerToSlaveMessage): void {
   if (message.assetType === 'image' && message.data instanceof ImageBitmap) {
     renderSlave.registerAsset(message.id, message.data);
 
-    // Check if this completes our pending batch requirements
-    void tryRender();
+    // Notify coordinator that an asset was received
+    batchCoordinator.handleAssetReceived();
   }
 }
 
@@ -206,7 +162,7 @@ function handleInit(): void {
 }
 
 /**
- * Handle batch message - store batch and try to render if assets are ready.
+ * Handle batch message - delegate to coordinator.
  * @param layers - Layer descriptors to render
  * @param width - Canvas width
  * @param height - Canvas height
@@ -215,14 +171,8 @@ function handleBatch(layers: LayerDescriptor[], width: number, height: number): 
   // Reset abort flag for new batch
   renderSlave.resetAbort();
 
-  // Extract required asset IDs from the batch
-  const requiredAssetIds = extractRequiredAssetIds(layers);
-
-  // Store pending batch
-  pendingBatch = { layers, width, height, requiredAssetIds };
-
-  // Try to render immediately if all assets are already available
-  void tryRender();
+  // Delegate to coordinator
+  batchCoordinator.handleBatch(layers, width, height);
 }
 
 /**
@@ -230,7 +180,7 @@ function handleBatch(layers: LayerDescriptor[], width: number, height: number): 
  */
 function handleAbort(): void {
   renderSlave.abort();
-  pendingBatch = null;
+  batchCoordinator.clear();
 }
 
 /**
@@ -285,7 +235,7 @@ self.onunhandledrejection = (event: PromiseRejectionEvent) => {
  */
 function cleanup(): void {
   renderSlave.destroy();
-  pendingBatch = null;
+  batchCoordinator.clear();
   if (assetPort) {
     assetPort.onmessage = null;
     assetPort.close();

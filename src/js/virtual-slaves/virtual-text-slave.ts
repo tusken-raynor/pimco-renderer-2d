@@ -19,6 +19,7 @@
  */
 
 import { TextRenderSlave } from '../text-render-slave';
+import { createTextBatchCoordinator, type PendingBatch } from '../text-render-slave/batch-coordinator';
 import { probeCapabilities } from '../renderer/capability-probe';
 import { wrapError } from '../errors';
 import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../types';
@@ -66,6 +67,9 @@ export class VirtualTextSlave implements VirtualSlavePort {
   /** Internal text render slave instance */
   private textRenderSlave: TextRenderSlave;
 
+  /** Batch coordinator for synchronizing batch and asset arrival */
+  private batchCoordinator;
+
   /** Message handler */
   onmessage: ((event: MessageEvent<SlaveToMasterMessage>) => void) | null = null;
 
@@ -84,17 +88,15 @@ export class VirtualTextSlave implements VirtualSlavePort {
   /** WebGL2 availability (cached for effect routing) */
   private hasWebGL2 = false;
 
-  /** Pending batch state - stores batch info until assets are ready */
-  private pendingBatch: {
-    layers: TextLayerDescriptor[];
-    width: number;
-    height: number;
-    requiredAssetIds: Set<number>;
-  } | null = null;
-
   constructor(options: VirtualSlaveOptions = {}) {
     this.deferMessages = options.deferMessages ?? true;
     this.textRenderSlave = new TextRenderSlave();
+
+    // Create batch coordinator with render callback
+    this.batchCoordinator = createTextBatchCoordinator(
+      this.textRenderSlave,
+      (batch) => void this.executeRender(batch)
+    );
   }
 
   /**
@@ -157,39 +159,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
   }
 
   /**
-   * Extract all required asset IDs from text layer descriptors.
-   */
-  private extractRequiredAssetIds(layers: TextLayerDescriptor[]): Set<number> {
-    const assetIds = new Set<number>();
-
-    for (const layer of layers) {
-      const ids = layer.assetIds;
-      if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
-      if (ids.font !== undefined && ids.font >= 0) assetIds.add(ids.font);
-      if (ids.postmask !== undefined && ids.postmask >= 0) assetIds.add(ids.postmask);
-    }
-
-    return assetIds;
-  }
-
-  /**
-   * Check if all required assets for the pending batch are available.
-   */
-  private hasAllRequiredAssets(): boolean {
-    if (!this.pendingBatch) return false;
-
-    for (const assetId of this.pendingBatch.requiredAssetIds) {
-      if (
-        this.textRenderSlave.getAsset(assetId) === undefined &&
-        !this.textRenderSlave.hasFont(assetId)
-      ) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
    * Handle asset data from Asset Manager.
    */
   private handleAssetData(message: AssetManagerToSlaveMessage): void {
@@ -211,8 +180,8 @@ export class VirtualTextSlave implements VirtualSlavePort {
       );
     }
 
-    // Check if this completes our pending batch requirements
-    void this.tryRender();
+    // Notify coordinator that an asset was received
+    this.batchCoordinator.handleAssetReceived();
   }
 
   /**
@@ -227,7 +196,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
   }
 
   /**
-   * Handle batch message - store batch and try to render if assets are ready.
+   * Handle batch message - delegate to coordinator.
    */
   private handleBatch(
     layers: TextLayerDescriptor[],
@@ -235,11 +204,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
     height: number
   ): void {
     this.textRenderSlave.resetAbort();
-
-    const requiredAssetIds = this.extractRequiredAssetIds(layers);
-    this.pendingBatch = { layers, width, height, requiredAssetIds };
-
-    void this.tryRender();
+    this.batchCoordinator.handleBatch(layers, width, height);
   }
 
   /**
@@ -400,15 +365,15 @@ export class VirtualTextSlave implements VirtualSlavePort {
   }
 
   /**
-   * Try to render if we have both a pending batch and all required assets.
+   * Execute rendering when batch and assets are ready.
    */
-  private async tryRender(): Promise<void> {
-    if (this.terminated || !this.pendingBatch || !this.hasAllRequiredAssets()) {
+  private async executeRender(batch: PendingBatch<TextLayerDescriptor>): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (this.terminated) {
       return;
     }
 
-    const { layers, width, height } = this.pendingBatch;
-    this.pendingBatch = null;
+    const { layers, width, height } = batch;
 
     try {
       const results: RenderSegment[] = [];
@@ -448,7 +413,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
    */
   private handleAbort(): void {
     this.textRenderSlave.abort();
-    this.pendingBatch = null;
+    this.batchCoordinator.clear();
   }
 
   /**
@@ -563,7 +528,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
     this.terminated = true;
     this.textRenderSlave.abort();
     this.textRenderSlave.destroy();
-    this.pendingBatch = null;
+    this.batchCoordinator.clear();
     this.onmessage = null;
     this.onerror = null;
     this.messageListeners.clear();

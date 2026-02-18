@@ -17,6 +17,7 @@
 
 import { RenderSlave } from '../render-slave';
 import { batchSegmentResults } from '../render-slave/batch-segmenter';
+import { createStandardBatchCoordinator, type PendingBatch } from '../render-slave/batch-coordinator';
 import { probeCapabilities } from '../renderer/capability-probe';
 import { wrapError } from '../errors';
 import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../types';
@@ -44,6 +45,9 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   /** Internal render slave instance */
   private renderSlave: RenderSlave;
 
+  /** Batch coordinator for synchronizing batch and asset arrival */
+  private batchCoordinator;
+
   /** Message handler */
   onmessage: ((event: MessageEvent<SlaveToMasterMessage>) => void) | null = null;
 
@@ -59,17 +63,15 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   /** Whether the slave has been terminated */
   private terminated = false;
 
-  /** Pending batch state - stores batch info until assets are ready */
-  private pendingBatch: {
-    layers: LayerDescriptor[];
-    width: number;
-    height: number;
-    requiredAssetIds: Set<number>;
-  } | null = null;
-
   constructor(options: VirtualSlaveOptions = {}) {
     this.deferMessages = options.deferMessages ?? true;
     this.renderSlave = new RenderSlave();
+
+    // Create batch coordinator with render callback
+    this.batchCoordinator = createStandardBatchCoordinator(
+      this.renderSlave,
+      (batch) => void this.executeRender(batch)
+    );
   }
 
   /**
@@ -131,38 +133,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   }
 
   /**
-   * Extract all required asset IDs from layer descriptors.
-   */
-  private extractRequiredAssetIds(layers: LayerDescriptor[]): Set<number> {
-    const assetIds = new Set<number>();
-
-    for (const layer of layers) {
-      const ids = layer.assetIds;
-      if (ids.image >= 0) assetIds.add(ids.image);
-      if (ids.mask !== undefined && ids.mask >= 0) assetIds.add(ids.mask);
-      if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
-      if (ids.hlimage1 !== undefined && ids.hlimage1 >= 0) assetIds.add(ids.hlimage1);
-      if (ids.hlimage2 !== undefined && ids.hlimage2 >= 0) assetIds.add(ids.hlimage2);
-    }
-
-    return assetIds;
-  }
-
-  /**
-   * Check if all required assets for the pending batch are available.
-   */
-  private hasAllRequiredAssets(): boolean {
-    if (!this.pendingBatch) return false;
-
-    for (const assetId of this.pendingBatch.requiredAssetIds) {
-      if (!this.renderSlave.hasAsset(assetId)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
    * Handle asset data from Asset Manager.
    */
   private handleAssetData(message: AssetManagerToSlaveMessage): void {
@@ -178,8 +148,8 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     if (message.assetType === 'image') {
       this.renderSlave.registerAsset(message.id, message.data as ImageBitmap);
 
-      // Check if this completes our pending batch requirements
-      void this.tryRender();
+      // Notify coordinator that an asset was received
+      this.batchCoordinator.handleAssetReceived();
     }
   }
 
@@ -192,28 +162,23 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   }
 
   /**
-   * Handle batch message - store batch and try to render if assets are ready.
+   * Handle batch message - delegate to coordinator.
    */
   private handleBatch(layers: LayerDescriptor[], width: number, height: number): void {
     this.renderSlave.resetAbort();
-
-    const requiredAssetIds = this.extractRequiredAssetIds(layers);
-    this.pendingBatch = { layers, width, height, requiredAssetIds };
-
-    void this.tryRender();
+    this.batchCoordinator.handleBatch(layers, width, height);
   }
 
   /**
-   * Try to render if we have both a pending batch and all required assets.
+   * Execute rendering when batch and assets are ready.
    */
-  private async tryRender(): Promise<void> {
-    if (this.terminated || !this.pendingBatch || !this.hasAllRequiredAssets()) {
+  private async executeRender(batch: PendingBatch<LayerDescriptor>): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (this.terminated) {
       return;
     }
 
-    // Capture batch info and clear pending state
-    const { layers, width, height } = this.pendingBatch;
-    this.pendingBatch = null;
+    const { layers, width, height } = batch;
 
     try {
       const results = await this.renderSlave.renderBatch(layers, width, height);
@@ -244,7 +209,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
    */
   private handleAbort(): void {
     this.renderSlave.abort();
-    this.pendingBatch = null;
+    this.batchCoordinator.clear();
   }
 
   /**
@@ -361,7 +326,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     this.terminated = true;
     this.renderSlave.abort();
     this.renderSlave.destroy();
-    this.pendingBatch = null;
+    this.batchCoordinator.clear();
     this.onmessage = null;
     this.onerror = null;
     this.messageListeners.clear();

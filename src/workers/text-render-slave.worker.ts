@@ -25,6 +25,7 @@
  */
 
 import { TextRenderSlave } from '../js/text-render-slave';
+import { createTextBatchCoordinator, type PendingBatch } from '../js/text-render-slave/batch-coordinator';
 import { probeCapabilities } from '../js/renderer/capability-probe';
 import { wrapError } from '../js/errors';
 import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../js/types';
@@ -67,13 +68,11 @@ let assetPort: MessagePort | null = null;
 // Track capabilities for effect routing
 let hasWebGL2 = false;
 
-// Pending batch state - stores batch info until assets are ready
-let pendingBatch: {
-  layers: TextLayerDescriptor[];
-  width: number;
-  height: number;
-  requiredAssetIds: Set<number>;
-} | null = null;
+// Create batch coordinator with render callback
+const batchCoordinator = createTextBatchCoordinator(
+  textRenderSlave,
+  (batch) => void executeRender(batch)
+);
 
 /**
  * Send capabilities message to master.
@@ -131,42 +130,6 @@ function sendError(error: unknown): void {
 }
 
 /**
- * Extract all required asset IDs from text layer descriptors.
- * @param layers - Text layer descriptors
- * @returns Set of required asset IDs (excluding undefined and negative values)
- */
-function extractRequiredAssetIds(layers: TextLayerDescriptor[]): Set<number> {
-  const assetIds = new Set<number>();
-
-  for (const layer of layers) {
-    const ids = layer.assetIds;
-
-    // Add all non-negative asset IDs (id >= 0 means valid asset)
-    if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
-    if (ids.font !== undefined && ids.font >= 0) assetIds.add(ids.font);
-    if (ids.postmask !== undefined && ids.postmask >= 0) assetIds.add(ids.postmask);
-  }
-
-  return assetIds;
-}
-
-/**
- * Check if all required assets for the pending batch are available.
- * @returns true if all required assets are registered
- */
-function hasAllRequiredAssets(): boolean {
-  if (!pendingBatch) return false;
-
-  for (const assetId of pendingBatch.requiredAssetIds) {
-    // Check both image assets and fonts
-    if (textRenderSlave.getAsset(assetId) === undefined && !textRenderSlave.hasFont(assetId)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
  * Handle asset data message from Asset Manager.
  * @param message - Asset data message
  */
@@ -182,8 +145,8 @@ function handleAssetData(message: AssetManagerToSlaveMessage): void {
     textRenderSlave.registerFont(message.id, `font-${String(message.id)}`, message.data);
   }
 
-  // Check if this completes our pending batch requirements
-  void tryRender();
+  // Notify coordinator that an asset was received
+  batchCoordinator.handleAssetReceived();
 }
 
 /**
@@ -349,16 +312,10 @@ async function renderTextLayer(
 }
 
 /**
- * Try to render if we have both a pending batch and all required assets.
+ * Execute rendering when batch and assets are ready.
  */
-async function tryRender(): Promise<void> {
-  if (!pendingBatch || !hasAllRequiredAssets()) {
-    return;
-  }
-
-  // Capture batch info and clear pending state
-  const { layers, width, height } = pendingBatch;
-  pendingBatch = null;
+async function executeRender(batch: PendingBatch<TextLayerDescriptor>): Promise<void> {
+  const { layers, width, height } = batch;
 
   try {
     const results: RenderSegment[] = [];
@@ -391,15 +348,11 @@ async function tryRender(): Promise<void> {
 }
 
 /**
- * Handle batch message - store batch and try to render if assets are ready.
+ * Handle batch message - delegate to coordinator.
  */
 function handleBatch(layers: TextLayerDescriptor[], width: number, height: number): void {
   textRenderSlave.resetAbort();
-
-  const requiredAssetIds = extractRequiredAssetIds(layers);
-  pendingBatch = { layers, width, height, requiredAssetIds };
-
-  void tryRender();
+  batchCoordinator.handleBatch(layers, width, height);
 }
 
 /**
@@ -407,7 +360,7 @@ function handleBatch(layers: TextLayerDescriptor[], width: number, height: numbe
  */
 function handleAbort(): void {
   textRenderSlave.abort();
-  pendingBatch = null;
+  batchCoordinator.clear();
 }
 
 /**
@@ -451,7 +404,7 @@ self.onunhandledrejection = (event: PromiseRejectionEvent) => {
 
 function cleanup(): void {
   textRenderSlave.destroy();
-  pendingBatch = null;
+  batchCoordinator.clear();
   if (assetPort) {
     assetPort.onmessage = null;
     assetPort.close();
