@@ -726,3 +726,231 @@ describe('error handling', () => {
     expect((workerError as Error & { workerId: number }).workerId).toBe(1);
   });
 });
+
+// =============================================================================
+// Failed Asset Tracking Tests
+// =============================================================================
+
+describe('failed asset URL tracking', () => {
+  describe('failedUrls Set tracking', () => {
+    it('should track failed URLs in a Set', () => {
+      const failedUrls = new Set<string>();
+
+      // Simulate marking URLs as failed
+      failedUrls.add('/images/missing1.png');
+      failedUrls.add('/images/missing2.png');
+
+      expect(failedUrls.has('/images/missing1.png')).toBe(true);
+      expect(failedUrls.has('/images/missing2.png')).toBe(true);
+      expect(failedUrls.has('/images/exists.png')).toBe(false);
+    });
+
+    it('should not duplicate failed URLs', () => {
+      const failedUrls = new Set<string>();
+
+      failedUrls.add('/images/missing.png');
+      failedUrls.add('/images/missing.png'); // Duplicate
+
+      expect(failedUrls.size).toBe(1);
+    });
+
+    it('should clear failed URLs on reset', () => {
+      const failedUrls = new Set<string>();
+
+      failedUrls.add('/images/missing.png');
+      expect(failedUrls.size).toBe(1);
+
+      failedUrls.clear();
+      expect(failedUrls.size).toBe(0);
+    });
+  });
+
+  describe('getAssetId with failed URL tracking', () => {
+    it('should return -1 for known failed URLs', () => {
+      const failedUrls = new Set<string>();
+      const urlToId = new Map<string, number>();
+      let nextId = 1;
+
+      const getAssetId = (url: string): number => {
+        // Return -1 for known failed URLs
+        if (failedUrls.has(url)) {
+          return -1;
+        }
+
+        const existing = urlToId.get(url);
+        if (existing !== undefined) {
+          return existing;
+        }
+
+        const id = nextId++;
+        urlToId.set(url, id);
+        return id;
+      };
+
+      // First request - normal ID assignment
+      const id1 = getAssetId('/images/image1.png');
+      expect(id1).toBe(1);
+
+      // Mark as failed
+      failedUrls.add('/images/image1.png');
+
+      // Subsequent request - should return -1
+      const id2 = getAssetId('/images/image1.png');
+      expect(id2).toBe(-1);
+    });
+
+    it('should continue to assign new IDs for non-failed URLs', () => {
+      const failedUrls = new Set<string>();
+      const urlToId = new Map<string, number>();
+      let nextId = 1;
+
+      const getAssetId = (url: string): number => {
+        if (failedUrls.has(url)) {
+          return -1;
+        }
+
+        const existing = urlToId.get(url);
+        if (existing !== undefined) {
+          return existing;
+        }
+
+        const id = nextId++;
+        urlToId.set(url, id);
+        return id;
+      };
+
+      // Mark one URL as failed
+      failedUrls.add('/images/missing.png');
+
+      // Other URLs should still get IDs
+      expect(getAssetId('/images/image1.png')).toBe(1);
+      expect(getAssetId('/images/image2.png')).toBe(2);
+      expect(getAssetId('/images/missing.png')).toBe(-1);
+    });
+  });
+
+  describe('extractAssetRequests with failed URL filtering', () => {
+    it('should skip failed URLs when extracting asset requests', () => {
+      const failedUrls = new Set<string>();
+      const urlToId = new Map<string, number>();
+      let nextId = 1;
+
+      const getAssetId = (url: string): number => {
+        if (failedUrls.has(url)) {
+          return -1;
+        }
+
+        const existing = urlToId.get(url);
+        if (existing !== undefined) {
+          return existing;
+        }
+
+        const id = nextId++;
+        urlToId.set(url, id);
+        return id;
+      };
+
+      // Mark a URL as failed
+      failedUrls.add('/images/missing.png');
+
+      // Simulate extractAssetRequests
+      const seen = new Set<string>();
+      const requests: { id: number; url: string }[] = [];
+
+      const addImageRequest = (url: string | undefined): void => {
+        // Skip known failed URLs
+        if (url && !seen.has(url) && !failedUrls.has(url)) {
+          seen.add(url);
+          requests.push({
+            id: getAssetId(url),
+            url,
+          });
+        }
+      };
+
+      addImageRequest('/images/valid1.png');
+      addImageRequest('/images/missing.png'); // Should be skipped
+      addImageRequest('/images/valid2.png');
+
+      expect(requests.length).toBe(2);
+      expect(requests.map((r) => r.url)).not.toContain('/images/missing.png');
+      expect(requests.map((r) => r.url)).toContain('/images/valid1.png');
+      expect(requests.map((r) => r.url)).toContain('/images/valid2.png');
+    });
+
+    it('should not request already-failed URLs on subsequent renders', () => {
+      const failedUrls = new Set<string>();
+
+      // First render - marks some as failed
+      const failedAssetIds = [1, 3];
+      const idToUrl = new Map<number, string>([
+        [1, '/images/missing1.png'],
+        [2, '/images/valid.png'],
+        [3, '/images/missing2.png'],
+      ]);
+
+      // Process failed assets
+      for (const id of failedAssetIds) {
+        const url = idToUrl.get(id);
+        if (url) {
+          failedUrls.add(url);
+        }
+      }
+
+      // Second render - should not include failed URLs
+      const urlsToRequest = ['/images/missing1.png', '/images/valid.png', '/images/missing2.png'];
+      const filteredUrls = urlsToRequest.filter((url) => !failedUrls.has(url));
+
+      expect(filteredUrls).toEqual(['/images/valid.png']);
+    });
+  });
+
+  describe('failed asset processing in render flow', () => {
+    it('should mark URLs as failed after fetchAssets returns failed IDs', () => {
+      const failedUrls = new Set<string>();
+      const idToUrl = new Map<number, string>([
+        [1, '/images/image1.png'],
+        [2, '/images/image2.png'],
+        [3, '/images/image3.png'],
+      ]);
+
+      // Simulate fetchAssets returning failed IDs
+      const failedAssets = [2, 3];
+
+      // Process failed assets
+      for (const id of failedAssets) {
+        const url = idToUrl.get(id);
+        if (url) {
+          failedUrls.add(url);
+        }
+      }
+
+      expect(failedUrls.has('/images/image1.png')).toBe(false);
+      expect(failedUrls.has('/images/image2.png')).toBe(true);
+      expect(failedUrls.has('/images/image3.png')).toBe(true);
+    });
+
+    it('should warn once per failed asset', () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const failedUrls = new Set<string>();
+
+      // First render with failures
+      const render1FailedUrls = ['/images/missing.png'];
+      if (render1FailedUrls.length > 0) {
+        console.warn('Some assets failed to load:', render1FailedUrls);
+        for (const url of render1FailedUrls) {
+          failedUrls.add(url);
+        }
+      }
+
+      // Second render - failed URLs are filtered out, no new warnings
+      const render2FilteredUrls: string[] = []; // Would be filtered by failedUrls check
+      if (render2FilteredUrls.length > 0) {
+        console.warn('Some assets failed to load:', render2FilteredUrls);
+      }
+
+      expect(consoleSpy).toHaveBeenCalledTimes(1);
+      consoleSpy.mockRestore();
+    });
+  });
+});

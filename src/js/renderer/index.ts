@@ -183,6 +183,9 @@ export class RenderMaster {
   /** Asset ID mapping */
   private assetMapping: AssetMapping;
 
+  /** URLs that have failed to load (404 or other errors) */
+  private failedUrls: Set<string> = new Set();
+
   /** Current pending render */
   private pendingRender: PendingRender | null = null;
 
@@ -618,8 +621,14 @@ export class RenderMaster {
 
   /**
    * Get or create an asset ID for a URL.
+   * Returns -1 for URLs that have previously failed to load.
    */
   private getAssetId(url: string): number {
+    // Return -1 for known failed URLs to prevent re-requesting
+    if (this.failedUrls.has(url)) {
+      return -1;
+    }
+
     const existing = this.assetMapping.urlToId.get(url);
     if (existing !== undefined) {
       return existing;
