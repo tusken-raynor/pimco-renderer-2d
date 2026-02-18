@@ -486,8 +486,8 @@ function blendPixel(
       break;
     }
 
-    default: // Default to source-over for unsupported operations
-    {
+    default: {
+      // Default to source-over for unsupported operations
       const outA = srcA + dst.a * (1 - srcA);
       if (outA > 0) {
         dst.r = (src.r * srcA + dst.r * dst.a * (1 - srcA)) / outA;

@@ -67,7 +67,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
   onerror: ((event: ErrorEvent | Event) => void) | null = null;
 
   /** Event listeners */
-  private messageListeners: Set<(event: MessageEvent<SlaveToMasterMessage>) => void> = new Set();
+  private messageListeners = new Set<(event: MessageEvent<SlaveToMasterMessage>) => void>();
 
   /** Whether to defer message handling */
   private deferMessages: boolean;
@@ -165,11 +165,17 @@ export class VirtualTextSlave implements VirtualSlavePort {
     }
 
     // Handle different asset types
-    if (message.assetType === 'image' && message.data instanceof ImageBitmap) {
-      this.textRenderSlave.registerAsset(message.id, message.data);
-    } else if (message.assetType === 'font' && message.data instanceof ArrayBuffer) {
+    if (message.assetType === 'image') {
+      // Asset data for images is always ImageBitmap after decoding
+      this.textRenderSlave.registerAsset(message.id, message.data as ImageBitmap);
+    } else if (message.assetType === 'font') {
+      // Asset data for fonts is always ArrayBuffer
       // Register font with generated family name
-      this.textRenderSlave.registerFont(message.id, `font-${String(message.id)}`, message.data);
+      this.textRenderSlave.registerFont(
+        message.id,
+        `font-${String(message.id)}`,
+        message.data as ArrayBuffer
+      );
     }
   }
 
@@ -305,6 +311,8 @@ export class VirtualTextSlave implements VirtualSlavePort {
     const rasterized = this.textRenderSlave.rasterizeText(maskData, width, height);
 
     // Check abort again after potentially slow operation
+    // (state may change during async operations - disable lint)
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (this.textRenderSlave.isAborted() || this.terminated) {
       return null;
     }
@@ -324,6 +332,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
     }
 
     // Check abort again
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (this.textRenderSlave.isAborted() || this.terminated) {
       return null;
     }
@@ -351,11 +360,12 @@ export class VirtualTextSlave implements VirtualSlavePort {
     // Step 5: Apply post-mask if present
     const postmaskId = layer.assetIds.postmask;
     if (postmaskId !== undefined) {
-      const postMask = this.textRenderSlave.getAsset(postmaskId);
-      if (postMask instanceof ImageBitmap) {
+      const postMaskAsset = this.textRenderSlave.getAsset(postmaskId);
+      // Post-mask must be an ImageBitmap (not ArrayBuffer font data)
+      if (postMaskAsset && 'width' in postMaskAsset) {
         outputCtx.globalCompositeOperation = 'destination-in';
         outputCtx.globalAlpha = 1.0;
-        outputCtx.drawImage(postMask, 0, 0, width, height);
+        outputCtx.drawImage(postMaskAsset, 0, 0, width, height);
         outputCtx.globalCompositeOperation = 'source-over';
       }
     }
@@ -390,7 +400,8 @@ export class VirtualTextSlave implements VirtualSlavePort {
       const results: RenderSegment[] = [];
 
       for (let i = 0; i < layers.length; i++) {
-        // Check for abort between layers
+        // Check for abort between layers (state may change during async - disable lint)
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (this.textRenderSlave.isAborted() || this.terminated) {
           break;
         }
@@ -406,6 +417,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
       }
 
       // Check if we were aborted during rendering
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.textRenderSlave.isAborted() || this.terminated) {
         return;
       }
@@ -413,6 +425,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
       // Send result
       this.sendResult(results);
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!this.textRenderSlave.isAborted() && !this.terminated) {
         this.sendError(error);
       }
@@ -514,9 +527,9 @@ export class VirtualTextSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    if (type === 'message') {
-      this.messageListeners.add(listener);
-    }
+    // Only 'message' event type is supported
+    void type;
+    this.messageListeners.add(listener);
   }
 
   /**
@@ -526,9 +539,9 @@ export class VirtualTextSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    if (type === 'message') {
-      this.messageListeners.delete(listener);
-    }
+    // Only 'message' event type is supported
+    void type;
+    this.messageListeners.delete(listener);
   }
 
   /**

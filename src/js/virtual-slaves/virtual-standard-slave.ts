@@ -45,7 +45,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   onerror: ((event: ErrorEvent | Event) => void) | null = null;
 
   /** Event listeners */
-  private messageListeners: Set<(event: MessageEvent<SlaveToMasterMessage>) => void> = new Set();
+  private messageListeners = new Set<(event: MessageEvent<SlaveToMasterMessage>) => void>();
 
   /** Whether to defer message handling */
   private deferMessages: boolean;
@@ -136,8 +136,9 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     }
 
     // Only handle image assets (standard slave doesn't need fonts or meshes)
-    if (message.assetType === 'image' && message.data instanceof ImageBitmap) {
-      this.renderSlave.registerAsset(message.id, message.data);
+    if (message.assetType === 'image') {
+      // Asset data for images is always ImageBitmap after decoding
+      this.renderSlave.registerAsset(message.id, message.data as ImageBitmap);
     }
   }
 
@@ -165,7 +166,9 @@ export class VirtualStandardSlave implements VirtualSlavePort {
       // Render all layers in the batch
       const results = await this.renderSlave.renderBatch(layers, width, height);
 
-      // Check if we were aborted during rendering
+      // Check if we were aborted during async rendering
+      // (state may change during await - disable lint)
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.renderSlave.isAborted() || this.terminated) {
         return;
       }
@@ -173,7 +176,8 @@ export class VirtualStandardSlave implements VirtualSlavePort {
       // Convert to optimized segments with batching
       const segments = await batchSegmentResults(results, width, height);
 
-      // Check abort again after segmentation
+      // Check abort again after async segmentation
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.renderSlave.isAborted() || this.terminated) {
         return;
       }
@@ -181,6 +185,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
       // Send result
       this.sendResult(segments);
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!this.renderSlave.isAborted() && !this.terminated) {
         this.sendError(error);
       }
@@ -282,9 +287,9 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    if (type === 'message') {
-      this.messageListeners.add(listener);
-    }
+    // Only 'message' event type is supported
+    void type;
+    this.messageListeners.add(listener);
   }
 
   /**
@@ -294,9 +299,9 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    if (type === 'message') {
-      this.messageListeners.delete(listener);
-    }
+    // Only 'message' event type is supported
+    void type;
+    this.messageListeners.delete(listener);
   }
 
   /**

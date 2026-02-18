@@ -59,7 +59,9 @@ function createMockCanvas(width: number, height: number): MockCanvas {
 // Mock the canvas utils module
 vi.mock('../utils/canvas', () => ({
   createCanvas: vi.fn((width: number, height: number) => createMockCanvas(width, height)),
-  getContext2D: vi.fn((canvas: MockCanvas) => canvas.getContext('2d')),
+  getContext2D: vi.fn(
+    (canvas: MockCanvas): MockContext | null => canvas.getContext('2d') as MockContext | null
+  ),
 }));
 
 // Import after mocking

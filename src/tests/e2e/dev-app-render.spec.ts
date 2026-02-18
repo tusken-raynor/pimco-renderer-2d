@@ -73,7 +73,9 @@ test.describe('Dev App Rendering', () => {
     });
 
     // Wait for JSON to load
-    await expect(page.locator('#status-message')).toContainText('Loaded 1 layers', { timeout: 5000 });
+    await expect(page.locator('#status-message')).toContainText('Loaded 1 layers', {
+      timeout: 5000,
+    });
     await expect(page.locator('#layer-count')).toHaveText('1');
     await expect(page.locator('#render-btn')).toBeEnabled();
   });
@@ -101,14 +103,18 @@ test.describe('Dev App Rendering', () => {
       buffer: Buffer.from(layerJson),
     });
 
-    await expect(page.locator('#status-message')).toContainText('Loaded 1 layers', { timeout: 5000 });
+    await expect(page.locator('#status-message')).toContainText('Loaded 1 layers', {
+      timeout: 5000,
+    });
 
     // Click render button
     await page.click('#render-btn');
 
     // Wait for render to complete (success or failure)
     // The status will change from "Rendering..." to something else
-    await expect(page.locator('#status-message')).not.toContainText('Rendering...', { timeout: 30000 });
+    await expect(page.locator('#status-message')).not.toContainText('Rendering...', {
+      timeout: 30000,
+    });
 
     // Check that timing is displayed (not the default "--")
     const renderTime = page.locator('#render-time');
@@ -164,7 +170,9 @@ test.describe('Dev App Rendering', () => {
       buffer: Buffer.from(layerJson),
     });
 
-    await expect(page.locator('#status-message')).toContainText('Loaded 3 layers', { timeout: 5000 });
+    await expect(page.locator('#status-message')).toContainText('Loaded 3 layers', {
+      timeout: 5000,
+    });
     await expect(page.locator('#layer-count')).toHaveText('3');
   });
 
@@ -184,7 +192,9 @@ test.describe('Dev App Rendering', () => {
       buffer: Buffer.from(layerJson),
     });
 
-    await expect(page.locator('#status-message')).toContainText('Loaded 1 layers', { timeout: 5000 });
+    await expect(page.locator('#status-message')).toContainText('Loaded 1 layers', {
+      timeout: 5000,
+    });
 
     // Example select should be cleared
     await expect(page.locator('#example-select')).toHaveValue('');

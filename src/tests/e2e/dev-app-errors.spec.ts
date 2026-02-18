@@ -74,7 +74,9 @@ test.describe('Dev App Error Handling', () => {
     });
 
     // Should load but with 0 layers
-    await expect(page.locator('#status-message')).toContainText('Loaded 0 layers', { timeout: 5000 });
+    await expect(page.locator('#status-message')).toContainText('Loaded 0 layers', {
+      timeout: 5000,
+    });
     await expect(page.locator('#layer-count')).toHaveText('0');
 
     // Render button should be disabled (no layers to render)
@@ -152,7 +154,9 @@ test.describe('Dev App Error Handling', () => {
     await page.click('#render-btn');
 
     // Wait for render to complete or fail
-    await expect(page.locator('#status-message')).not.toContainText('Rendering...', { timeout: 30000 });
+    await expect(page.locator('#status-message')).not.toContainText('Rendering...', {
+      timeout: 30000,
+    });
 
     // Either an error is shown or render completes (depending on how the renderer handles missing assets)
     // We just verify the app doesn't crash
@@ -181,7 +185,9 @@ test.describe('Dev App Error Handling', () => {
       buffer: Buffer.from(layerJson),
     });
 
-    await expect(page.locator('#status-message')).toContainText('Loaded 3 layers', { timeout: 5000 });
+    await expect(page.locator('#status-message')).toContainText('Loaded 3 layers', {
+      timeout: 5000,
+    });
 
     // The app logs warnings for missing mode, alpha, blend fields
     // Check that console messages were captured (may be warn or log type)

@@ -522,8 +522,8 @@ In Scenario F, the renderer runs in a worker context without OffscreenCanvas sup
 
 ### Supported Blend Operations
 
-| Category | Operations |
-|----------|------------|
+| Category    | Operations                                                                                                                                          |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Porter-Duff | `source-over`, `source-in`, `source-out`, `source-atop`, `destination-over`, `destination-in`, `destination-out`, `destination-atop`, `copy`, `xor` |
 | Blend Modes | `multiply`, `screen`, `overlay`, `darken`, `lighten`, `lighter`, `color-dodge`, `color-burn`, `hard-light`, `soft-light`, `difference`, `exclusion` |
 
@@ -532,7 +532,7 @@ In Scenario F, the renderer runs in a worker context without OffscreenCanvas sup
 ```typescript
 // Pixel buffer for software composition
 interface PixelBuffer {
-  data: Float32Array;  // RGBA values normalized to 0-1
+  data: Float32Array; // RGBA values normalized to 0-1
   width: number;
   height: number;
 }
@@ -709,14 +709,14 @@ The effects module manages a singleton WebGLPostProcessor. Call `destroyWebGLBud
 
 ### Hot Paths and Optimizations
 
-| Hot Path | Optimization Applied |
-|----------|---------------------|
-| Layer rendering | Pipeline context reuse (`createPipelineContext`) |
+| Hot Path          | Optimization Applied                                     |
+| ----------------- | -------------------------------------------------------- |
+| Layer rendering   | Pipeline context reuse (`createPipelineContext`)         |
 | Batch composition | Segmentation context reuse (`createSegmentationContext`) |
-| Asset transfer | Transferable objects (no copy) |
-| Text measurement | Single temporary canvas per measurement |
-| WebGL effects | Shader program reuse (`hasProgram`/`useProgram`) |
-| Final composition | Canvas context reuse (`MasterCompositor`) |
+| Asset transfer    | Transferable objects (no copy)                           |
+| Text measurement  | Single temporary canvas per measurement                  |
+| WebGL effects     | Shader program reuse (`hasProgram`/`useProgram`)         |
+| Final composition | Canvas context reuse (`MasterCompositor`)                |
 
 ### Memory Efficiency
 

@@ -65,8 +65,8 @@ class MockImageBitmap {
   height = 100;
   close = vi.fn();
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).ImageBitmap = MockImageBitmap;
+// Assign to globalThis for test environment
+Object.defineProperty(globalThis, 'ImageBitmap', { value: MockImageBitmap });
 
 // Helper to create a mock ImageBitmap
 function createMockImageBitmap(): ImageBitmap {
@@ -76,7 +76,9 @@ function createMockImageBitmap(): ImageBitmap {
 // Mock the canvas utils module
 vi.mock('../utils/canvas', () => ({
   createCanvas: vi.fn((width: number, height: number) => createMockCanvas(width, height)),
-  getContext2D: vi.fn((canvas: MockCanvas) => canvas.getContext('2d')),
+  getContext2D: vi.fn(
+    (canvas: MockCanvas): MockContext | null => canvas.getContext('2d') as MockContext | null
+  ),
   canvasToImageBitmap: vi.fn().mockResolvedValue({
     width: 100,
     height: 100,
@@ -313,7 +315,7 @@ describe('TextRenderSlave', () => {
         maskData: undefined as unknown as PimcoMaskSubstitutionCompiled,
       };
 
-      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const result = await slave.renderLayer(layer, 500, 500, 0);
 
       expect(result).toBeNull();
@@ -451,7 +453,7 @@ describe('TextRenderSlave', () => {
         createTextLayerDescriptor({ id: 'layer3', maskData: { content: 'Good' } }),
       ];
 
-      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const results = await slave.renderBatch(layers, 500, 500);
 
       // Should have 2 successful renders (indices 0 and 2)

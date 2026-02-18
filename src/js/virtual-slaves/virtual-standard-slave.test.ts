@@ -33,19 +33,19 @@ describe('VirtualStandardSlave', () => {
     });
 
     it('should report capabilities correctly', () => {
-      let capabilitiesMsg: CapabilitiesMessage | null = null;
+      let capabilitiesMsg: CapabilitiesMessage | undefined;
 
       slave.onmessage = (event) => {
         if (event.data.type === 'capabilities') {
-          capabilitiesMsg = event.data as CapabilitiesMessage;
+          capabilitiesMsg = event.data;
         }
       };
 
       slave.postMessage({ type: 'init' });
 
-      expect(capabilitiesMsg).not.toBeNull();
-      expect(typeof capabilitiesMsg!.offscreenCanvas).toBe('boolean');
-      expect(typeof capabilitiesMsg!.webgl2).toBe('boolean');
+      expect(capabilitiesMsg).toBeDefined();
+      expect(typeof capabilitiesMsg?.offscreenCanvas).toBe('boolean');
+      expect(typeof capabilitiesMsg?.webgl2).toBe('boolean');
     });
   });
 
@@ -145,8 +145,12 @@ describe('VirtualStandardSlave', () => {
       expect(messages).toHaveLength(0);
 
       // Wait for microtasks
-      await new Promise<void>((resolve) => queueMicrotask(resolve));
-      await new Promise<void>((resolve) => queueMicrotask(resolve));
+      await new Promise<void>((resolve) => {
+        queueMicrotask(resolve);
+      });
+      await new Promise<void>((resolve) => {
+        queueMicrotask(resolve);
+      });
 
       expect(messages.length).toBeGreaterThan(0);
 

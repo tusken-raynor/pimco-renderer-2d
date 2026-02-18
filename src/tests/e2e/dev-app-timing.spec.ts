@@ -38,7 +38,9 @@ test.describe('Dev App Timing Display', () => {
     await page.click('#render-btn');
 
     // Wait for render to complete
-    await expect(page.locator('#status-message')).not.toContainText('Rendering...', { timeout: 30000 });
+    await expect(page.locator('#status-message')).not.toContainText('Rendering...', {
+      timeout: 30000,
+    });
 
     // Check timing display
     const renderTime = page.locator('#render-time');
@@ -106,7 +108,9 @@ test.describe('Dev App Timing Display', () => {
 
     // Status should show "Rendering..." during render
     // (May be too fast to catch, so we just wait for completion)
-    await expect(page.locator('#status-message')).not.toContainText('Rendering...', { timeout: 30000 });
+    await expect(page.locator('#status-message')).not.toContainText('Rendering...', {
+      timeout: 30000,
+    });
 
     // After successful render, status should mention timing or complete
     const statusText = await page.locator('#status-message').textContent();
@@ -114,7 +118,9 @@ test.describe('Dev App Timing Display', () => {
 
     // Status should either contain timing info or indicate completion
     const hasTimingOrComplete =
-      statusText?.includes('ms') || statusText?.includes('complete') || statusText?.includes('failed');
+      (statusText?.includes('ms') ?? false) ||
+      (statusText?.includes('complete') ?? false) ||
+      (statusText?.includes('failed') ?? false);
     expect(hasTimingOrComplete).toBe(true);
   });
 
@@ -154,10 +160,11 @@ test.describe('Dev App Timing Display', () => {
     await page.click('#render-btn');
 
     // Wait for render to complete
-    await expect(page.locator('#status-message')).not.toContainText('Rendering...', { timeout: 30000 });
+    await expect(page.locator('#status-message')).not.toContainText('Rendering...', {
+      timeout: 30000,
+    });
 
     // Check console logs for timing information
-    const hasTimingLog = logs.some((log) => log.includes('ms') || log.includes('complete'));
     // May or may not have timing log depending on render success, just verify app ran
     expect(logs.length).toBeGreaterThan(0);
   });
@@ -201,7 +208,9 @@ test.describe('Dev App Timing Display', () => {
     await renderPromise;
 
     // Wait for completion
-    await expect(page.locator('#status-message')).not.toContainText('Rendering...', { timeout: 30000 });
+    await expect(page.locator('#status-message')).not.toContainText('Rendering...', {
+      timeout: 30000,
+    });
   });
 
   test('should preserve timing value when loading new JSON', async ({ page }) => {
@@ -228,7 +237,9 @@ test.describe('Dev App Timing Display', () => {
 
     await expect(page.locator('#status-message')).toContainText('Loaded', { timeout: 5000 });
     await page.click('#render-btn');
-    await expect(page.locator('#status-message')).not.toContainText('Rendering...', { timeout: 30000 });
+    await expect(page.locator('#status-message')).not.toContainText('Rendering...', {
+      timeout: 30000,
+    });
 
     // Get timing value after first render
     const firstTiming = await page.locator('#render-time').textContent();
@@ -244,7 +255,9 @@ test.describe('Dev App Timing Display', () => {
       buffer: Buffer.from(layerJson2),
     });
 
-    await expect(page.locator('#status-message')).toContainText('Loaded 1 layers', { timeout: 5000 });
+    await expect(page.locator('#status-message')).toContainText('Loaded 1 layers', {
+      timeout: 5000,
+    });
 
     // Timing should still show the previous value (until next render)
     const timingAfterLoad = await page.locator('#render-time').textContent();

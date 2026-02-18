@@ -150,7 +150,7 @@ export function parseTypography(
  * @returns CSS font string (e.g., '400 24px sans-serif')
  */
 export function buildFontString(typography: TypographyConfig): string {
-  return `${typography.fontWeight} ${typography.fontSize}px/100% ${typography.fontFamily}`;
+  return `${String(typography.fontWeight)} ${String(typography.fontSize)}px/100% ${typography.fontFamily}`;
 }
 
 /**
