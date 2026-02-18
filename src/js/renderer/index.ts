@@ -667,16 +667,17 @@ export class RenderMaster {
 
     const addImageRequest = (url: string | undefined): void => {
       if (url && !seen.has(url)) {
-        const id = this.getAssetId(url);
-        // Skip known failed URLs (ID of -1) to prevent re-requesting
-        if (id !== -1) {
-          seen.add(url);
-          requests.push({
-            id,
-            url,
-            assetType: 'image',
-          });
+        seen.add(url);
+        // Skip URLs already in the asset map (previously fetched or known failed)
+        if (this.assetMapping.urlToId.has(url)) {
+          return;
         }
+        const id = this.getAssetId(url);
+        requests.push({
+          id,
+          url,
+          assetType: 'image',
+        });
       }
     };
 
@@ -1319,13 +1320,22 @@ export class RenderMaster {
   async preload(urls: string[]): Promise<void> {
     await this.ensureInitialized();
 
-    const requests: AssetRequest[] = urls.map((url) => ({
-      id: this.getAssetId(url),
-      url,
-      assetType: 'image' as const,
-    }));
+    const requests: AssetRequest[] = [];
+    for (const url of urls) {
+      // Skip URLs already in the asset map (previously fetched or known failed)
+      if (this.assetMapping.urlToId.has(url)) {
+        continue;
+      }
+      requests.push({
+        id: this.getAssetId(url),
+        url,
+        assetType: 'image' as const,
+      });
+    }
 
-    await this.fetchAssets(requests);
+    if (requests.length > 0) {
+      await this.fetchAssets(requests);
+    }
   }
 
   /**

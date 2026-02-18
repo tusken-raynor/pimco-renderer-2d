@@ -1,655 +1,662 @@
-[
-  {
-    "name": "Belt Shadow",
-    "mode": "color",
-    "alpha": 0,
-    "blend": "multiply",
-    "x-data": {
-      "id": "atrGv4YdNTkhIP",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrGv4YdNTkhIP"
-        }
-      ]
-    },
-    "id": "pic6FmGPLwxIVt",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_view-1_shadow.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif?ver=5.4.6",
-    "order": -1
-  },
-  {
-    "name": "Liner (Back)",
-    "mode": "color",
-    "alpha": 0.78,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrESLVJ9VHsJF"
-        },
-        {
-          "id": "atrk9yfck5aS6f"
-        }
-      ],
-      "id": "clowJ3cqSfzW7G",
-      "disabled": false
-    },
-    "color": "rgb(242,106,46)",
-    "hlalpha1": 1,
-    "hlalpha2": 0.65,
-    "hlblend1": "soft-light",
-    "hlblend2": "color-burn",
-    "regionid": 2018256,
-    "id": "pic30xQWamyQke",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_base.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_mask_liner.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_highlight.avif?ver=5.4.6",
-    "order": 1.5
-  },
-  {
-    "name": "Liner Personalization",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrkojGz6Jvm16"
-        },
-        {
-          "id": "atrCokTrSFmOBI"
-        }
-      ],
-      "id": "clo7oVPd1cv982",
-      "disabled": false
-    },
-    "color": "rgb(226,64,0)",
-    "hlalpha1": 0.42,
-    "hlalpha2": 0.72,
-    "hlblend1": "soft-light",
-    "hlblend2": "overlay",
-    "regionid": 151217,
-    "id": "picUqaHtPKGXkR",
-    "mask": {
-      "projection": {
-        "mesh": "/show-imgs/pimcos/belts/vec3d/personalization_mesh_inside.obj",
-        "camera": [-7, 1.32, 0],
-        "fov": 7.86,
-        "identifier": "liner-personalization-fv",
-        "transformation": [1, 0, 0, 0, 0, 1.04, -0.007, 0, 0, 0.0088, 1, 0, 0, 0.02, 0, 1],
-        "uvauto": "x",
-        "uvorigin": [0.5, 0],
-        "uvmeshratio": 27
+{
+  "dimensions": [800, 308],
+  "preload": [
+    "/show-imgs/pimcos/belts/patterns/belt_view-1_shadow.avif?ver=5.4.6",
+    "/show-imgs/pimcos/belts/patterns/generic_mask.avif?ver=5.4.6"
+  ],
+  "pimcos": [
+    {
+      "name": "Belt Shadow",
+      "mode": "color",
+      "alpha": 0,
+      "blend": "multiply",
+      "x-data": {
+        "id": "atrGv4YdNTkhIP",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrGv4YdNTkhIP"
+          }
+        ]
       },
-      "content": "THIS IS SOME TEXT",
-      "effect": "embroidery",
-      "type": {
-        "fontfamily": "\"Helvetica\", sans-serif",
-        "letterspacing": "0.01em",
-        "lineheight": 0.09,
-        "maxwidth": 100
-      }
+      "id": "pic6FmGPLwxIVt",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_view-1_shadow.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif?ver=5.4.6",
+      "order": -1
     },
-    "order": 1.55,
-    "image": "/show-imgs/effects/embroidery/texture-dark.jpg?ver=5.4.6"
-  },
-  {
-    "name": "Main Leather (Back Belt)",
-    "mode": "image",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atr0VwuiQ2UDJS"
-        },
-        {
-          "id": "atrgucmASHJK9d"
-        }
-      ],
-      "id": "clejyDEuDCyxhQ",
-      "disabled": false
-    },
-    "regionid": 9091425,
-    "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
-    "hlalpha1": 1,
-    "hlblend1": "overlay",
-    "hlalpha2": 1,
-    "hlblend2": "multiply",
-    "id": "picXw9PG69skyV",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_base-dark.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_mask_leather.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_highlight.avif?ver=5.4.6",
-    "order": 1.7
-  },
-  {
-    "name": "Main Leather (Front Belt)",
-    "mode": "image",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atr0VwuiQ2UDJS"
-        },
-        {
-          "id": "atrgucmASHJK9d"
-        }
-      ],
-      "id": "clejyDEuDCyxhQ",
-      "disabled": false
-    },
-    "regionid": 1188886,
-    "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
-    "hlalpha1": 1,
-    "hlblend1": "overlay",
-    "hlalpha2": 1,
-    "hlblend2": "multiply",
-    "id": "picPJNl6JZR7k1",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_front_base-dark.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_front_mask_full.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_front_highlight.avif?ver=5.4.6",
-    "order": 1.76
-  },
-  {
-    "name": "Back Personalization",
-    "mode": "image",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "atra5a8fmHlSBc",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atr3i7vvm6Yzbx"
-        },
-        {
-          "id": "atra5a8fmHlSBc"
-        }
-      ]
-    },
-    "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
-    "hlalpha1": 1,
-    "hlblend1": "overlay",
-    "hlalpha2": 1,
-    "hlblend2": "multiply",
-    "regionid": 16147305,
-    "id": "pic1ej2KWhIUqP",
-    "mask": {
-      "transform": {
-        "translation": [0, 24.95],
-        "scale": 0.9
+    {
+      "name": "Liner (Back)",
+      "mode": "color",
+      "alpha": 0.78,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrESLVJ9VHsJF"
+          },
+          {
+            "id": "atrk9yfck5aS6f"
+          }
+        ],
+        "id": "clowJ3cqSfzW7G",
+        "disabled": false
       },
-      "projection": {
-        "mesh": "/show-imgs/pimcos/belts/vec3d/personalization_mesh_outside.obj",
-        "camera": [-1, 0.245, 0],
-        "fov": 17.86,
-        "identifier": "back-personalization-bv",
-        "transformation": [0.32, 0, 0, 0, 0, 0.4, 0, 0, 0, 0, 0.32, 0, 0, 0.0323, 0, 1],
-        "uvauto": "x",
-        "uvorigin": [0.5, 0],
-        "uvmeshratio": 18.3
+      "color": "rgb(242,106,46)",
+      "hlalpha1": 1,
+      "hlalpha2": 0.65,
+      "hlblend1": "soft-light",
+      "hlblend2": "color-burn",
+      "regionid": 2018256,
+      "id": "pic30xQWamyQke",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_base.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_mask_liner.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_highlight.avif?ver=5.4.6",
+      "order": 1.5
+    },
+    {
+      "name": "Liner Personalization",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrkojGz6Jvm16"
+          },
+          {
+            "id": "atrCokTrSFmOBI"
+          }
+        ],
+        "id": "clo7oVPd1cv982",
+        "disabled": false
       },
-      "type": {
-        "letterspacing": "-0.05em",
-        "lineheight": 0.09,
-        "maxwidth": 100
+      "color": "rgb(226,64,0)",
+      "hlalpha1": 0.42,
+      "hlalpha2": 0.72,
+      "hlblend1": "soft-light",
+      "hlblend2": "overlay",
+      "regionid": 151217,
+      "id": "picUqaHtPKGXkR",
+      "mask": {
+        "projection": {
+          "mesh": "/show-imgs/pimcos/belts/vec3d/personalization_mesh_inside.obj",
+          "camera": [-7, 1.32, 0],
+          "fov": 7.86,
+          "identifier": "liner-personalization-fv",
+          "transformation": [1, 0, 0, 0, 0, 1.04, -0.007, 0, 0, 0.0088, 1, 0, 0, 0.02, 0, 1],
+          "uvauto": "x",
+          "uvorigin": [0.5, 0],
+          "uvmeshratio": 27
+        },
+        "content": "THIS IS SOME TEXT",
+        "effect": "embroidery",
+        "type": {
+          "fontfamily": "\"Helvetica\", sans-serif",
+          "letterspacing": "0.01em",
+          "lineheight": 0.09,
+          "maxwidth": 100
+        }
       },
-      "effect": "painted",
-      "postmask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-personalization-space_mask.avif"
+      "order": 1.55,
+      "image": "/show-imgs/effects/embroidery/texture-dark.jpg?ver=5.4.6"
     },
-    "image": "/show-imgs/effects/painted/texture-dark.jpg?ver=5.4.6",
-    "order": 1.773
-  },
-  {
-    "name": "Thread Shadow (Front)",
-    "mode": "image",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clejyDEuDCyxhQ",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atr0VwuiQ2UDJS"
-        },
-        {
-          "id": "atrgucmASHJK9d"
-        }
-      ]
-    },
-    "regionid": 5193447,
-    "color": "rgb(199,22,22)",
-    "hlalpha1": 1,
-    "hlblend1": "overlay",
-    "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
-    "hlalpha2": 1,
-    "hlblend2": "multiply",
-    "id": "picY4SxjtLkP3z",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_base-dark.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_mask_leather.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_highlight.avif?ver=5.4.6",
-    "order": 1.8
-  },
-  {
-    "name": "Thread Shadow (Back)",
-    "mode": "image",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atr0VwuiQ2UDJS"
-        },
-        {
-          "id": "atrgucmASHJK9d"
-        }
-      ],
-      "id": "clejyDEuDCyxhQ",
-      "disabled": false
-    },
-    "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
-    "hlalpha1": 1,
-    "hlblend1": "overlay",
-    "hlalpha2": 1,
-    "hlblend2": "multiply",
-    "id": "piclwRX52OCsVo",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_base-dark.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_mask_leather.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_highlight.avif?ver=5.4.6",
-    "order": 2
-  },
-  {
-    "name": "Edge (Back)",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrs9CawNZj1UV"
-        }
-      ],
-      "id": "atrs9CawNZj1UV",
-      "disabled": false
-    },
-    "regionid": 15142686,
-    "color": "rgb(31,75,35)",
-    "hlalpha1": 0.37,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.65,
-    "hlblend2": "color-burn",
-    "id": "picW0iHv5bt8rr",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_base.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_mask_edge.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_highlight.avif?ver=5.4.6",
-    "order": 2
-  },
-  {
-    "name": "Thread (Front)",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "atrRow2779u6by",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrMHdZqYNekY6"
-        },
-        {
-          "id": "atrRow2779u6by"
-        }
-      ]
-    },
-    "color": "rgb(199,22,22)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "id": "picwoLhTbVaNIb",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_base-dark.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_mask_thread.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_highlight.avif?ver=5.4.6",
-    "order": 2
-  },
-  {
-    "name": "Edge (Front)",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrs9CawNZj1UV"
-        }
-      ],
-      "id": "atrs9CawNZj1UV",
-      "disabled": false
-    },
-    "regionid": 6076375,
-    "color": "rgb(31,75,35)",
-    "hlalpha1": 0.37,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.65,
-    "hlblend2": "color-burn",
-    "id": "pictJ0m4L0NyKf",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_front_base.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_front_mask_edge.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_front_highlight.avif?ver=5.4.6",
-    "order": 2.1
-  },
-  {
-    "name": "Flash Leather",
-    "mode": "color",
-    "alpha": 0.86,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atr0VwuiQ2UDJS"
-        },
-        {
-          "id": "atrJ1n52vR7FeI"
-        }
-      ],
-      "id": "clejyDEuDCyxhQ",
-      "disabled": false
-    },
-    "regionid": 5365641,
-    "color": "rgb(16,77,160)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.41,
-    "hlblend2": "color-burn",
-    "id": "pickAmhJhhAqxh",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_base-gloss-dark.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_mask_full.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_highlight-gloss.avif?ver=5.4.6",
-    "order": 2.5
-  },
-  {
-    "name": "Thread (Flash)",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrMHdZqYNekY6"
-        },
-        {
-          "id": "atrRow2779u6by"
-        }
-      ],
-      "id": "atrRow2779u6by",
-      "disabled": false
-    },
-    "regionid": 13528813,
-    "color": "rgb(199,22,22)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "id": "picuUNdW5KQrDH",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_base-dark.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_mask_thread.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_highlight.avif?ver=5.4.6",
-    "order": 2.6
-  },
-  {
-    "name": "Thread (Back)",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrMHdZqYNekY6"
-        },
-        {
-          "id": "atrRow2779u6by"
-        }
-      ],
-      "id": "atrRow2779u6by",
-      "disabled": false
-    },
-    "regionid": 9746745,
-    "color": "rgb(199,22,22)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "id": "picSBS5UkqAzJF",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_base-dark.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_mask_thread.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_highlight.avif?ver=5.4.6",
-    "order": 2.8
-  },
-  {
-    "name": "Logo",
-    "mode": "color",
-    "alpha": 0.86,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atr0VwuiQ2UDJS"
-        },
-        {
-          "id": "atrJ1n52vR7FeI"
-        }
-      ],
-      "id": "clejyDEuDCyxhQ",
-      "disabled": false
-    },
-    "regionid": 9451779,
-    "color": "rgb(16,77,160)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.41,
-    "hlblend2": "color-burn",
-    "id": "picFdMxtfJWXSP",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_logo-show_base-gloss-dark.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_logo-show_mask_leather.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_logo-show_highlight-gloss.avif?ver=5.4.6",
-    "order": 3
-  },
-  {
-    "name": "Buckle",
-    "mode": "color",
-    "alpha": 0,
-    "blend": "overlay",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrF7BPe67kOdB"
-        },
-        {
-          "id": "atrbXzOS85a70y"
-        }
-      ],
-      "id": "cloWK5B0U0RKna",
-      "disabled": false
-    },
-    "regionid": 533187,
-    "color": "rgba(0,0,0,0)",
-    "id": "picOTdjzdkvNYv",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_buckle-classic-gold.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_buckle_mask.avif?ver=5.4.6",
-    "order": 3
-  },
-  {
-    "name": "Logo Diamond",
-    "mode": "color",
-    "alpha": 0,
-    "blend": "overlay",
-    "x-data": {
-      "id": "clePfkddd2ZZTl",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrI88kyzOygNs"
-        },
-        {
-          "id": "atrJGNvTUXMjRq"
-        }
-      ]
-    },
-    "regionid": 2578428,
-    "color": "rgba(0,0,0,0)",
-    "id": "picd9y7ulk8blU",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_logo-show_diamond-silver.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif?ver=5.4.6",
-    "order": 3.1
-  },
-  {
-    "name": "Keeper",
-    "mode": "image",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clejyDEuDCyxhQ",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrLD8wvVfPwdp"
-        },
-        {
-          "id": "atr6s6ycr3mQ8q"
-        }
-      ]
-    },
-    "regionid": 6422932,
-    "texture": "/show-imgs/pimcos/belts/textures/texture_chrome-silver_keeper.avif?ver=5.4.6",
-    "hlalpha1": 0.88,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.7,
-    "hlblend2": "color-burn",
-    "eindex": 0.1,
-    "id": "picZPoczNMmwan",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_keeper-double_base-gloss.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_keeper-double_mask.avif?ver=5.4.6",
-    "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_keeper-double_highlight-gloss.avif?ver=5.4.6",
-    "order": 4
-  },
-  {
-    "name": "Tip Flag",
-    "mode": "color",
-    "alpha": 0,
-    "blend": "multiply",
-    "x-data": {
-      "id": "atrCeB4oHUZqbB",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrwrkVg9o6LLH"
-        },
-        {
-          "id": "atrCeB4oHUZqbB"
-        }
-      ]
-    },
-    "color": "rgba(0,0,0,0)",
-    "regionid": 2037621,
-    "id": "picilJpm0l6Dap",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_tip_flag-canada.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif?ver=5.4.6",
-    "order": 4.1
-  },
-  {
-    "name": "Tip Personalization",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clowMnRrodsFUb",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrwrkVg9o6LLH"
-        },
-        {
-          "id": "atrBzwEhW6I1Ys"
-        }
-      ]
-    },
-    "color": "rgb(255,60,0)",
-    "hlalpha1": 0.29,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.93,
-    "hlblend2": "overlay",
-    "regionid": 7602843,
-    "id": "picSN5cezSJ9HN",
-    "mask": {
-      "transform": {
-        "translation": [31, 18],
-        "scale": 0.9625
+    {
+      "name": "Main Leather (Back Belt)",
+      "mode": "image",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atr0VwuiQ2UDJS"
+          },
+          {
+            "id": "atrgucmASHJK9d"
+          }
+        ],
+        "id": "clejyDEuDCyxhQ",
+        "disabled": false
       },
-      "type": {
-        "fontfamily": "\"AlternateGothicPro-No1\", sans-serif",
-        "alignment": "left",
-        "lineheight": 0.1
-      },
-      "content": "SUP",
-      "effect": "embroidery"
+      "regionid": 9091425,
+      "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
+      "hlalpha1": 1,
+      "hlblend1": "overlay",
+      "hlalpha2": 1,
+      "hlblend2": "multiply",
+      "id": "picXw9PG69skyV",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_base-dark.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_mask_leather.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_highlight.avif?ver=5.4.6",
+      "order": 1.7
     },
-    "order": 4.1,
-    "image": "/show-imgs/effects/embroidery/texture-dark.jpg?ver=5.4.6"
-  },
-  {
-    "name": "Logo Color",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "color",
-    "x-data": {
-      "id": "atrybx1sbtYnYf",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrI88kyzOygNs"
+    {
+      "name": "Main Leather (Front Belt)",
+      "mode": "image",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atr0VwuiQ2UDJS"
+          },
+          {
+            "id": "atrgucmASHJK9d"
+          }
+        ],
+        "id": "clejyDEuDCyxhQ",
+        "disabled": false
+      },
+      "regionid": 1188886,
+      "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
+      "hlalpha1": 1,
+      "hlblend1": "overlay",
+      "hlalpha2": 1,
+      "hlblend2": "multiply",
+      "id": "picPJNl6JZR7k1",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_front_base-dark.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_front_mask_full.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_front_highlight.avif?ver=5.4.6",
+      "order": 1.76
+    },
+    {
+      "name": "Back Personalization",
+      "mode": "image",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "atra5a8fmHlSBc",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atr3i7vvm6Yzbx"
+          },
+          {
+            "id": "atra5a8fmHlSBc"
+          }
+        ]
+      },
+      "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
+      "hlalpha1": 1,
+      "hlblend1": "overlay",
+      "hlalpha2": 1,
+      "hlblend2": "multiply",
+      "regionid": 16147305,
+      "id": "pic1ej2KWhIUqP",
+      "mask": {
+        "transform": {
+          "translation": [0, 24.95],
+          "scale": 0.9
         },
-        {
-          "id": "atrJGNvTUXMjRq"
-        }
-      ]
-    },
-    "color": "rgb(221,220,216)",
-    "id": "pic7nTT4Vl6Huh",
-    "image": "/show-imgs/pimcos/belts/patterns/belt_v1_logo_foil_base.avif?ver=5.4.6",
-    "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_logo_mask_foil-show.avif?ver=5.4.6",
-    "order": 5
-  },
-  {
-    "name": "Keeper Personalization",
-    "mode": "color",
-    "alpha": 0.7,
-    "blend": "multiply",
-    "x-data": {
-      "id": "cloXlLMQOm5NBI",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrqXQpKSQJUVR"
+        "projection": {
+          "mesh": "/show-imgs/pimcos/belts/vec3d/personalization_mesh_outside.obj",
+          "camera": [-1, 0.245, 0],
+          "fov": 17.86,
+          "identifier": "back-personalization-bv",
+          "transformation": [0.32, 0, 0, 0, 0, 0.4, 0, 0, 0, 0, 0.32, 0, 0, 0.0323, 0, 1],
+          "uvauto": "x",
+          "uvorigin": [0.5, 0],
+          "uvmeshratio": 18.3
         },
-        {
-          "id": "atrN0M1G25ScpL"
-        }
-      ]
-    },
-    "regionid": 9095668,
-    "color": "rgb(243,189,71)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "id": "picVShfiqmKaVf",
-    "mask": {
-      "transform": {
-        "translation": [8.7, 17.5],
-        "scale": 0.9625
+        "type": {
+          "letterspacing": "-0.05em",
+          "lineheight": 0.09,
+          "maxwidth": 100
+        },
+        "effect": "painted",
+        "postmask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-personalization-space_mask.avif"
       },
-      "type": {
-        "fontfamily": "\"AlternateGothicPro-No1\", sans-serif",
-        "lineheight": 0.1
-      },
-      "content": "34",
-      "effect": "metal"
+      "image": "/show-imgs/effects/painted/texture-dark.jpg?ver=5.4.6",
+      "order": 1.773
     },
-    "order": 5,
-    "image": "/show-imgs/effects/metal/texture.jpg?ver=5.4.6"
-  }
-]
+    {
+      "name": "Thread Shadow (Front)",
+      "mode": "image",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clejyDEuDCyxhQ",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atr0VwuiQ2UDJS"
+          },
+          {
+            "id": "atrgucmASHJK9d"
+          }
+        ]
+      },
+      "regionid": 5193447,
+      "color": "rgb(199,22,22)",
+      "hlalpha1": 1,
+      "hlblend1": "overlay",
+      "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
+      "hlalpha2": 1,
+      "hlblend2": "multiply",
+      "id": "picY4SxjtLkP3z",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_base-dark.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_mask_leather.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_highlight.avif?ver=5.4.6",
+      "order": 1.8
+    },
+    {
+      "name": "Thread Shadow (Back)",
+      "mode": "image",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atr0VwuiQ2UDJS"
+          },
+          {
+            "id": "atrgucmASHJK9d"
+          }
+        ],
+        "id": "clejyDEuDCyxhQ",
+        "disabled": false
+      },
+      "texture": "/show-imgs/pimcos/belts/textures/texture-ostrich-blue_full.avif?ver=5.4.6",
+      "hlalpha1": 1,
+      "hlblend1": "overlay",
+      "hlalpha2": 1,
+      "hlblend2": "multiply",
+      "id": "piclwRX52OCsVo",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_base-dark.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_mask_leather.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_highlight.avif?ver=5.4.6",
+      "order": 2
+    },
+    {
+      "name": "Edge (Back)",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrs9CawNZj1UV"
+          }
+        ],
+        "id": "atrs9CawNZj1UV",
+        "disabled": false
+      },
+      "regionid": 15142686,
+      "color": "rgb(31,75,35)",
+      "hlalpha1": 0.37,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.65,
+      "hlblend2": "color-burn",
+      "id": "picW0iHv5bt8rr",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_base.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_mask_edge.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid_highlight.avif?ver=5.4.6",
+      "order": 2
+    },
+    {
+      "name": "Thread (Front)",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "atrRow2779u6by",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrMHdZqYNekY6"
+          },
+          {
+            "id": "atrRow2779u6by"
+          }
+        ]
+      },
+      "color": "rgb(199,22,22)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "id": "picwoLhTbVaNIb",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_base-dark.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_mask_thread.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_front-thread_highlight.avif?ver=5.4.6",
+      "order": 2
+    },
+    {
+      "name": "Edge (Front)",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrs9CawNZj1UV"
+          }
+        ],
+        "id": "atrs9CawNZj1UV",
+        "disabled": false
+      },
+      "regionid": 6076375,
+      "color": "rgb(31,75,35)",
+      "hlalpha1": 0.37,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.65,
+      "hlblend2": "color-burn",
+      "id": "pictJ0m4L0NyKf",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_front_base.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_front_mask_edge.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_front_highlight.avif?ver=5.4.6",
+      "order": 2.1
+    },
+    {
+      "name": "Flash Leather",
+      "mode": "color",
+      "alpha": 0.86,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atr0VwuiQ2UDJS"
+          },
+          {
+            "id": "atrJ1n52vR7FeI"
+          }
+        ],
+        "id": "clejyDEuDCyxhQ",
+        "disabled": false
+      },
+      "regionid": 5365641,
+      "color": "rgb(16,77,160)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.41,
+      "hlblend2": "color-burn",
+      "id": "pickAmhJhhAqxh",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_base-gloss-dark.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_mask_full.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_highlight-gloss.avif?ver=5.4.6",
+      "order": 2.5
+    },
+    {
+      "name": "Thread (Flash)",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrMHdZqYNekY6"
+          },
+          {
+            "id": "atrRow2779u6by"
+          }
+        ],
+        "id": "atrRow2779u6by",
+        "disabled": false
+      },
+      "regionid": 13528813,
+      "color": "rgb(199,22,22)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "id": "picuUNdW5KQrDH",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_base-dark.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_mask_thread.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_flash_highlight.avif?ver=5.4.6",
+      "order": 2.6
+    },
+    {
+      "name": "Thread (Back)",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrMHdZqYNekY6"
+          },
+          {
+            "id": "atrRow2779u6by"
+          }
+        ],
+        "id": "atrRow2779u6by",
+        "disabled": false
+      },
+      "regionid": 9746745,
+      "color": "rgb(199,22,22)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "id": "picSBS5UkqAzJF",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_base-dark.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_mask_thread.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_back-solid-thread_highlight.avif?ver=5.4.6",
+      "order": 2.8
+    },
+    {
+      "name": "Logo",
+      "mode": "color",
+      "alpha": 0.86,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atr0VwuiQ2UDJS"
+          },
+          {
+            "id": "atrJ1n52vR7FeI"
+          }
+        ],
+        "id": "clejyDEuDCyxhQ",
+        "disabled": false
+      },
+      "regionid": 9451779,
+      "color": "rgb(16,77,160)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.41,
+      "hlblend2": "color-burn",
+      "id": "picFdMxtfJWXSP",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_logo-show_base-gloss-dark.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_logo-show_mask_leather.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_logo-show_highlight-gloss.avif?ver=5.4.6",
+      "order": 3
+    },
+    {
+      "name": "Buckle",
+      "mode": "color",
+      "alpha": 0,
+      "blend": "overlay",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrF7BPe67kOdB"
+          },
+          {
+            "id": "atrbXzOS85a70y"
+          }
+        ],
+        "id": "cloWK5B0U0RKna",
+        "disabled": false
+      },
+      "regionid": 533187,
+      "color": "rgba(0,0,0,0)",
+      "id": "picOTdjzdkvNYv",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_buckle-classic-gold.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_buckle_mask.avif?ver=5.4.6",
+      "order": 3
+    },
+    {
+      "name": "Logo Diamond",
+      "mode": "color",
+      "alpha": 0,
+      "blend": "overlay",
+      "x-data": {
+        "id": "clePfkddd2ZZTl",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrI88kyzOygNs"
+          },
+          {
+            "id": "atrJGNvTUXMjRq"
+          }
+        ]
+      },
+      "regionid": 2578428,
+      "color": "rgba(0,0,0,0)",
+      "id": "picd9y7ulk8blU",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_logo-show_diamond-silver.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif?ver=5.4.6",
+      "order": 3.1
+    },
+    {
+      "name": "Keeper",
+      "mode": "image",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clejyDEuDCyxhQ",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrLD8wvVfPwdp"
+          },
+          {
+            "id": "atr6s6ycr3mQ8q"
+          }
+        ]
+      },
+      "regionid": 6422932,
+      "texture": "/show-imgs/pimcos/belts/textures/texture_chrome-silver_keeper.avif?ver=5.4.6",
+      "hlalpha1": 0.88,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.7,
+      "hlblend2": "color-burn",
+      "eindex": 0.1,
+      "id": "picZPoczNMmwan",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_keeper-double_base-gloss.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_keeper-double_mask.avif?ver=5.4.6",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_keeper-double_highlight-gloss.avif?ver=5.4.6",
+      "order": 4
+    },
+    {
+      "name": "Tip Flag",
+      "mode": "color",
+      "alpha": 0,
+      "blend": "multiply",
+      "x-data": {
+        "id": "atrCeB4oHUZqbB",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrwrkVg9o6LLH"
+          },
+          {
+            "id": "atrCeB4oHUZqbB"
+          }
+        ]
+      },
+      "color": "rgba(0,0,0,0)",
+      "regionid": 2037621,
+      "id": "picilJpm0l6Dap",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_tip_flag-canada.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif?ver=5.4.6",
+      "order": 4.1
+    },
+    {
+      "name": "Tip Personalization",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clowMnRrodsFUb",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrwrkVg9o6LLH"
+          },
+          {
+            "id": "atrBzwEhW6I1Ys"
+          }
+        ]
+      },
+      "color": "rgb(255,60,0)",
+      "hlalpha1": 0.29,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.93,
+      "hlblend2": "overlay",
+      "regionid": 7602843,
+      "id": "picSN5cezSJ9HN",
+      "mask": {
+        "transform": {
+          "translation": [31, 18],
+          "scale": 0.9625
+        },
+        "type": {
+          "fontfamily": "\"AlternateGothicPro-No1\", sans-serif",
+          "alignment": "left",
+          "lineheight": 0.1
+        },
+        "content": "SUP",
+        "effect": "embroidery"
+      },
+      "order": 4.1,
+      "image": "/show-imgs/effects/embroidery/texture-dark.jpg?ver=5.4.6"
+    },
+    {
+      "name": "Logo Color",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "color",
+      "x-data": {
+        "id": "atrybx1sbtYnYf",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrI88kyzOygNs"
+          },
+          {
+            "id": "atrJGNvTUXMjRq"
+          }
+        ]
+      },
+      "color": "rgb(221,220,216)",
+      "id": "pic7nTT4Vl6Huh",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_logo_foil_base.avif?ver=5.4.6",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_logo_mask_foil-show.avif?ver=5.4.6",
+      "order": 5
+    },
+    {
+      "name": "Keeper Personalization",
+      "mode": "color",
+      "alpha": 0.7,
+      "blend": "multiply",
+      "x-data": {
+        "id": "cloXlLMQOm5NBI",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrqXQpKSQJUVR"
+          },
+          {
+            "id": "atrN0M1G25ScpL"
+          }
+        ]
+      },
+      "regionid": 9095668,
+      "color": "rgb(243,189,71)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "id": "picVShfiqmKaVf",
+      "mask": {
+        "transform": {
+          "translation": [8.7, 17.5],
+          "scale": 0.9625
+        },
+        "type": {
+          "fontfamily": "\"AlternateGothicPro-No1\", sans-serif",
+          "lineheight": 0.1
+        },
+        "content": "34",
+        "effect": "metal"
+      },
+      "order": 5,
+      "image": "/show-imgs/effects/metal/texture.jpg?ver=5.4.6"
+    }
+  ]
+}

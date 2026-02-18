@@ -1,989 +1,998 @@
-[
-  {
-    "id": "modelbase",
-    "name": "Base",
-    "mode": "color",
-    "alpha": 0,
-    "blend": "multiply",
-    "frames": [
-      {
-        "image": "/show-imgs/pimcos/gloves/patterns/$pattern$_back_base.avif",
-        "mask": "/show-imgs/pimcos/gloves/patterns/$pattern$_back_mask_full.avif",
-        "hlimage1": "/show-imgs/pimcos/gloves/patterns/$pattern$_back_highlight.avif"
+{
+  "dimensions": [800, 800],
+  "preload": [
+    "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13",
+    "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13",
+    "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_full.avif?ver=0.2.13",
+    "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13"
+  ],
+  "pimcos": [
+    {
+      "id": "modelbase",
+      "name": "Base",
+      "mode": "color",
+      "alpha": 0,
+      "blend": "multiply",
+      "frames": [
+        {
+          "image": "/show-imgs/pimcos/gloves/patterns/$pattern$_back_base.avif",
+          "mask": "/show-imgs/pimcos/gloves/patterns/$pattern$_back_mask_full.avif",
+          "hlimage1": "/show-imgs/pimcos/gloves/patterns/$pattern$_back_highlight.avif"
+        },
+        {
+          "image": "/show-imgs/pimcos/gloves/patterns/$pattern$_thumb_base.avif",
+          "mask": "/show-imgs/pimcos/gloves/patterns/$pattern$_thumb_mask_full.avif",
+          "hlimage1": "/show-imgs/pimcos/gloves/patterns/$pattern$_thumb_highlight.avif"
+        },
+        {
+          "image": "/show-imgs/pimcos/gloves/patterns/$pattern$_palm_base.avif",
+          "mask": "/show-imgs/pimcos/gloves/patterns/$pattern$_palm_mask_full.avif",
+          "hlimage1": "/show-imgs/pimcos/gloves/patterns/$pattern$_palm_highlight.avif"
+        },
+        {
+          "image": "/show-imgs/pimcos/gloves/patterns/$pattern$_pinky_base.avif",
+          "mask": "/show-imgs/pimcos/gloves/patterns/$pattern$_pinky_mask_full.avif",
+          "hlimage1": "/show-imgs/pimcos/gloves/patterns/$pattern$_pinky_highlight.avif"
+        }
+      ],
+      "hlalpha1": 1,
+      "hlblend1": "multiply",
+      "colorref": "picIwqnHOQHLiX",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_full.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13"
+    },
+    {
+      "name": "Palm",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atr5PBOe1V2n74"
+          }
+        ]
       },
-      {
-        "image": "/show-imgs/pimcos/gloves/patterns/$pattern$_thumb_base.avif",
-        "mask": "/show-imgs/pimcos/gloves/patterns/$pattern$_thumb_mask_full.avif",
-        "hlimage1": "/show-imgs/pimcos/gloves/patterns/$pattern$_thumb_highlight.avif"
+      "regionid": 15863760,
+      "color": "rgb(241,241,241)",
+      "hlalpha1": 0.73,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.94,
+      "hlblend2": "color-burn",
+      "id": "picmz8Set5wBJo",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_mask_palm.avif?ver=0.2.13",
+      "order": -1,
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
+    },
+    {
+      "name": "Liner",
+      "mode": "image",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clel5O6uOvMQ3q",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrRPnR3dQZCzs"
+          }
+        ]
       },
-      {
-        "image": "/show-imgs/pimcos/gloves/patterns/$pattern$_palm_base.avif",
-        "mask": "/show-imgs/pimcos/gloves/patterns/$pattern$_palm_mask_full.avif",
-        "hlimage1": "/show-imgs/pimcos/gloves/patterns/$pattern$_palm_highlight.avif"
+      "regionid": 7890651,
+      "texture": "/show-imgs/pimcos/gloves/textures/texture_supersoft_full.avif?ver=0.2.13",
+      "color": "",
+      "hlalpha1": 0.96,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.87,
+      "hlblend2": "color-burn",
+      "id": "pic4MzWqsaKju9",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_liner.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
+    },
+    {
+      "name": "Index Pad",
+      "mode": "image",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrRfjJQawTeRZ"
+          }
+        ]
       },
-      {
-        "image": "/show-imgs/pimcos/gloves/patterns/$pattern$_pinky_base.avif",
-        "mask": "/show-imgs/pimcos/gloves/patterns/$pattern$_pinky_mask_full.avif",
-        "hlimage1": "/show-imgs/pimcos/gloves/patterns/$pattern$_pinky_highlight.avif"
-      }
-    ],
-    "hlalpha1": 1,
-    "hlblend1": "multiply",
-    "colorref": "picIwqnHOQHLiX",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_full.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13"
-  },
-  {
-    "name": "Palm",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atr5PBOe1V2n74"
-        }
-      ]
+      "regionid": 14977832,
+      "texture": "/show-imgs/pimcos/gloves/textures/texture_walnut_full.avif?ver=0.2.13",
+      "color": "",
+      "hlalpha1": 1,
+      "hlblend1": "multiply",
+      "hlalpha2": 0.47,
+      "hlblend2": "soft-light",
+      "id": "pic5Rg33oq8ikn",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_pad.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
     },
-    "regionid": 15863760,
-    "color": "rgb(241,241,241)",
-    "hlalpha1": 0.73,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.94,
-    "hlblend2": "color-burn",
-    "id": "picmz8Set5wBJo",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_mask_palm.avif?ver=0.2.13",
-    "order": -1,
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Liner",
-    "mode": "image",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clel5O6uOvMQ3q",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrRPnR3dQZCzs"
-        }
-      ]
+    {
+      "name": "Back Pinky",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrmw97OpUbBkK"
+          }
+        ]
+      },
+      "regionid": 6109467,
+      "color": "rgb(113,34,32)",
+      "hlalpha1": 0.55,
+      "hlblend1": "soft-light",
+      "id": "pickPDcNEyjOX8",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_pinky.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
     },
-    "regionid": 7890651,
-    "texture": "/show-imgs/pimcos/gloves/textures/texture_supersoft_full.avif?ver=0.2.13",
-    "color": "",
-    "hlalpha1": 0.96,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.87,
-    "hlblend2": "color-burn",
-    "id": "pic4MzWqsaKju9",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_liner.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Index Pad",
-    "mode": "image",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrRfjJQawTeRZ"
-        }
-      ]
+    {
+      "name": "Back Index",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrRVVV0qROUZj"
+          }
+        ]
+      },
+      "regionid": 3650694,
+      "color": "rgb(226,95,20)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.46,
+      "hlblend2": "color-burn",
+      "id": "picp4q5sWsg7SY",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_index.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
     },
-    "regionid": 14977832,
-    "texture": "/show-imgs/pimcos/gloves/textures/texture_walnut_full.avif?ver=0.2.13",
-    "color": "",
-    "hlalpha1": 1,
-    "hlblend1": "multiply",
-    "hlalpha2": 0.47,
-    "hlblend2": "soft-light",
-    "id": "pic5Rg33oq8ikn",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_pad.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
-  },
-  {
-    "name": "Back Pinky",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrmw97OpUbBkK"
-        }
-      ]
+    {
+      "name": "Back Middle",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrBVNXE3z6e2V"
+          }
+        ]
+      },
+      "regionid": 12633739,
+      "color": "rgb(21,73,138)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.7,
+      "hlblend2": "color-burn",
+      "id": "pictHs9Y4vLWvM",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_middle.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
     },
-    "regionid": 6109467,
-    "color": "rgb(113,34,32)",
-    "hlalpha1": 0.55,
-    "hlblend1": "soft-light",
-    "id": "pickPDcNEyjOX8",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_pinky.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
-  },
-  {
-    "name": "Back Index",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrRVVV0qROUZj"
-        }
-      ]
+    {
+      "name": "Back Thumb",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrpQMVLmbmsbf"
+          }
+        ]
+      },
+      "regionid": 1971407,
+      "color": "rgb(199,22,22)",
+      "hlalpha1": 0.9,
+      "hlblend1": "soft-light",
+      "id": "picWCgHu63OVkO",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_thumb.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
     },
-    "regionid": 3650694,
-    "color": "rgb(226,95,20)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.46,
-    "hlblend2": "color-burn",
-    "id": "picp4q5sWsg7SY",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_index.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Back Middle",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrBVNXE3z6e2V"
-        }
-      ]
+    {
+      "name": "Construction (Edge Index Pad)",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrRfjJQawTeRZ"
+          }
+        ]
+      },
+      "texture": "/show-imgs/pimcos/gloves/textures/texture_walnut_full.avif?ver=0.2.13",
+      "color": "rgb(208,184,172)",
+      "hlalpha1": 1,
+      "hlblend1": "multiply",
+      "hlalpha2": 0.47,
+      "hlblend2": "soft-light",
+      "id": "pic1KvsaqADhtq",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_pad-edge.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 0.6,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
     },
-    "regionid": 12633739,
-    "color": "rgb(21,73,138)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.7,
-    "hlblend2": "color-burn",
-    "id": "pictHs9Y4vLWvM",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_middle.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Back Thumb",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrpQMVLmbmsbf"
-        }
-      ]
+    {
+      "name": "Thumb Edge",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrpQMVLmbmsbf"
+          }
+        ]
+      },
+      "color": "rgb(207,117,108)",
+      "hlalpha1": 0.9,
+      "hlblend1": "soft-light",
+      "id": "picPrkcLMWqm03",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_thumb-edge.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 0.6,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
     },
-    "regionid": 1971407,
-    "color": "rgb(199,22,22)",
-    "hlalpha1": 0.9,
-    "hlblend1": "soft-light",
-    "id": "picWCgHu63OVkO",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_thumb.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
-  },
-  {
-    "name": "Construction (Edge Index Pad)",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrRfjJQawTeRZ"
-        }
-      ]
+    {
+      "name": "Middle Fingers Edge",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrBVNXE3z6e2V"
+          }
+        ]
+      },
+      "color": "rgb(154,154,157)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.7,
+      "hlblend2": "color-burn",
+      "id": "picr57KwyTzp1G",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_middle-edge.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 0.6,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
     },
-    "texture": "/show-imgs/pimcos/gloves/textures/texture_walnut_full.avif?ver=0.2.13",
-    "color": "rgb(208,184,172)",
-    "hlalpha1": 1,
-    "hlblend1": "multiply",
-    "hlalpha2": 0.47,
-    "hlblend2": "soft-light",
-    "id": "pic1KvsaqADhtq",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_pad-edge.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 0.6,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
-  },
-  {
-    "name": "Thumb Edge",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrpQMVLmbmsbf"
-        }
-      ]
+    {
+      "name": "Index Fingers Edge",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrRVVV0qROUZj"
+          }
+        ]
+      },
+      "color": "rgb(207,164,108)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.46,
+      "hlblend2": "color-burn",
+      "id": "picr6Xm8wMXvja",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_index-edge.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 0.6,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
     },
-    "color": "rgb(207,117,108)",
-    "hlalpha1": 0.9,
-    "hlblend1": "soft-light",
-    "id": "picPrkcLMWqm03",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_thumb-edge.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 0.6,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
-  },
-  {
-    "name": "Middle Fingers Edge",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrBVNXE3z6e2V"
-        }
-      ]
+    {
+      "name": "Pinky Finger Edge",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrmw97OpUbBkK"
+          }
+        ]
+      },
+      "color": "rgb(131,74,68)",
+      "hlalpha1": 0.55,
+      "hlblend1": "soft-light",
+      "id": "piczjPiGs2Xxil",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_pinky-edge.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 0.6,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
     },
-    "color": "rgb(154,154,157)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.7,
-    "hlblend2": "color-burn",
-    "id": "picr57KwyTzp1G",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_middle-edge.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 0.6,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Index Fingers Edge",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrRVVV0qROUZj"
-        }
-      ]
+    {
+      "name": "Ties",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrQOiVJRL2XQJ"
+          }
+        ]
+      },
+      "regionid": 794017,
+      "color": "rgb(241,241,241)",
+      "hlalpha1": 0.73,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.94,
+      "hlblend2": "color-burn",
+      "id": "picAekcsrA7Kih",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_tie_base.avif?ver=0.2.13",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_tie.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_tie_highlight.avif?ver=0.2.13",
+      "order": 1
     },
-    "color": "rgb(207,164,108)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.46,
-    "hlblend2": "color-burn",
-    "id": "picr6Xm8wMXvja",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_index-edge.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 0.6,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Pinky Finger Edge",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrmw97OpUbBkK"
-        }
-      ]
+    {
+      "name": "Logo Back",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clooMKm3eRw5kq",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrDChltaKu9HW"
+          },
+          {
+            "id": "atryUWIjHbZt5L"
+          }
+        ]
+      },
+      "regionid": 12251704,
+      "color": "rgb(246,249,253)",
+      "hlalpha1": 1,
+      "hlblend1": "normal",
+      "hlalpha2": 0.5,
+      "hlblend2": "overlay",
+      "id": "picw0OPihjsdxz",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_index_modern-emb_mask_full.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_index_modern-emb_base-dark.avif?ver=0.2.13",
+      "order": 1,
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_index_modern-emb_highlight.avif?ver=0.2.13"
     },
-    "color": "rgb(131,74,68)",
-    "hlalpha1": 0.55,
-    "hlblend1": "soft-light",
-    "id": "piczjPiGs2Xxil",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_pinky-edge.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 0.6,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
-  },
-  {
-    "name": "Ties",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrQOiVJRL2XQJ"
-        }
-      ]
+    {
+      "name": "Ties Edge",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrQOiVJRL2XQJ"
+          }
+        ]
+      },
+      "color": "rgb(203,203,203)",
+      "hlalpha1": 0.73,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.94,
+      "hlblend2": "color-burn",
+      "id": "picMrmRYXo0bTl",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_tie_base.avif?ver=0.2.13",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_tie_mask-edge.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 1.1
     },
-    "regionid": 794017,
-    "color": "rgb(241,241,241)",
-    "hlalpha1": 0.73,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.94,
-    "hlblend2": "color-burn",
-    "id": "picAekcsrA7Kih",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_tie_base.avif?ver=0.2.13",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_tie.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_tie_highlight.avif?ver=0.2.13",
-    "order": 1
-  },
-  {
-    "name": "Logo Back",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clooMKm3eRw5kq",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrDChltaKu9HW"
-        },
-        {
-          "id": "atryUWIjHbZt5L"
-        }
-      ]
+    {
+      "name": "Web Basis",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atr5h0fw5THEel"
+          }
+        ],
+        "id": "clewW7jsIFb1ew",
+        "disabled": false
+      },
+      "regionid": 15342724,
+      "color": "rgb(45,53,77)",
+      "hlalpha1": 0.75,
+      "hlblend1": "soft-light",
+      "hlalpha2": 1,
+      "hlblend2": "color-burn",
+      "id": "pic7WfLE4UGQd6",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_full.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
+      "order": 2
     },
-    "regionid": 12251704,
-    "color": "rgb(246,249,253)",
-    "hlalpha1": 1,
-    "hlblend1": "normal",
-    "hlalpha2": 0.5,
-    "hlblend2": "overlay",
-    "id": "picw0OPihjsdxz",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_index_modern-emb_mask_full.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_index_modern-emb_base-dark.avif?ver=0.2.13",
-    "order": 1,
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_index_modern-emb_highlight.avif?ver=0.2.13"
-  },
-  {
-    "name": "Ties Edge",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrQOiVJRL2XQJ"
-        }
-      ]
+    {
+      "name": "Binding",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "atrXT7C94DTWQ6",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrXT7C94DTWQ6"
+          }
+        ]
+      },
+      "regionid": 14727972,
+      "color": "rgb(215,215,206)",
+      "hlalpha1": 0.63,
+      "hlblend1": "soft-light",
+      "id": "picGoda86QRCtX",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_binding.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 2.5,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
     },
-    "color": "rgb(203,203,203)",
-    "hlalpha1": 0.73,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.94,
-    "hlblend2": "color-burn",
-    "id": "picMrmRYXo0bTl",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_tie_base.avif?ver=0.2.13",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_tie_mask-edge.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 1.1
-  },
-  {
-    "name": "Web Basis",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atr5h0fw5THEel"
-        }
-      ],
-      "id": "clewW7jsIFb1ew",
-      "disabled": false
+    {
+      "name": "Web Thumb Shadow",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrpQMVLmbmsbf"
+          }
+        ],
+        "id": "clewW7jsIFb1ew",
+        "disabled": false
+      },
+      "color": "rgb(199,22,22)",
+      "hlalpha1": 0.9,
+      "hlblend1": "soft-light",
+      "id": "picrK14cKHA44s",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_thumb.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base-dark.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
+      "order": 2.7
     },
-    "regionid": 15342724,
-    "color": "rgb(45,53,77)",
-    "hlalpha1": 0.75,
-    "hlblend1": "soft-light",
-    "hlalpha2": 1,
-    "hlblend2": "color-burn",
-    "id": "pic7WfLE4UGQd6",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_full.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
-    "order": 2
-  },
-  {
-    "name": "Binding",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "atrXT7C94DTWQ6",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrXT7C94DTWQ6"
-        }
-      ]
+    {
+      "name": "Web Index Shadow",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrRVVV0qROUZj"
+          }
+        ],
+        "id": "clewW7jsIFb1ew",
+        "disabled": false
+      },
+      "color": "rgb(226,95,20)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.46,
+      "hlblend2": "color-burn",
+      "id": "picWDqqDWUSs5m",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_index.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
+      "order": 2.7
     },
-    "regionid": 14727972,
-    "color": "rgb(215,215,206)",
-    "hlalpha1": 0.63,
-    "hlblend1": "soft-light",
-    "id": "picGoda86QRCtX",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_binding.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 2.5,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Web Thumb Shadow",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrpQMVLmbmsbf"
-        }
-      ],
-      "id": "clewW7jsIFb1ew",
-      "disabled": false
+    {
+      "name": "Thread",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "atrwHF1PsDuAHs",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrmb30lQxwqYc"
+          },
+          {
+            "id": "atrwHF1PsDuAHs"
+          }
+        ]
+      },
+      "regionid": 2496118,
+      "color": "rgb(199,22,22)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "id": "picen0J7fdVOTn",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_thread.avif?ver=0.2.13",
+      "order": 2.9,
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
     },
-    "color": "rgb(199,22,22)",
-    "hlalpha1": 0.9,
-    "hlblend1": "soft-light",
-    "id": "picrK14cKHA44s",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_thumb.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base-dark.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
-    "order": 2.7
-  },
-  {
-    "name": "Web Index Shadow",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrRVVV0qROUZj"
-        }
-      ],
-      "id": "clewW7jsIFb1ew",
-      "disabled": false
+    {
+      "name": "Lace Color 2",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "ccoQueZBzkM8iH",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrZmViaR91Wzj"
+          }
+        ]
+      },
+      "regionid": 7561925,
+      "color": "rgb(6,120,81)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.49,
+      "hlblend2": "color-burn",
+      "id": "picBk7IgVbhaqH",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_lace-2.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 3,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
     },
-    "color": "rgb(226,95,20)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.46,
-    "hlblend2": "color-burn",
-    "id": "picWDqqDWUSs5m",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_index.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
-    "order": 2.7
-  },
-  {
-    "name": "Thread",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "atrwHF1PsDuAHs",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrmb30lQxwqYc"
-        },
-        {
-          "id": "atrwHF1PsDuAHs"
-        }
-      ]
+    {
+      "name": "Web Leather 1",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atr5h0fw5THEel"
+          }
+        ],
+        "id": "clewW7jsIFb1ew",
+        "disabled": false
+      },
+      "regionid": 1568332,
+      "color": "rgb(45,53,77)",
+      "hlalpha1": 0.75,
+      "hlblend1": "soft-light",
+      "hlalpha2": 1,
+      "hlblend2": "color-burn",
+      "id": "picC8hi8ZlYaQK",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_web.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
+      "order": 3
     },
-    "regionid": 2496118,
-    "color": "rgb(199,22,22)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "id": "picen0J7fdVOTn",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_thread.avif?ver=0.2.13",
-    "order": 2.9,
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
-  },
-  {
-    "name": "Lace Color 2",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "ccoQueZBzkM8iH",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrZmViaR91Wzj"
-        }
-      ]
+    {
+      "name": "Lace Color 1",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "ccoQueZBzkM8iH",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrZmViaR91Wzj"
+          }
+        ]
+      },
+      "regionid": 416003,
+      "color": "rgb(6,120,81)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.49,
+      "hlblend2": "color-burn",
+      "id": "picDCKEtzA79gO",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_lace-1.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 3,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
     },
-    "regionid": 7561925,
-    "color": "rgb(6,120,81)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.49,
-    "hlblend2": "color-burn",
-    "id": "picBk7IgVbhaqH",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_lace-2.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 3,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Web Leather 1",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atr5h0fw5THEel"
-        }
-      ],
-      "id": "clewW7jsIFb1ew",
-      "disabled": false
+    {
+      "name": "Lace Color 4",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "ccoQueZBzkM8iH",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrZmViaR91Wzj"
+          }
+        ]
+      },
+      "regionid": 6692425,
+      "color": "rgb(6,120,81)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.49,
+      "hlblend2": "color-burn",
+      "id": "pice60yNBe2jdd",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_lace-4.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 3,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
     },
-    "regionid": 1568332,
-    "color": "rgb(45,53,77)",
-    "hlalpha1": 0.75,
-    "hlblend1": "soft-light",
-    "hlalpha2": 1,
-    "hlblend2": "color-burn",
-    "id": "picC8hi8ZlYaQK",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_web.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
-    "order": 3
-  },
-  {
-    "name": "Lace Color 1",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "ccoQueZBzkM8iH",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrZmViaR91Wzj"
-        }
-      ]
+    {
+      "name": "Web Leather 2",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atr5h0fw5THEel"
+          }
+        ],
+        "id": "clewW7jsIFb1ew",
+        "disabled": false
+      },
+      "regionid": 13533576,
+      "color": "rgb(45,53,77)",
+      "hlalpha1": 0.75,
+      "hlblend1": "soft-light",
+      "hlalpha2": 1,
+      "hlblend2": "color-burn",
+      "id": "pichT2S8njEG6A",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_web-alt.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
+      "order": 3
     },
-    "regionid": 416003,
-    "color": "rgb(6,120,81)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.49,
-    "hlblend2": "color-burn",
-    "id": "picDCKEtzA79gO",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_lace-1.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 3,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Lace Color 4",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "ccoQueZBzkM8iH",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrZmViaR91Wzj"
-        }
-      ]
+    {
+      "name": "Logo Wrist Multicolor 1",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "ciolCzSuurTMWA",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrDChltaKu9HW"
+          },
+          {
+            "id": "atr3qqko8LZbZA"
+          }
+        ]
+      },
+      "regionid": 2566123,
+      "color": "rgb(255,176,0)",
+      "hlalpha1": 0.41,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.59,
+      "hlblend2": "overlay",
+      "id": "picMKNc1tbFxRI",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_logo-wrist-dh-emb_base-dark.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_logo-wrist-dh-emb_highlight.avif?ver=0.2.13",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_logo-wrist-dh-emb_mask_full.avif?ver=0.2.13",
+      "order": 3
     },
-    "regionid": 6692425,
-    "color": "rgb(6,120,81)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.49,
-    "hlblend2": "color-burn",
-    "id": "pice60yNBe2jdd",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_lace-4.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 3,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "Web Leather 2",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atr5h0fw5THEel"
-        }
-      ],
-      "id": "clewW7jsIFb1ew",
-      "disabled": false
+    {
+      "name": "Lace Color 3",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "ccoQueZBzkM8iH",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrZmViaR91Wzj"
+          }
+        ]
+      },
+      "regionid": 6847814,
+      "color": "rgb(6,120,81)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.49,
+      "hlblend2": "color-burn",
+      "id": "picS93DxfTk5YN",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_mask_lace-3.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "order": 3,
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
     },
-    "regionid": 13533576,
-    "color": "rgb(45,53,77)",
-    "hlalpha1": 0.75,
-    "hlblend1": "soft-light",
-    "hlalpha2": 1,
-    "hlblend2": "color-burn",
-    "id": "pichT2S8njEG6A",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_web-alt.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
-    "order": 3
-  },
-  {
-    "name": "Logo Wrist Multicolor 1",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "ciolCzSuurTMWA",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrDChltaKu9HW"
-        },
-        {
-          "id": "atr3qqko8LZbZA"
-        }
-      ]
+    {
+      "name": "X-Thread",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "atrokQT6fONBoX",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrmb30lQxwqYc"
+          },
+          {
+            "id": "atrokQT6fONBoX"
+          }
+        ]
+      },
+      "regionid": 15707989,
+      "color": "rgb(81,18,26)",
+      "hlalpha1": 0.79,
+      "hlblend1": "soft-light",
+      "id": "picPPOpTaQOG3v",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_x-thread.avif?ver=0.2.13",
+      "order": 3.1,
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
     },
-    "regionid": 2566123,
-    "color": "rgb(255,176,0)",
-    "hlalpha1": 0.41,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.59,
-    "hlblend2": "overlay",
-    "id": "picMKNc1tbFxRI",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_logo-wrist-dh-emb_base-dark.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_logo-wrist-dh-emb_highlight.avif?ver=0.2.13",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_logo-wrist-dh-emb_mask_full.avif?ver=0.2.13",
-    "order": 3
-  },
-  {
-    "name": "Lace Color 3",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "ccoQueZBzkM8iH",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrZmViaR91Wzj"
-        }
-      ]
+    {
+      "name": "Logo Thumb Extra",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "id": "clewW7jsIFb1ew",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrDChltaKu9HW"
+          },
+          {
+            "id": "atrGytk7qjd0Uh"
+          }
+        ]
+      },
+      "color": "rgb(199,22,22)",
+      "hlalpha1": 0.9,
+      "hlblend1": "soft-light",
+      "regionid": 194065,
+      "id": "pictejaRYy2MgI",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_base-dark.avif?ver=0.2.13",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb_stamp_mask_full.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_highlight.avif?ver=0.2.13",
+      "order": 3.5
     },
-    "regionid": 6847814,
-    "color": "rgb(6,120,81)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.49,
-    "hlblend2": "color-burn",
-    "id": "picS93DxfTk5YN",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_mask_lace-3.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "order": 3,
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base.avif?ver=0.2.13"
-  },
-  {
-    "name": "X-Thread",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "atrokQT6fONBoX",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrmb30lQxwqYc"
-        },
-        {
-          "id": "atrokQT6fONBoX"
-        }
-      ]
+    {
+      "name": "Logo Thumb",
+      "mode": "color",
+      "alpha": 0.7,
+      "blend": "multiply",
+      "x-data": {
+        "id": "ciomk2u74vTeiw",
+        "disabled": false,
+        "attributes": [
+          {
+            "id": "atrDChltaKu9HW"
+          },
+          {
+            "id": "atrGytk7qjd0Uh"
+          }
+        ]
+      },
+      "color": "rgb(172,172,172)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "id": "picdan0NJk91uH",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_base.avif?ver=0.2.13",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_mask_metal.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_highlight.avif?ver=0.2.13",
+      "order": 3.6
     },
-    "regionid": 15707989,
-    "color": "rgb(81,18,26)",
-    "hlalpha1": 0.79,
-    "hlblend1": "soft-light",
-    "id": "picPPOpTaQOG3v",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_mask_x-thread.avif?ver=0.2.13",
-    "order": 3.1,
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_highlight.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-6_back_base-dark.avif?ver=0.2.13"
-  },
-  {
-    "name": "Logo Thumb Extra",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "id": "clewW7jsIFb1ew",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrDChltaKu9HW"
-        },
-        {
-          "id": "atrGytk7qjd0Uh"
-        }
-      ]
+    {
+      "name": "Web Laces 3",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrflDFqfKoDAz"
+          },
+          {
+            "id": "atrZmViaR91Wzj"
+          }
+        ],
+        "id": "ccoQueZBzkM8iH",
+        "disabled": false
+      },
+      "regionid": 8503189,
+      "color": "rgb(6,120,81)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.49,
+      "hlblend2": "color-burn",
+      "id": "picPPx3bIKy24z",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_lace-3.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
+      "order": 4
     },
-    "color": "rgb(199,22,22)",
-    "hlalpha1": 0.9,
-    "hlblend1": "soft-light",
-    "regionid": 194065,
-    "id": "pictejaRYy2MgI",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_base-dark.avif?ver=0.2.13",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb_stamp_mask_full.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_highlight.avif?ver=0.2.13",
-    "order": 3.5
-  },
-  {
-    "name": "Logo Thumb",
-    "mode": "color",
-    "alpha": 0.7,
-    "blend": "multiply",
-    "x-data": {
-      "id": "ciomk2u74vTeiw",
-      "disabled": false,
-      "attributes": [
-        {
-          "id": "atrDChltaKu9HW"
-        },
-        {
-          "id": "atrGytk7qjd0Uh"
-        }
-      ]
+    {
+      "name": "Web Thread",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrmb30lQxwqYc"
+          },
+          {
+            "id": "atrwHF1PsDuAHs"
+          }
+        ],
+        "id": "atrwHF1PsDuAHs",
+        "disabled": false
+      },
+      "regionid": 2978083,
+      "color": "rgb(199,22,22)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "id": "picq28F3mG4wpz",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_thread.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base-dark.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
+      "order": 4
     },
-    "color": "rgb(172,172,172)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "id": "picdan0NJk91uH",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_base.avif?ver=0.2.13",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_mask_metal.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_thumb-100-metal_highlight.avif?ver=0.2.13",
-    "order": 3.6
-  },
-  {
-    "name": "Web Laces 3",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrflDFqfKoDAz"
-        },
-        {
-          "id": "atrZmViaR91Wzj"
-        }
-      ],
-      "id": "ccoQueZBzkM8iH",
-      "disabled": false
+    {
+      "name": "Web Laces 4",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrDe3Reyvh2it"
+          },
+          {
+            "id": "atrwMZNdUzz5Bk"
+          }
+        ],
+        "id": "ccoQueZBzkM8iH",
+        "disabled": false
+      },
+      "regionid": 6766351,
+      "color": "rgb(6,120,81)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.49,
+      "hlblend2": "color-burn",
+      "id": "picQ4iJrlBlFnl",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_lace-4.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
+      "order": 4
     },
-    "regionid": 8503189,
-    "color": "rgb(6,120,81)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.49,
-    "hlblend2": "color-burn",
-    "id": "picPPx3bIKy24z",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_lace-3.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
-    "order": 4
-  },
-  {
-    "name": "Web Thread",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrmb30lQxwqYc"
-        },
-        {
-          "id": "atrwHF1PsDuAHs"
-        }
-      ],
-      "id": "atrwHF1PsDuAHs",
-      "disabled": false
-    },
-    "regionid": 2978083,
-    "color": "rgb(199,22,22)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "id": "picq28F3mG4wpz",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_thread.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base-dark.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
-    "order": 4
-  },
-  {
-    "name": "Web Laces 4",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrDe3Reyvh2it"
-        },
-        {
-          "id": "atrwMZNdUzz5Bk"
-        }
-      ],
-      "id": "ccoQueZBzkM8iH",
-      "disabled": false
-    },
-    "regionid": 6766351,
-    "color": "rgb(6,120,81)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.49,
-    "hlblend2": "color-burn",
-    "id": "picQ4iJrlBlFnl",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_lace-4.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
-    "order": 4
-  },
-  {
-    "name": "Web Laces 2",
-    "mode": "color",
-    "alpha": 1,
-    "blend": "multiply",
-    "x-data": {
-      "attributes": [
-        {
-          "id": "atrDe3Reyvh2it"
-        },
-        {
-          "id": "atrwMZNdUzz5Bk"
-        }
-      ],
-      "id": "ccoQueZBzkM8iH",
-      "disabled": false
-    },
-    "regionid": 12940357,
-    "color": "rgb(6,120,81)",
-    "hlalpha1": 1,
-    "hlblend1": "soft-light",
-    "hlalpha2": 0.49,
-    "hlblend2": "color-burn",
-    "id": "picRdbxhtFKHPN",
-    "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_lace-2.avif?ver=0.2.13",
-    "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
-    "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
-    "order": 4
-  }
-]
+    {
+      "name": "Web Laces 2",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "x-data": {
+        "attributes": [
+          {
+            "id": "atrDe3Reyvh2it"
+          },
+          {
+            "id": "atrwMZNdUzz5Bk"
+          }
+        ],
+        "id": "ccoQueZBzkM8iH",
+        "disabled": false
+      },
+      "regionid": 12940357,
+      "color": "rgb(6,120,81)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.49,
+      "hlblend2": "color-burn",
+      "id": "picRdbxhtFKHPN",
+      "mask": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_mask_lace-2.avif?ver=0.2.13",
+      "image": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_base.avif?ver=0.2.13",
+      "hlimage1": "/show-imgs/pimcos/gloves/patterns/pattern-1_back_i-web_highlight.avif?ver=0.2.13",
+      "order": 4
+    }
+  ]
+}

@@ -106,6 +106,53 @@ function updateCanvasDimensions(): void {
 }
 
 /**
+ * Apply dimensions from JSON to the canvas size inputs and update the canvas.
+ */
+function applyDimensions(dimensions: [number, number]): void {
+  canvasWidthInput.value = String(dimensions[0]);
+  canvasHeightInput.value = String(dimensions[1]);
+  updateCanvasDimensions();
+  resetRenderMaster();
+}
+
+/**
+ * Extract layers, dimensions, and preload list from loaded JSON data.
+ * Supports both the new wrapper format ({ dimensions, preload, pimcos })
+ * and a bare array of layers for backward compatibility.
+ */
+function parseExampleData(data: unknown): {
+  layers: ProductImageComponent[];
+  dimensions: [number, number] | null;
+  preload: string[] | null;
+} {
+  // New wrapper format
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    !Array.isArray(data) &&
+    'pimcos' in data
+  ) {
+    const wrapper = data as Record<string, unknown>;
+    const layers = parseLayerData(wrapper.pimcos);
+
+    const dimensions =
+      Array.isArray(wrapper.dimensions) && wrapper.dimensions.length === 2
+        ? (wrapper.dimensions as [number, number])
+        : null;
+
+    const preload =
+      Array.isArray(wrapper.preload) && wrapper.preload.length > 0
+        ? (wrapper.preload as string[])
+        : null;
+
+    return { layers, dimensions, preload };
+  }
+
+  // Legacy bare array format
+  return { layers: parseLayerData(data), dimensions: null, preload: null };
+}
+
+/**
  * Parse and validate layer data from JSON.
  */
 function parseLayerData(data: unknown): ProductImageComponent[] {
@@ -163,7 +210,21 @@ async function loadFromFile(file: File): Promise<void> {
   try {
     const text = await file.text();
     const data = JSON.parse(text) as unknown;
-    currentLayers = parseLayerData(data);
+    const result = parseExampleData(data);
+
+    currentLayers = result.layers;
+
+    if (result.dimensions) {
+      applyDimensions(result.dimensions);
+    }
+
+    if (result.preload) {
+      // eslint-disable-next-line no-console
+      console.log(`[DevApp] Preloading ${String(result.preload.length)} assets`);
+      const master = ensureRenderMaster();
+      void master.preload(result.preload);
+    }
+
     updateJsonPreview(currentLayers);
     updateRenderButtonState();
     setStatus(`Loaded ${String(currentLayers.length)} layers from ${file.name}`, 'success');
@@ -195,7 +256,21 @@ async function loadFromExample(filename: string): Promise<void> {
     }
 
     const data = (await response.json()) as unknown;
-    currentLayers = parseLayerData(data);
+    const result = parseExampleData(data);
+
+    currentLayers = result.layers;
+
+    if (result.dimensions) {
+      applyDimensions(result.dimensions);
+    }
+
+    if (result.preload) {
+      // eslint-disable-next-line no-console
+      console.log(`[DevApp] Preloading ${String(result.preload.length)} assets`);
+      const master = ensureRenderMaster();
+      void master.preload(result.preload);
+    }
+
     updateJsonPreview(currentLayers);
     updateRenderButtonState();
     setStatus(`Loaded ${String(currentLayers.length)} layers from ${filename}`, 'success');
