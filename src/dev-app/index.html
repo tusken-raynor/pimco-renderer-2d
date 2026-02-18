@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PIMCO Renderer Dev App</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="dev-app">
+      <header class="dev-app__header">
+        <h1 class="dev-app__title">PIMCO Renderer Dev App</h1>
+        <p class="dev-app__subtitle">Multi-threaded 2D compositing renderer test environment</p>
+      </header>
+
+      <main class="dev-app__main">
+        <section class="dev-app__controls">
+          <div class="dev-app__file-input">
+            <label for="json-upload" class="dev-app__label">Upload JSON:</label>
+            <input
+              type="file"
+              id="json-upload"
+              class="dev-app__input"
+              accept=".json,application/json"
+            />
+          </div>
+
+          <div class="dev-app__example-select">
+            <label for="example-select" class="dev-app__label">Or select example:</label>
+            <select id="example-select" class="dev-app__select">
+              <option value="">-- Select example --</option>
+              <option value="example1.json">Example 1 (Gloves)</option>
+              <option value="example2.json">Example 2</option>
+              <option value="example3.json">Example 3</option>
+            </select>
+          </div>
+
+          <div class="dev-app__dimensions">
+            <label class="dev-app__label">Canvas Size:</label>
+            <input
+              type="number"
+              id="canvas-width"
+              class="dev-app__dimension-input"
+              value="800"
+              min="100"
+              max="4096"
+            />
+            <span class="dev-app__dimension-separator">x</span>
+            <input
+              type="number"
+              id="canvas-height"
+              class="dev-app__dimension-input"
+              value="800"
+              min="100"
+              max="4096"
+            />
+          </div>
+
+          <button id="render-btn" class="dev-app__button dev-app__button--primary" disabled>
+            Render
+          </button>
+
+          <button id="clear-btn" class="dev-app__button dev-app__button--secondary">
+            Clear
+          </button>
+        </section>
+
+        <section class="dev-app__output">
+          <div class="dev-app__canvas-container">
+            <canvas id="render-canvas" class="dev-app__canvas" width="800" height="800"></canvas>
+          </div>
+
+          <div class="dev-app__info">
+            <div class="dev-app__timing">
+              <span class="dev-app__timing-label">Last render:</span>
+              <span id="render-time" class="dev-app__timing-value">--</span>
+            </div>
+            <div class="dev-app__layer-count">
+              <span class="dev-app__layer-count-label">Layers:</span>
+              <span id="layer-count" class="dev-app__layer-count-value">--</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="dev-app__status">
+          <div id="status-message" class="dev-app__status-message"></div>
+          <div id="error-display" class="dev-app__error" hidden></div>
+        </section>
+
+        <section class="dev-app__json-preview">
+          <h2 class="dev-app__json-preview-title">Loaded JSON:</h2>
+          <pre id="json-preview" class="dev-app__json-content">No JSON loaded</pre>
+        </section>
+      </main>
+
+      <footer class="dev-app__footer">
+        <p>PIMCO Renderer 2D - Development Testing Environment</p>
+      </footer>
+    </div>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

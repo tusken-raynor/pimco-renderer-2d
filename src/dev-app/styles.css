@@ -1,0 +1,322 @@
+/**
+ * PIMCO Renderer Dev App Styles
+ * BEM naming convention: block__element--modifier
+ */
+
+/* Reset and base */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+  line-height: 1.5;
+}
+
+/* Dev App Block */
+.dev-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Header */
+.dev-app__header {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #333;
+}
+
+.dev-app__title {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.dev-app__subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #888;
+}
+
+/* Main Content */
+.dev-app__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Controls Section */
+.dev-app__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background-color: #242442;
+  border-radius: 8px;
+}
+
+.dev-app__file-input,
+.dev-app__example-select,
+.dev-app__dimensions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dev-app__label {
+  font-size: 14px;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.dev-app__input,
+.dev-app__select {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+}
+
+.dev-app__input:focus,
+.dev-app__select:focus {
+  outline: none;
+  border-color: #5c6bc0;
+}
+
+.dev-app__dimension-input {
+  width: 80px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+  text-align: center;
+}
+
+.dev-app__dimension-input:focus {
+  outline: none;
+  border-color: #5c6bc0;
+}
+
+.dev-app__dimension-separator {
+  color: #666;
+  font-weight: 600;
+}
+
+.dev-app__button {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    opacity 0.2s;
+}
+
+.dev-app__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dev-app__button--primary {
+  background-color: #5c6bc0;
+  color: #fff;
+}
+
+.dev-app__button--primary:hover:not(:disabled) {
+  background-color: #7986cb;
+}
+
+.dev-app__button--secondary {
+  background-color: #444;
+  color: #e0e0e0;
+}
+
+.dev-app__button--secondary:hover:not(:disabled) {
+  background-color: #555;
+}
+
+/* Output Section */
+.dev-app__output {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.dev-app__canvas-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  background-color: #242442;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.dev-app__canvas {
+  display: block;
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 20px 20px;
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0;
+  border: 1px solid #444;
+  max-width: 100%;
+}
+
+.dev-app__info {
+  display: flex;
+  gap: 24px;
+  font-size: 14px;
+}
+
+.dev-app__timing,
+.dev-app__layer-count {
+  display: flex;
+  gap: 8px;
+}
+
+.dev-app__timing-label,
+.dev-app__layer-count-label {
+  color: #888;
+}
+
+.dev-app__timing-value,
+.dev-app__layer-count-value {
+  color: #5c6bc0;
+  font-weight: 600;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+/* Status Section */
+.dev-app__status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dev-app__status-message {
+  font-size: 14px;
+  color: #888;
+  min-height: 20px;
+}
+
+.dev-app__status-message--loading {
+  color: #ffb74d;
+}
+
+.dev-app__status-message--success {
+  color: #81c784;
+}
+
+.dev-app__error {
+  padding: 12px 16px;
+  background-color: rgba(244, 67, 54, 0.1);
+  border: 1px solid #f44336;
+  border-radius: 4px;
+  color: #f44336;
+  font-size: 14px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* JSON Preview Section */
+.dev-app__json-preview {
+  padding: 16px;
+  background-color: #242442;
+  border-radius: 8px;
+}
+
+.dev-app__json-preview-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #aaa;
+}
+
+.dev-app__json-content {
+  margin: 0;
+  padding: 16px;
+  background-color: #1a1a2e;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  color: #e0e0e0;
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Footer */
+.dev-app__footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #333;
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+}
+
+.dev-app__footer p {
+  margin: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .dev-app {
+    padding: 12px;
+  }
+
+  .dev-app__controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dev-app__file-input,
+  .dev-app__example-select,
+  .dev-app__dimensions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dev-app__dimensions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .dev-app__info {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+}

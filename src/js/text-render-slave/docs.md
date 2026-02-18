@@ -1,0 +1,478 @@
+# Text Render Slave Module
+
+## Purpose
+
+The Text Render Slave module is responsible for processing text/effect layers in the multi-threaded 2D renderer. While Standard Render Slaves handle conventional image layers (where `mask` is a URL string), Text Render Slaves handle layers where `mask` is a `PimcoMaskSubstitutionCompiled` object containing text content and typography settings.
+
+This module provides:
+
+- **Text Rasterization**: Converting text content to canvas using font metrics
+- **Typography Support**: Font family, weight, size, letter spacing, text transforms
+- **2D Transform Application**: Translation, rotation, and scale via DOMMatrix
+- **Asset Management**: Storing images and fonts received from the Asset Manager
+- **Post-Mask Application**: Applying optional masks after transforms (destination-in composite)
+- **Effect Application**: Full effect pipeline routing (embroidery, engraving, metal, foil, hotstamp, painted, normal, shadow)
+
+## How It Works
+
+### Text Rasterization Flow
+
+1. **Typography Parsing**: Convert `PimcoMaskSubstitutionTypeDefinition` to normalized `TypographyConfig`
+2. **Text Transform**: Apply uppercase/lowercase/capitalize transforms
+3. **Text Measurement**: Measure text dimensions with proper font settings
+4. **Scale Calculation**: If text exceeds `maxwidth`, calculate scale factor
+5. **Canvas Creation**: Create canvas with computed dimensions
+6. **Text Rendering**: Draw text with correct alignment and baseline
+
+### 2D Transform Pipeline
+
+After text rasterization, transforms are applied in this order:
+
+1. **Parse Transform**: Extract translation, rotation, scale from `PimcoMaskSubstitutionTransformation`
+2. **Calculate Alignment Offset**: Adjust transform origin based on text alignment (left/center/right)
+3. **Build Transform Matrix**: Create DOMMatrix with combined transforms
+4. **Apply and Draw**: Set context transform and draw source centered at origin
+5. **Apply Post-Mask**: If present, apply destination-in composite to clip result
+
+Transform coordinates use percentages:
+
+- `translation[0]` = X offset as percentage (-50 to 50 maps to canvas edges)
+- `translation[1]` = Y offset as percentage (-50 to 50 maps to canvas edges)
+- `rotation` = Rotation in degrees
+- `scale` = Uniform number or `[x, y]` tuple
+
+### Key Constants (from legacy renderer)
+
+```typescript
+const DEFAULT_LINE_HEIGHT = 0.08; // Font size = workWidth * lineHeight
+const DEFAULT_MAX_WIDTH = 0.85; // Max text width = workWidth * maxWidth
+const OVERSCALE_FACTOR = 1.5; // Canvas height multiplier for descenders
+```
+
+### Typography Configuration
+
+The module supports these typography settings:
+
+| Property        | Default        | Description                      |
+| --------------- | -------------- | -------------------------------- |
+| `fontfamily`    | `'sans-serif'` | CSS font family                  |
+| `fontweight`    | `'400'`        | Font weight (100-900 or 'bold')  |
+| `lineheight`    | `0.08`         | Ratio of workWidth for font size |
+| `letterspacing` | `''`           | CSS letter-spacing value         |
+| `texttransform` | `'none'`       | Text case transformation         |
+| `alignment`     | `'center'`     | Horizontal alignment             |
+| `maxwidth`      | `0.85`         | Max width as ratio of workWidth  |
+| `widthscale`    | `1`            | Width multiplier                 |
+| `heightscale`   | `1`            | Height multiplier                |
+
+## Interface
+
+### TextRasterizer Functions
+
+```typescript
+// Apply text transformation
+function applyTextTransform(
+  text: string,
+  transform: 'uppercase' | 'lowercase' | 'capitalize' | 'none'
+): string;
+
+// Parse typography definition to normalized config
+function parseTypography(
+  type: PimcoMaskSubstitutionTypeDefinition | undefined,
+  workWidth: number
+): TypographyConfig;
+
+// Build CSS font string
+function buildFontString(typography: TypographyConfig): string;
+
+// Measure text dimensions
+function measureText(
+  content: string,
+  type: PimcoMaskSubstitutionTypeDefinition | undefined,
+  workWidth: number
+): TextMeasurement;
+
+// Rasterize text to canvas
+function rasterizeText(options: TextRasterizerOptions): RasterizedText;
+```
+
+### TextRasterizer Class
+
+```typescript
+class TextRasterizer {
+  measure(
+    content: string,
+    type: PimcoMaskSubstitutionTypeDefinition | undefined,
+    workWidth: number
+  ): TextMeasurement;
+  rasterize(options: TextRasterizerOptions): RasterizedText;
+  transform(text: string, transform: 'uppercase' | 'lowercase' | 'capitalize' | 'none'): string;
+  destroy(): void;
+}
+
+function createTextRasterizer(): TextRasterizer;
+```
+
+### Transform Functions
+
+```typescript
+// Parse transform data from mask substitution
+function parseTransform(
+  transform: PimcoMaskSubstitutionTransformation | undefined,
+  canvasWidth: number,
+  canvasHeight: number
+): ParsedTransform;
+
+// Calculate alignment-based offset for text
+function calculateAlignmentOffset(
+  alignment: TextAlignment | undefined,
+  sourceWidth: number
+): number;
+
+// Build a DOMMatrix representing the full transform chain
+function buildTransformMatrix(
+  parsed: ParsedTransform,
+  canvasWidth: number,
+  canvasHeight: number,
+  alignmentOffset: number
+): DOMMatrix;
+
+// Apply transforms and draw source onto target context
+function applyTransformAndDraw(
+  targetCtx: Canvas2DContext,
+  source: AnyCanvas | ImageBitmap,
+  transform: PimcoMaskSubstitutionTransformation | undefined,
+  canvasWidth: number,
+  canvasHeight: number,
+  alignment?: TextAlignment
+): void;
+
+// Check if a transform has any non-identity values
+function hasActiveTransform(transform: PimcoMaskSubstitutionTransformation | undefined): boolean;
+```
+
+### TextRenderSlave Class
+
+```typescript
+class TextRenderSlave {
+  // Asset management
+  registerAsset(id: number, asset: ImageBitmap): void;
+  registerFont(id: number, family: string, data: ArrayBuffer): void;
+  hasAsset(id: number): boolean;
+  getAsset(id: number): TextSlaveAsset | undefined;
+  hasFont(id: number): boolean;
+  getFont(id: number): FontCacheEntry | undefined;
+  clearAssets(): void;
+
+  // Font loading
+  loadFont(id: number): Promise<void>;
+
+  // Abort handling
+  abort(): void;
+  resetAbort(): void;
+  isAborted(): boolean;
+
+  // Rendering
+  rasterizeText(
+    maskData: PimcoMaskSubstitutionCompiled,
+    width: number,
+    height: number
+  ): RasterizedText;
+  renderLayer(
+    layer: TextLayerDescriptor,
+    width: number,
+    height: number,
+    index: number
+  ): Promise<TextLayerResult | null>;
+  renderBatch(
+    layers: TextLayerDescriptor[],
+    width: number,
+    height: number
+  ): Promise<TextLayerResult[]>;
+
+  // Cleanup
+  destroy(): void;
+}
+
+function createTextRenderSlave(): TextRenderSlave;
+function textResultsToSegments(results: TextLayerResult[]): RenderSegment[];
+```
+
+### Types
+
+```typescript
+// 2D Transform Types
+interface ParsedTransform {
+  translateX: number; // X translation in pixels
+  translateY: number; // Y translation in pixels
+  rotation: number; // Rotation in degrees
+  scaleX: number; // X scale factor
+  scaleY: number; // Y scale factor
+}
+
+type TextAlignment = 'left' | 'center' | 'right';
+
+// Typography Types
+interface TypographyConfig {
+  fontFamily: string;
+  fontWeight: string | number;
+  fontSize: number;
+  letterSpacing: string;
+  textTransform: 'uppercase' | 'lowercase' | 'capitalize' | 'none';
+  alignment: 'left' | 'center' | 'right';
+  widthScale: number;
+  heightScale: number;
+}
+
+interface TextMeasurement {
+  width: number;
+  height: number;
+  scale: number;
+  text: string;
+  typography: TypographyConfig;
+}
+
+interface RasterizedText {
+  canvas: AnyCanvas;
+  width: number;
+  height: number;
+  measurement: TextMeasurement;
+}
+
+interface TextRasterizerOptions {
+  workWidth: number;
+  workHeight: number;
+  type?: PimcoMaskSubstitutionTypeDefinition;
+  content: string;
+}
+
+interface TextLayerResult {
+  bitmap: ImageBitmap;
+  index: number;
+  compositemode: CanvasCompositeOperation;
+  compositealpha: number;
+}
+
+interface FontCacheEntry {
+  family: string;
+  data: ArrayBuffer;
+  loaded: boolean;
+}
+```
+
+## Usage Examples
+
+### Basic Text Rasterization
+
+```typescript
+import { rasterizeText } from './text-rasterizer';
+
+const result = rasterizeText({
+  workWidth: 1000,
+  workHeight: 800,
+  content: 'Hello World',
+  type: {
+    fontfamily: 'Arial',
+    fontweight: 700,
+    lineheight: 0.1,
+    texttransform: 'uppercase',
+    alignment: 'center',
+  },
+});
+
+console.log(`Canvas: ${result.width}x${result.height}`);
+console.log(`Text: ${result.measurement.text}`); // "HELLO WORLD"
+```
+
+### Using TextRenderSlave
+
+```typescript
+import { createTextRenderSlave } from './index';
+import type { TextLayerDescriptor } from '../types/messages';
+
+const slave = createTextRenderSlave();
+
+// Register assets
+slave.registerAsset(1, baseImage);
+slave.registerFont(1, 'CustomFont', fontData);
+await slave.loadFont(1);
+
+// Render layers
+const layers: TextLayerDescriptor[] = [
+  {
+    id: 'text-1',
+    assetIds: { image: 1 },
+    mode: 'color',
+    color: '#ff0000',
+    alpha: 1,
+    blend: 'normal',
+    compositemode: 'source-over',
+    compositealpha: 1,
+    maskData: {
+      content: 'Hello',
+      type: { fontfamily: 'CustomFont' },
+    },
+  },
+];
+
+const results = await slave.renderBatch(layers, 1000, 800);
+
+// Convert to segments for transfer
+const segments = textResultsToSegments(results);
+
+// Cleanup
+slave.destroy();
+```
+
+### Text Measurement for Layout
+
+```typescript
+import { measureText } from './text-rasterizer';
+
+const measurement = measureText(
+  'Sample Text',
+  {
+    fontfamily: 'Arial',
+    lineheight: 0.08,
+    maxwidth: 0.9,
+  },
+  1000
+);
+
+console.log(`Dimensions: ${measurement.width}x${measurement.height}`);
+console.log(`Scale applied: ${measurement.scale}`);
+console.log(`Transformed text: ${measurement.text}`);
+```
+
+## Tests
+
+### text-rasterizer.test.ts
+
+- **applyTextTransform**: Tests for uppercase, lowercase, capitalize, none, empty strings, special characters
+- **parseTypography**: Default values, custom values, partial definitions, font size calculations
+- **buildFontString**: CSS font string generation with various weights and families
+- **measureText**: Empty content, default typography, text transforms, scaling, width/height scales
+- **rasterizeText**: Empty text, typography settings, dimension matching, alignment handling
+- **TextRasterizer class**: Factory function, measure, rasterize, transform, reusability
+- **Edge cases**: Very small/large workWidth, unicode, newlines, long text, whitespace, zero lineheight, negative scales
+
+### transforms.test.ts
+
+- **toScaleString**: Empty string for undefined, uniform and non-uniform scale strings
+- **toRotationString**: Empty string for undefined, degree suffix, string passthrough
+- **parseTransform**: Identity transform, translation as percentage, rotation in degrees, uniform/non-uniform scale, combined transforms
+- **calculateAlignmentOffset**: Center/left/right alignment, undefined defaults, scaling with source width
+- **buildTransformMatrix**: Identity at center, translation offset, scale factors, rotation, alignment offset
+- **hasActiveTransform**: False for undefined/empty/identity, true for any non-default values
+- **applyTransformAndDraw**: Context save/restore, DOMMatrix application, centered drawing, all transform types, alignment offsets
+
+### index.test.ts
+
+- **Constructor**: Instance creation, empty stores, abort flag initialization
+- **Asset management**: Register, retrieve, multiple assets, overwriting, clearing
+- **Font management**: Register, retrieve, multiple fonts, clearing
+- **Abort handling**: Initial state, setting, resetting
+- **rasterizeText**: Mask data processing, empty content, typography
+- **renderLayer**: Aborted state, missing maskData, successful render, post-mask, layer index, composite settings, 2D transforms
+- **renderBatch**: Empty batch, single/multiple layers, abort reset, abort mid-render, skip failed layers
+- **textResultsToSegments**: Empty results, conversion, bitmap references, index exclusion
+
+## Architecture Notes
+
+### Worker Context
+
+The TextRenderSlave is designed to run in a Web Worker context using OffscreenCanvas. Key considerations:
+
+1. **Canvas API**: Uses `createCanvas()` which prefers OffscreenCanvas when available
+2. **Font Loading**: Uses FontFace API which works in both main thread and workers
+3. **Asset Transfer**: Assets are received via MessagePort from Asset Manager as ImageBitmaps
+
+### Worker Entry Point
+
+The Text Render Slave Worker (`src/workers/text-render-slave.worker.ts`) provides the Web Worker entry point for text layer rendering. It handles:
+
+1. **Message Protocol**: init, batch, abort messages from the Master
+2. **Capability Detection**: Probes for WebGL2 support on init
+3. **Asset Reception**: Receives images and fonts from Asset Manager via MessagePort
+4. **Effect Routing**: Routes layers to appropriate effect handlers based on `mask.effect`
+5. **Fallback Handling**: Falls back to no-effect for WebGL2-dependent effects when unsupported
+
+**Effect Routing Matrix:**
+
+| Effect     | WebGL2 Required             | Fallback Behavior       |
+| ---------- | --------------------------- | ----------------------- |
+| (none)     | No                          | Basic color/texture     |
+| shadow     | No                          | Full support            |
+| embroidery | Yes (fuzz)                  | Falls back to no-effect |
+| engraving  | No                          | Full support            |
+| hotstamp   | No                          | Full support            |
+| metal      | No                          | Full support            |
+| foil       | Yes (alphaErode)            | Falls back to no-effect |
+| painted    | No                          | Full support            |
+| normal     | Yes (colorScale, normalMap) | Falls back to no-effect |
+
+### Worker Rendering Pipeline
+
+The worker implements a full rendering pipeline for each text layer:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Text Layer Pipeline                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. Font Loading (if needed)                                    │
+│     └── FontFace API: Load custom fonts into worker context     │
+│                                                                  │
+│  2. Text Rasterization                                          │
+│     └── Typography → Measurement → Canvas drawing               │
+│                                                                  │
+│  3. Effect Application (based on mask.effect)                   │
+│     ├── no-effect: Tile texture, color multiply, mask           │
+│     ├── shadow: Spread, white-to-alpha, color, blur             │
+│     ├── embroidery: Erode, texture, emboss, fuzz, shadow        │
+│     ├── engraving: Emboss shadow, color-distance, multiply      │
+│     ├── hotstamp: Dual emboss, color-distance, multiply         │
+│     ├── metal: Texture tile, color, dual emboss                 │
+│     ├── foil: Erode, texture, emboss, shadow                    │
+│     ├── painted: Edge expand, dual emboss, inset, texture       │
+│     └── normal: Roundness, texture, normal map, lighting        │
+│                                                                  │
+│  4. 2D Transform Application                                    │
+│     └── DOMMatrix: translation, rotation, scale                 │
+│                                                                  │
+│  5. Post-Mask Application                                       │
+│     └── destination-in composite for final clipping             │
+│                                                                  │
+│  6. ImageBitmap Creation                                        │
+│     └── Transfer to master via postMessage                      │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Worker Message Protocol
+
+**Incoming (from Master):**
+
+- `init`: Initialize worker, probe capabilities, send ready
+- `batch`: Render array of TextLayerDescriptor, return RenderSegment[]
+- `abort`: Cancel current rendering, discard results
+
+**Incoming (from Asset Manager via MessagePort):**
+
+- `asset-data`: Receive ImageBitmap (images) or ArrayBuffer (fonts)
+
+**Outgoing (to Master):**
+
+- `capabilities`: Report offscreenCanvas and webgl2 support
+- `ready`: Worker is initialized and ready for work
+- `result`: Array of RenderSegment with transferred bitmaps
+- `error`: Error message with code and context
+
+### Reference Files
+
+- **Worker**: `src/workers/text-render-slave.worker.ts`
+- **Effects**: `src/js/effects/*.ts`
+- **Legacy code**: `old-src-ref/src/renderer/index.ts` (preEffect, drawSubstitutionMask, applyWithTransformation functions)
+- **Legacy transforms spec**: `old-src-ref/src/renderer/transforms.spec.ts` (transform calculation tests)
+- **Types**: `src/js/types/pimco.ts`, `src/js/types/messages.ts`
+- **Canvas utils**: `src/js/utils/canvas.ts`
