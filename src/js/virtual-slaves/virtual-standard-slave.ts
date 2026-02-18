@@ -7,19 +7,19 @@
  *
  * The virtual slave provides the same MessagePort interface as a real worker,
  * allowing it to be used interchangeably by the RenderMaster.
+ *
+ * Synchronization:
+ * The slave waits until both conditions are met before rendering:
+ * 1. A batch message has been received from the master
+ * 2. All assets referenced in the batch (non-negative IDs) have been received
+ * Either the batch arrival or an asset arrival can trigger rendering.
  */
 
 import { RenderSlave } from '../render-slave';
 import { batchSegmentResults } from '../render-slave/batch-segmenter';
 import { probeCapabilities } from '../renderer/capability-probe';
 import { wrapError } from '../errors';
-import {
-  isInitMessage,
-  isBatchMessage,
-  isAbortMessage,
-  isAssetDataMessage,
-  isPrepareAssetsMessage,
-} from '../types';
+import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../types';
 import type {
   MasterToSlaveMessage,
   AssetManagerToSlaveMessage,
@@ -27,11 +27,9 @@ import type {
   ResultMessage,
   ErrorMessage,
   ReadyMessage,
-  AssetsReadyMessage,
   SlaveToMasterMessage,
   RenderSegment,
   LayerDescriptor,
-  PrepareAssetsMessage,
 } from '../types';
 import type { VirtualSlavePort, VirtualSlaveOptions } from './types';
 import { createVirtualMessageEvent } from './types';
@@ -61,11 +59,13 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   /** Whether the slave has been terminated */
   private terminated = false;
 
-  /** Asset synchronization tracking */
-  private expectedAssetCount = 0;
-  private expectedAssetIds = new Set<number>();
-  private receivedAssetIds = new Set<number>();
-  private assetsReadySent = false;
+  /** Pending batch state - stores batch info until assets are ready */
+  private pendingBatch: {
+    layers: LayerDescriptor[];
+    width: number;
+    height: number;
+    requiredAssetIds: Set<number>;
+  } | null = null;
 
   constructor(options: VirtualSlaveOptions = {}) {
     this.deferMessages = options.deferMessages ?? true;
@@ -75,9 +75,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   /**
    * Post a message to the virtual slave.
    * Emulates Worker.postMessage() behavior.
-   *
-   * @param message - Message to handle
-   * @param transfer - Transferable objects (ports are extracted, others ignored)
    */
   postMessage(message: MasterToSlaveMessage, transfer?: Transferable[]): void {
     if (this.terminated) {
@@ -106,9 +103,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
 
   /**
    * Handle an incoming message.
-   *
-   * @param message - The message to handle
-   * @param ports - Any MessagePorts transferred with the message
    */
   private handleMessage(message: MasterToSlaveMessage, ports: MessagePort[]): void {
     if (this.terminated) {
@@ -126,17 +120,46 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     try {
       if (isInitMessage(message)) {
         this.handleInit();
-      } else if (isPrepareAssetsMessage(message)) {
-        this.handlePrepareAssets(message);
       } else if (isBatchMessage(message)) {
-        // Handle async batch rendering
-        void this.handleBatch(message.layers, message.width, message.height);
+        this.handleBatch(message.layers, message.width, message.height);
       } else if (isAbortMessage(message)) {
         this.handleAbort();
       }
     } catch (error) {
       this.sendError(error);
     }
+  }
+
+  /**
+   * Extract all required asset IDs from layer descriptors.
+   */
+  private extractRequiredAssetIds(layers: LayerDescriptor[]): Set<number> {
+    const assetIds = new Set<number>();
+
+    for (const layer of layers) {
+      const ids = layer.assetIds;
+      if (ids.image >= 0) assetIds.add(ids.image);
+      if (ids.mask !== undefined && ids.mask >= 0) assetIds.add(ids.mask);
+      if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
+      if (ids.hlimage1 !== undefined && ids.hlimage1 >= 0) assetIds.add(ids.hlimage1);
+      if (ids.hlimage2 !== undefined && ids.hlimage2 >= 0) assetIds.add(ids.hlimage2);
+    }
+
+    return assetIds;
+  }
+
+  /**
+   * Check if all required assets for the pending batch are available.
+   */
+  private hasAllRequiredAssets(): boolean {
+    if (!this.pendingBatch) return false;
+
+    for (const assetId of this.pendingBatch.requiredAssetIds) {
+      if (!this.renderSlave.hasAsset(assetId)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -153,36 +176,10 @@ export class VirtualStandardSlave implements VirtualSlavePort {
 
     // Only handle image assets (standard slave doesn't need fonts or meshes)
     if (message.assetType === 'image') {
-      // Asset data for images is always ImageBitmap after decoding
       this.renderSlave.registerAsset(message.id, message.data as ImageBitmap);
 
-      // Track received assets for synchronization
-      if (this.expectedAssetIds.has(message.id)) {
-        this.receivedAssetIds.add(message.id);
-
-        // Check if all expected assets have been received
-        if (!this.assetsReadySent && this.receivedAssetIds.size === this.expectedAssetCount) {
-          this.assetsReadySent = true;
-          this.sendAssetsReady();
-        }
-      }
-    }
-  }
-
-  /**
-   * Handle prepare-assets message from Master.
-   * Sets up tracking for expected assets and sends ready immediately if count is zero.
-   */
-  private handlePrepareAssets(message: PrepareAssetsMessage): void {
-    this.expectedAssetCount = message.expectedCount;
-    this.expectedAssetIds = new Set(message.assetIds);
-    this.receivedAssetIds.clear();
-    this.assetsReadySent = false;
-
-    // If expecting zero assets, immediately signal ready
-    if (this.expectedAssetCount === 0) {
-      this.assetsReadySent = true;
-      this.sendAssetsReady();
+      // Check if this completes our pending batch requirements
+      void this.tryRender();
     }
   }
 
@@ -195,38 +192,44 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   }
 
   /**
-   * Handle batch message - render all layers and return segments.
+   * Handle batch message - store batch and try to render if assets are ready.
    */
-  private async handleBatch(
-    layers: LayerDescriptor[],
-    width: number,
-    height: number
-  ): Promise<void> {
-    if (this.terminated) {
+  private handleBatch(layers: LayerDescriptor[], width: number, height: number): void {
+    this.renderSlave.resetAbort();
+
+    const requiredAssetIds = this.extractRequiredAssetIds(layers);
+    this.pendingBatch = { layers, width, height, requiredAssetIds };
+
+    void this.tryRender();
+  }
+
+  /**
+   * Try to render if we have both a pending batch and all required assets.
+   */
+  private async tryRender(): Promise<void> {
+    if (this.terminated || !this.pendingBatch || !this.hasAllRequiredAssets()) {
       return;
     }
 
+    // Capture batch info and clear pending state
+    const { layers, width, height } = this.pendingBatch;
+    this.pendingBatch = null;
+
     try {
-      // Render all layers in the batch
       const results = await this.renderSlave.renderBatch(layers, width, height);
 
-      // Check if we were aborted during async rendering
-      // (state may change during await - disable lint)
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.renderSlave.isAborted() || this.terminated) {
         return;
       }
 
-      // Convert to optimized segments with batching
       const segments = await batchSegmentResults(results, width, height);
 
-      // Check abort again after async segmentation
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.renderSlave.isAborted() || this.terminated) {
         return;
       }
 
-      // Send result
       this.sendResult(segments);
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -241,6 +244,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
    */
   private handleAbort(): void {
     this.renderSlave.abort();
+    this.pendingBatch = null;
   }
 
   /**
@@ -262,17 +266,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   private sendReady(): void {
     const msg: ReadyMessage = {
       type: 'ready',
-    };
-    this.dispatchMessage(msg);
-  }
-
-  /**
-   * Send assets-ready message.
-   * Indicates that all expected assets have been received.
-   */
-  private sendAssetsReady(): void {
-    const msg: AssetsReadyMessage = {
-      type: 'assets-ready',
     };
     this.dispatchMessage(msg);
   }
@@ -342,7 +335,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    // Only 'message' event type is supported
     void type;
     this.messageListeners.add(listener);
   }
@@ -354,7 +346,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    // Only 'message' event type is supported
     void type;
     this.messageListeners.delete(listener);
   }
@@ -370,6 +361,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     this.terminated = true;
     this.renderSlave.abort();
     this.renderSlave.destroy();
+    this.pendingBatch = null;
     this.onmessage = null;
     this.onerror = null;
     this.messageListeners.clear();
@@ -384,10 +376,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
 
   /**
    * Directly register an asset (bypasses MessagePort).
-   * Useful for testing or when not using Asset Manager.
-   *
-   * @param id - Asset ID
-   * @param bitmap - Asset ImageBitmap
    */
   registerAssetDirect(id: number, bitmap: ImageBitmap): void {
     if (!this.terminated) {

@@ -8,6 +8,12 @@
  * The virtual slave provides the same MessagePort interface as a real worker,
  * allowing it to be used interchangeably by the RenderMaster.
  *
+ * Synchronization:
+ * The slave waits until both conditions are met before rendering:
+ * 1. A batch message has been received from the master
+ * 2. All assets referenced in the batch (non-negative IDs) have been received
+ * Either the batch arrival or an asset arrival can trigger rendering.
+ *
  * Note: Without WebGL2, some effects (embroidery, foil, normal) will fall back
  * to simpler implementations (typically no-effect).
  */
@@ -15,13 +21,7 @@
 import { TextRenderSlave } from '../text-render-slave';
 import { probeCapabilities } from '../renderer/capability-probe';
 import { wrapError } from '../errors';
-import {
-  isInitMessage,
-  isBatchMessage,
-  isAbortMessage,
-  isAssetDataMessage,
-  isPrepareAssetsMessage,
-} from '../types';
+import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../types';
 
 // Import effects for routing
 import { processNoEffectLayer } from '../effects/no-effect';
@@ -49,11 +49,9 @@ import type {
   ResultMessage,
   ErrorMessage,
   ReadyMessage,
-  AssetsReadyMessage,
   SlaveToMasterMessage,
   RenderSegment,
   TextLayerDescriptor,
-  PrepareAssetsMessage,
 } from '../types';
 import type { VirtualSlavePort, VirtualSlaveOptions } from './types';
 import { createVirtualMessageEvent } from './types';
@@ -86,11 +84,13 @@ export class VirtualTextSlave implements VirtualSlavePort {
   /** WebGL2 availability (cached for effect routing) */
   private hasWebGL2 = false;
 
-  /** Asset synchronization tracking */
-  private expectedAssetCount = 0;
-  private expectedAssetIds = new Set<number>();
-  private receivedAssetIds = new Set<number>();
-  private assetsReadySent = false;
+  /** Pending batch state - stores batch info until assets are ready */
+  private pendingBatch: {
+    layers: TextLayerDescriptor[];
+    width: number;
+    height: number;
+    requiredAssetIds: Set<number>;
+  } | null = null;
 
   constructor(options: VirtualSlaveOptions = {}) {
     this.deferMessages = options.deferMessages ?? true;
@@ -100,16 +100,12 @@ export class VirtualTextSlave implements VirtualSlavePort {
   /**
    * Post a message to the virtual slave.
    * Emulates Worker.postMessage() behavior.
-   *
-   * @param message - Message to handle
-   * @param transfer - Transferable objects (ports are extracted, others ignored)
    */
   postMessage(message: MasterToSlaveMessage, transfer?: Transferable[]): void {
     if (this.terminated) {
       return;
     }
 
-    // Extract ports from transfer array (if present)
     const ports: MessagePort[] = [];
     if (transfer) {
       for (const item of transfer) {
@@ -119,7 +115,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
       }
     }
 
-    // Handle the message (optionally deferred)
     if (this.deferMessages) {
       queueMicrotask(() => {
         this.handleMessage(message, ports);
@@ -131,16 +126,12 @@ export class VirtualTextSlave implements VirtualSlavePort {
 
   /**
    * Handle an incoming message.
-   *
-   * @param message - The message to handle
-   * @param ports - Any MessagePorts transferred with the message
    */
   private handleMessage(message: MasterToSlaveMessage, ports: MessagePort[]): void {
     if (this.terminated) {
       return;
     }
 
-    // Set up asset port handler if port was transferred
     if (ports.length > 0) {
       const assetPort = ports[0];
       assetPort.onmessage = (event: MessageEvent<AssetManagerToSlaveMessage>) => {
@@ -151,11 +142,8 @@ export class VirtualTextSlave implements VirtualSlavePort {
     try {
       if (isInitMessage(message)) {
         this.handleInit();
-      } else if (isPrepareAssetsMessage(message)) {
-        this.handlePrepareAssets(message);
       } else if (isBatchMessage(message)) {
-        // Handle async batch rendering - layers are TextLayerDescriptor for text slave
-        void this.handleBatch(
+        this.handleBatch(
           message.layers as unknown as TextLayerDescriptor[],
           message.width,
           message.height
@@ -166,6 +154,39 @@ export class VirtualTextSlave implements VirtualSlavePort {
     } catch (error) {
       this.sendError(error);
     }
+  }
+
+  /**
+   * Extract all required asset IDs from text layer descriptors.
+   */
+  private extractRequiredAssetIds(layers: TextLayerDescriptor[]): Set<number> {
+    const assetIds = new Set<number>();
+
+    for (const layer of layers) {
+      const ids = layer.assetIds;
+      if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
+      if (ids.font !== undefined && ids.font >= 0) assetIds.add(ids.font);
+      if (ids.postmask !== undefined && ids.postmask >= 0) assetIds.add(ids.postmask);
+    }
+
+    return assetIds;
+  }
+
+  /**
+   * Check if all required assets for the pending batch are available.
+   */
+  private hasAllRequiredAssets(): boolean {
+    if (!this.pendingBatch) return false;
+
+    for (const assetId of this.pendingBatch.requiredAssetIds) {
+      if (
+        this.textRenderSlave.getAsset(assetId) === undefined &&
+        !this.textRenderSlave.hasFont(assetId)
+      ) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -180,13 +201,9 @@ export class VirtualTextSlave implements VirtualSlavePort {
       return;
     }
 
-    // Handle different asset types
     if (message.assetType === 'image') {
-      // Asset data for images is always ImageBitmap after decoding
       this.textRenderSlave.registerAsset(message.id, message.data as ImageBitmap);
     } else if (message.assetType === 'font') {
-      // Asset data for fonts is always ArrayBuffer
-      // Register font with generated family name
       this.textRenderSlave.registerFont(
         message.id,
         `font-${String(message.id)}`,
@@ -194,40 +211,14 @@ export class VirtualTextSlave implements VirtualSlavePort {
       );
     }
 
-    // Track received assets for synchronization
-    if (this.expectedAssetIds.has(message.id)) {
-      this.receivedAssetIds.add(message.id);
-
-      // Check if all expected assets have been received
-      if (!this.assetsReadySent && this.receivedAssetIds.size === this.expectedAssetCount) {
-        this.assetsReadySent = true;
-        this.sendAssetsReady();
-      }
-    }
-  }
-
-  /**
-   * Handle prepare-assets message from Master.
-   * Sets up tracking for expected assets and sends ready immediately if count is zero.
-   */
-  private handlePrepareAssets(message: PrepareAssetsMessage): void {
-    this.expectedAssetCount = message.expectedCount;
-    this.expectedAssetIds = new Set(message.assetIds);
-    this.receivedAssetIds.clear();
-    this.assetsReadySent = false;
-
-    // If expecting zero assets, immediately signal ready
-    if (this.expectedAssetCount === 0) {
-      this.assetsReadySent = true;
-      this.sendAssetsReady();
-    }
+    // Check if this completes our pending batch requirements
+    void this.tryRender();
   }
 
   /**
    * Handle init message - probe capabilities and report ready.
    */
   private handleInit(): void {
-    // Probe capabilities and cache WebGL2 availability
     const capabilities = probeCapabilities();
     this.hasWebGL2 = capabilities.webgl2;
 
@@ -236,14 +227,23 @@ export class VirtualTextSlave implements VirtualSlavePort {
   }
 
   /**
+   * Handle batch message - store batch and try to render if assets are ready.
+   */
+  private handleBatch(
+    layers: TextLayerDescriptor[],
+    width: number,
+    height: number
+  ): void {
+    this.textRenderSlave.resetAbort();
+
+    const requiredAssetIds = this.extractRequiredAssetIds(layers);
+    this.pendingBatch = { layers, width, height, requiredAssetIds };
+
+    void this.tryRender();
+  }
+
+  /**
    * Apply effect to a rasterized text mask based on the effect type.
-   *
-   * @param layer - Text layer descriptor
-   * @param rasterizedMask - Rasterized text canvas
-   * @param textHeight - Height of the rasterized text (for emboss threshold)
-   * @param width - Canvas width
-   * @param height - Canvas height
-   * @returns Canvas with effect applied, or null on failure
    */
   private applyEffect(
     layer: TextLayerDescriptor,
@@ -254,7 +254,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
   ): AnyCanvas | null {
     const effect = layer.maskData.effect;
 
-    // Get texture if available
     const textureId = layer.assetIds.texture;
     let texture: ImageBitmap | undefined;
     if (textureId !== undefined) {
@@ -264,14 +263,12 @@ export class VirtualTextSlave implements VirtualSlavePort {
       }
     }
 
-    // Route to appropriate effect handler
     switch (effect) {
       case 'shadow':
         return processShadowEffectLayer(layer, width, height, rasterizedMask);
 
       case 'embroidery':
         if (!this.hasWebGL2) {
-          // Fall back to no-effect without WebGL2
           console.warn('WebGL2 not available, falling back to no-effect for embroidery');
           return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
         }
@@ -295,7 +292,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
 
       case 'foil':
         if (!this.hasWebGL2) {
-          // Fall back to no-effect without WebGL2 (foil uses alpha erode)
           console.warn('WebGL2 not available, falling back to no-effect for foil');
           return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
         }
@@ -306,26 +302,18 @@ export class VirtualTextSlave implements VirtualSlavePort {
 
       case 'normal':
         if (!this.hasWebGL2) {
-          // Fall back to no-effect without WebGL2 (normal uses colorScale and normalMap)
           console.warn('WebGL2 not available, falling back to no-effect for normal');
           return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
         }
         return processNormalEffectLayer(layer, width, height, rasterizedMask, texture);
 
       default:
-        // No effect or unrecognized effect - use no-effect pipeline
         return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
     }
   }
 
   /**
    * Render a single text layer with full pipeline.
-   *
-   * @param layer - Text layer descriptor
-   * @param width - Canvas width
-   * @param height - Canvas height
-   * @param index - Layer index
-   * @returns Rendered bitmap result or null if aborted/failed
    */
   private async renderTextLayer(
     layer: TextLayerDescriptor,
@@ -338,30 +326,25 @@ export class VirtualTextSlave implements VirtualSlavePort {
     compositemode: string;
     compositealpha: number;
   } | null> {
-    // Check for abort
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (this.textRenderSlave.isAborted() || this.terminated) {
       return null;
     }
 
     const maskData = layer.maskData;
 
-    // Step 1: Load font if specified and not yet loaded
     const fontId = layer.assetIds.font;
     if (fontId !== undefined && this.textRenderSlave.hasFont(fontId)) {
       await this.textRenderSlave.loadFont(fontId);
     }
 
-    // Step 2: Rasterize text
     const rasterized = this.textRenderSlave.rasterizeText(maskData, width, height);
 
-    // Check abort again after potentially slow operation
-    // (state may change during async operations - disable lint)
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (this.textRenderSlave.isAborted() || this.terminated) {
       return null;
     }
 
-    // Step 3: Apply effect
     const effectCanvas = this.applyEffect(
       layer,
       rasterized.canvas,
@@ -375,46 +358,37 @@ export class VirtualTextSlave implements VirtualSlavePort {
       return null;
     }
 
-    // Check abort again
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (this.textRenderSlave.isAborted() || this.terminated) {
       return null;
     }
 
-    // Step 4: Create output canvas and apply transforms
-    const outputCanvas = createCanvas(width, height, false); // Prefer HTMLCanvas
+    const outputCanvas = createCanvas(width, height, false);
     const outputCtx = getContext2D(outputCanvas);
 
     if (!outputCtx) {
       throw new Error('Failed to create output context');
     }
 
-    // Get text alignment for transform origin calculation
     const alignment: TextAlignment = maskData.type?.alignment ?? 'center';
 
-    // Apply transforms and draw
     if (hasActiveTransform(maskData.transform)) {
-      // Use transform-based drawing
       applyTransformAndDraw(outputCtx, effectCanvas, maskData.transform, width, height, alignment);
     } else {
-      // No transforms: draw at origin (effect canvas is already full-size)
       outputCtx.drawImage(effectCanvas, 0, 0);
     }
 
-    // Step 5: Apply post-mask if present
     const postmaskId = layer.assetIds.postmask;
     if (postmaskId !== undefined) {
-      const postMaskAsset = this.textRenderSlave.getAsset(postmaskId);
-      // Post-mask must be an ImageBitmap (not ArrayBuffer font data)
-      if (postMaskAsset && 'width' in postMaskAsset) {
+      const postMask = this.textRenderSlave.getAsset(postmaskId);
+      if (postMask instanceof ImageBitmap) {
         outputCtx.globalCompositeOperation = 'destination-in';
         outputCtx.globalAlpha = 1.0;
-        outputCtx.drawImage(postMaskAsset, 0, 0, width, height);
+        outputCtx.drawImage(postMask, 0, 0, width, height);
         outputCtx.globalCompositeOperation = 'source-over';
       }
     }
 
-    // Convert to ImageBitmap
     const bitmap = await canvasToImageBitmap(outputCanvas);
 
     return {
@@ -426,25 +400,20 @@ export class VirtualTextSlave implements VirtualSlavePort {
   }
 
   /**
-   * Handle batch message - render all text layers and return segments.
+   * Try to render if we have both a pending batch and all required assets.
    */
-  private async handleBatch(
-    layers: TextLayerDescriptor[],
-    width: number,
-    height: number
-  ): Promise<void> {
-    if (this.terminated) {
+  private async tryRender(): Promise<void> {
+    if (this.terminated || !this.pendingBatch || !this.hasAllRequiredAssets()) {
       return;
     }
 
-    try {
-      // Reset abort flag for new batch
-      this.textRenderSlave.resetAbort();
+    const { layers, width, height } = this.pendingBatch;
+    this.pendingBatch = null;
 
+    try {
       const results: RenderSegment[] = [];
 
       for (let i = 0; i < layers.length; i++) {
-        // Check for abort between layers (state may change during async - disable lint)
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (this.textRenderSlave.isAborted() || this.terminated) {
           break;
@@ -460,13 +429,11 @@ export class VirtualTextSlave implements VirtualSlavePort {
         }
       }
 
-      // Check if we were aborted during rendering
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.textRenderSlave.isAborted() || this.terminated) {
         return;
       }
 
-      // Send result
       this.sendResult(results);
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -481,6 +448,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
    */
   private handleAbort(): void {
     this.textRenderSlave.abort();
+    this.pendingBatch = null;
   }
 
   /**
@@ -502,17 +470,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
   private sendReady(): void {
     const msg: ReadyMessage = {
       type: 'ready',
-    };
-    this.dispatchMessage(msg);
-  }
-
-  /**
-   * Send assets-ready message.
-   * Indicates that all expected assets have been received.
-   */
-  private sendAssetsReady(): void {
-    const msg: AssetsReadyMessage = {
-      type: 'assets-ready',
     };
     this.dispatchMessage(msg);
   }
@@ -552,7 +509,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
 
     const event = createVirtualMessageEvent(message);
 
-    // Call onmessage handler
     if (this.onmessage) {
       if (this.deferMessages) {
         queueMicrotask(() => {
@@ -563,7 +519,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
       }
     }
 
-    // Call registered listeners
     for (const listener of this.messageListeners) {
       if (this.deferMessages) {
         queueMicrotask(() => {
@@ -582,7 +537,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    // Only 'message' event type is supported
     void type;
     this.messageListeners.add(listener);
   }
@@ -594,7 +548,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    // Only 'message' event type is supported
     void type;
     this.messageListeners.delete(listener);
   }
@@ -610,6 +563,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
     this.terminated = true;
     this.textRenderSlave.abort();
     this.textRenderSlave.destroy();
+    this.pendingBatch = null;
     this.onmessage = null;
     this.onerror = null;
     this.messageListeners.clear();
@@ -624,10 +578,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
 
   /**
    * Directly register an image asset (bypasses MessagePort).
-   * Useful for testing or when not using Asset Manager.
-   *
-   * @param id - Asset ID
-   * @param bitmap - Asset ImageBitmap
    */
   registerAssetDirect(id: number, bitmap: ImageBitmap): void {
     if (!this.terminated) {
@@ -637,11 +587,6 @@ export class VirtualTextSlave implements VirtualSlavePort {
 
   /**
    * Directly register a font asset (bypasses MessagePort).
-   * Useful for testing or when not using Asset Manager.
-   *
-   * @param id - Asset ID
-   * @param family - Font family name
-   * @param data - Font data as ArrayBuffer
    */
   registerFontDirect(id: number, family: string, data: ArrayBuffer): void {
     if (!this.terminated) {

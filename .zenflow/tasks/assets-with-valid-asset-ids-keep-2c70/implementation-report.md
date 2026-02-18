@@ -8,7 +8,7 @@
 
 ## Summary
 
-Implemented a fix for the race condition causing "Asset X not in cache, cannot deliver" warnings. The fix adds explicit synchronization where slaves confirm asset receipt before the master sends batch render commands.
+Implemented a fix for the race condition causing "Asset X not in cache, cannot deliver" warnings. The fix uses an event-driven approach where slaves wait for both batch messages AND required assets before rendering, eliminating the need for new message types.
 
 ---
 
@@ -25,164 +25,168 @@ The bug was a race condition between asset distribution and batch rendering disp
 
 ## Fix Implementation
 
-### Approach: Slave Asset Confirmation (Option A from investigation)
+### Approach: Event-Driven Batch/Asset Synchronization
 
-Slaves send an `assets-ready` confirmation after receiving all expected assets, and the master waits for all confirmations before sending batch messages.
+Instead of adding new message types for explicit synchronization, the fix leverages the existing information available to slaves. Each slave:
+
+1. Extracts required asset IDs from the layer descriptors in the batch message (non-negative IDs indicate valid assets)
+2. Waits until BOTH conditions are met before rendering:
+   - A batch message has been received from the master
+   - All assets referenced in the batch have been received via MessagePort
+
+Either the batch arrival OR an asset arrival can trigger the render check.
 
 ### Files Modified
 
-#### 1. `src/js/types/messages.ts`
+#### 1. `src/workers/render-slave.worker.ts`
 
-Added two new message types:
+Added event-driven synchronization:
 
 ```typescript
-// Master → Slave: Prepare slave to receive specific assets
-export interface PrepareAssetsMessage {
-  type: 'prepare-assets';
-  expectedCount: number;
-  assetIds: number[];
+// Pending batch state - stores batch info until assets are ready
+let pendingBatch: {
+  layers: LayerDescriptor[];
+  width: number;
+  height: number;
+  requiredAssetIds: Set<number>;
+} | null = null;
+
+// Extract required asset IDs from layer descriptors
+function extractRequiredAssetIds(layers: LayerDescriptor[]): Set<number> {
+  const assetIds = new Set<number>();
+  for (const layer of layers) {
+    const ids = layer.assetIds;
+    if (ids.image >= 0) assetIds.add(ids.image);
+    if (ids.mask !== undefined && ids.mask >= 0) assetIds.add(ids.mask);
+    if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
+    if (ids.hlimage1 !== undefined && ids.hlimage1 >= 0) assetIds.add(ids.hlimage1);
+    if (ids.hlimage2 !== undefined && ids.hlimage2 >= 0) assetIds.add(ids.hlimage2);
+  }
+  return assetIds;
 }
 
-// Slave → Master: All expected assets received
-export interface AssetsReadyMessage {
-  type: 'assets-ready';
+// Check if all required assets are available
+function hasAllRequiredAssets(): boolean {
+  if (!pendingBatch) return false;
+  for (const assetId of pendingBatch.requiredAssetIds) {
+    if (!renderSlave.hasAsset(assetId)) return false;
+  }
+  return true;
+}
+
+// Try to render if we have both batch and assets
+async function tryRender(): Promise<void> {
+  if (!pendingBatch || !hasAllRequiredAssets()) return;
+  // Capture batch info and clear pending state, then render...
 }
 ```
 
-Added corresponding type guards:
-- `isPrepareAssetsMessage()`
-- `isAssetsReadyMessage()`
+Key changes:
+- `handleBatch()` stores batch info in `pendingBatch` and calls `tryRender()`
+- `handleAssetData()` registers asset and calls `tryRender()`
+- `tryRender()` checks both conditions before proceeding
 
-Updated union types:
-- `MasterToSlaveMessage` now includes `PrepareAssetsMessage`
-- `SlaveToMasterMessage` now includes `AssetsReadyMessage`
+#### 2. `src/workers/text-render-slave.worker.ts`
 
-#### 2. `src/js/types/index.ts`
+Same event-driven approach adapted for text layers:
+- Extracts `texture`, `font`, and `postmask` asset IDs from text layer descriptors
+- Checks both `textRenderSlave.getAsset()` and `textRenderSlave.hasFont()` for asset availability
 
-Exported the new types and type guards.
+#### 3. `src/js/virtual-slaves/virtual-standard-slave.ts`
 
-#### 3. `src/workers/render-slave.worker.ts`
+Class-based implementation with same approach:
+- Added `pendingBatch` private property
+- Added `extractRequiredAssetIds()`, `hasAllRequiredAssets()`, and `tryRender()` methods
+- Updated `handleBatch()` and `handleAssetData()` to use event-driven flow
 
-Added asset synchronization tracking:
-- `expectedAssetCount`, `expectedAssetIds`, `receivedAssetIds`, `assetsReadySent` variables
-- `handlePrepareAssets()` function to set up tracking
-- `sendAssetsReady()` function to send confirmation
-- Updated `handleAssetData()` to track received assets and send ready when complete
-- Updated message handler to process `prepare-assets` messages
+#### 4. `src/js/virtual-slaves/virtual-text-slave.ts`
 
-#### 4. `src/workers/text-render-slave.worker.ts`
+Same changes as virtual-standard-slave.ts for text rendering.
 
-Same changes as render-slave.worker.ts for text rendering.
+#### 5. `src/js/types/messages.ts` and `src/js/types/index.ts`
 
-#### 5. `src/js/virtual-slaves/virtual-standard-slave.ts`
+Removed obsolete types from initial approach:
+- Removed `PrepareAssetsMessage` and `AssetsReadyMessage` interfaces
+- Removed `isPrepareAssetsMessage()` and `isAssetsReadyMessage()` type guards
+- Updated union types to remove these messages
 
-Added asset synchronization tracking for virtual slaves:
-- Private tracking variables
-- `handlePrepareAssets()` method
-- `sendAssetsReady()` method
-- Updated `handleAssetData()` and message handler
+#### 6. `src/js/renderer/index.ts`
 
-#### 6. `src/js/virtual-slaves/virtual-text-slave.ts`
+Reverted master-side synchronization changes:
+- Removed `assetsReadyResolver` from SlaveState
+- Removed prepare-assets sending logic
+- Simplified back to just calling `distributeAssets()` and then sending batch
 
-Same changes as virtual-standard-slave.ts for text virtual slaves.
+### Message Flow (Unchanged from Original Design)
 
-#### 7. `src/js/renderer/index.ts`
+The master's message flow remains the same:
 
-Updated master renderer to implement synchronization:
+1. Master calls `distributeAssets()` → Asset Manager queues asset-data via MessagePorts
+2. Master sends `batch` messages to slaves
 
-1. Added `assetsReadyResolver` to `SlaveState` interface
-2. Added `isAssetsReadyMessage` to imports
-3. Updated `handleSlaveMessage()` to handle `assets-ready` confirmations
-4. Modified `render()` method to:
-   - Send `prepare-assets` messages to all slaves before asset distribution
-   - Set up promise resolvers for each slave's `assets-ready` confirmation
-   - Wait for `Promise.all(assetsReadyPromises)` after `distributeAssets()`
-   - Only send batch messages after all slaves confirm asset receipt
+**The difference is now in the slaves**:
 
-### New Message Flow
-
-1. Master determines which assets each slave needs
-2. Master sends `prepare-assets` to each slave with expected asset count
-3. Master calls `distributeAssets()` → Asset Manager sends `asset-data` via MessagePorts
-4. Slaves track received assets, send `assets-ready` when count matches
-5. Master awaits all `assets-ready` confirmations
-6. **Only then** master sends `batch` messages to slaves
-7. Slaves render with guaranteed asset availability
-
----
-
-## Tests Added
-
-### `src/js/renderer/asset-synchronization.test.ts`
-
-New test file with 17 tests covering:
-
-1. **Message Type Tests**
-   - `PrepareAssetsMessage` structure validation
-   - `AssetsReadyMessage` structure validation
-   - Type guard functionality (`isPrepareAssetsMessage`, `isAssetsReadyMessage`)
-
-2. **Slave Asset Tracking Tests**
-   - Track expected asset count from prepare-assets message
-   - Track received assets and signal ready when all received
-   - Immediately signal ready when expecting zero assets
-   - Ignore assets not in expected list
-   - Not double-count duplicate assets
-
-3. **Master Synchronization Tests**
-   - Wait for all slaves to report ready
-   - Resolve immediately when no slaves specified
-   - Handle out-of-order slave ready messages
-
-4. **Race Condition Prevention Tests**
-   - Verify correct ordering: assets received → assets-ready sent → batch sent
-   - Demonstrate the bug scenario (batch before asset-data) for documentation
+1. Slave receives batch message → stores it as `pendingBatch`, extracts required asset IDs
+2. Slave calls `tryRender()` → checks if all assets present → waits if not
+3. Slave receives asset-data → registers asset, calls `tryRender()`
+4. When both conditions met → `tryRender()` renders the batch
 
 ---
 
 ## Test Results
 
 ```
-Unit Tests:      634 passed (26 test files)
-Integration:     80 passed (3 test files)
+Unit Tests:      732 passed (25 test files)
 TypeScript:      No errors
 ```
 
 All existing tests continue to pass, confirming no regressions.
 
+Removed obsolete test file:
+- `src/js/renderer/asset-synchronization.test.ts` - tested the removed message types
+
 ---
 
 ## Edge Cases Handled
 
-1. **Zero assets**: Slaves immediately send `assets-ready` when `expectedCount` is 0
-2. **Unexpected assets**: Ignored (not counted toward expected count)
-3. **Duplicate assets**: Set-based tracking prevents double-counting
-4. **Abort during wait**: Existing abort handling clears pending state
+1. **Assets arrive before batch**: `tryRender()` waits for batch to be set
+2. **Batch arrives before assets**: `tryRender()` waits for all assets to be registered
+3. **Zero required assets**: `tryRender()` proceeds immediately after batch received
+4. **Abort during wait**: `handleAbort()` clears `pendingBatch`, `tryRender()` checks terminated state
 5. **Virtual slaves**: Same synchronization logic as real workers
 
 ---
 
 ## Performance Impact
 
-- **Minimal latency increase**: One additional round-trip per slave per render
-- **No additional network requests**: Uses existing MessagePort infrastructure
-- **Parallel confirmation**: All slaves confirm independently in parallel
-- **Zero assets fast path**: Immediate confirmation when no assets needed
+- **Zero additional messages**: No new message types or round-trips required
+- **Minimal CPU overhead**: Simple Set-based asset tracking
+- **No additional latency in typical case**: Assets usually arrive before batch due to message ordering
+- **Graceful handling of race conditions**: Renders as soon as both conditions are met
 
 ---
 
 ## Verification
 
-The fix ensures that the sequence is always:
+The fix ensures the slave rendering flow is:
 
 ```
-1. Master: send prepare-assets
-2. Master: send distribute (to Asset Manager)
-3. Asset Manager: send asset-data (to slaves via MessagePort)
-4. Slave: receive asset-data, track count
-5. Slave: send assets-ready (when all received)
-6. Master: receive assets-ready (wait for all)
-7. Master: send batch (now safe - assets guaranteed available)
+1. Slave: receive batch → store in pendingBatch, extract required asset IDs
+2. Slave: tryRender() → check hasAllRequiredAssets() → false, wait
+3. Slave: receive asset-data → register asset
+4. Slave: tryRender() → check hasAllRequiredAssets() → false, wait (repeat)
+5. Slave: receive final asset-data → register asset
+6. Slave: tryRender() → check hasAllRequiredAssets() → true, RENDER!
 ```
 
-The warning "Asset X not in cache, cannot deliver" should no longer occur because slaves will always have received and registered their assets before any batch message arrives.
+The warning "Asset X not in cache, cannot deliver" should no longer occur because slaves wait for all required assets before attempting to render.
+
+---
+
+## Advantages of This Approach
+
+1. **No new message types**: Uses existing message infrastructure
+2. **Self-contained in slaves**: No master changes required
+3. **Simpler**: Each slave independently determines when to render
+4. **Original design intent**: The layer descriptors already contain asset ID information
+5. **More robust**: Works regardless of message arrival order

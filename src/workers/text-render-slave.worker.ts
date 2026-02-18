@@ -13,6 +13,12 @@
  * The worker also receives asset-data messages from the Asset Manager via
  * a separate MessagePort registered by the master.
  *
+ * Synchronization:
+ * The slave waits until both conditions are met before rendering:
+ * 1. A batch message has been received from the master
+ * 2. All assets referenced in the batch (non-negative IDs) have been received
+ * Either the batch arrival or an asset arrival can trigger rendering.
+ *
  * Capability Requirements:
  * - WebGL2 is required for full effect support (embroidery, engraving, etc.)
  * - Without WebGL2, only basic effects (no-effect, simple color) will work
@@ -21,13 +27,7 @@
 import { TextRenderSlave } from '../js/text-render-slave';
 import { probeCapabilities } from '../js/renderer/capability-probe';
 import { wrapError } from '../js/errors';
-import {
-  isInitMessage,
-  isBatchMessage,
-  isAbortMessage,
-  isAssetDataMessage,
-  isPrepareAssetsMessage,
-} from '../js/types';
+import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../js/types';
 import type {
   MasterToSlaveMessage,
   AssetManagerToSlaveMessage,
@@ -35,10 +35,8 @@ import type {
   ResultMessage,
   ErrorMessage,
   ReadyMessage,
-  AssetsReadyMessage,
   RenderSegment,
   TextLayerDescriptor,
-  PrepareAssetsMessage,
 } from '../js/types';
 
 // Import effects for routing
@@ -69,11 +67,13 @@ let assetPort: MessagePort | null = null;
 // Track capabilities for effect routing
 let hasWebGL2 = false;
 
-// Asset synchronization tracking
-let expectedAssetCount = 0;
-let expectedAssetIds = new Set<number>();
-let receivedAssetIds = new Set<number>();
-let assetsReadySent = false;
+// Pending batch state - stores batch info until assets are ready
+let pendingBatch: {
+  layers: TextLayerDescriptor[];
+  width: number;
+  height: number;
+  requiredAssetIds: Set<number>;
+} | null = null;
 
 /**
  * Send capabilities message to master.
@@ -96,17 +96,6 @@ function sendCapabilities(): void {
 function sendReady(): void {
   const msg: ReadyMessage = {
     type: 'ready',
-  };
-  self.postMessage(msg);
-}
-
-/**
- * Send assets-ready message to master.
- * Indicates that all expected assets have been received.
- */
-function sendAssetsReady(): void {
-  const msg: AssetsReadyMessage = {
-    type: 'assets-ready',
   };
   self.postMessage(msg);
 }
@@ -142,6 +131,42 @@ function sendError(error: unknown): void {
 }
 
 /**
+ * Extract all required asset IDs from text layer descriptors.
+ * @param layers - Text layer descriptors
+ * @returns Set of required asset IDs (excluding undefined and negative values)
+ */
+function extractRequiredAssetIds(layers: TextLayerDescriptor[]): Set<number> {
+  const assetIds = new Set<number>();
+
+  for (const layer of layers) {
+    const ids = layer.assetIds;
+
+    // Add all non-negative asset IDs (id >= 0 means valid asset)
+    if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
+    if (ids.font !== undefined && ids.font >= 0) assetIds.add(ids.font);
+    if (ids.postmask !== undefined && ids.postmask >= 0) assetIds.add(ids.postmask);
+  }
+
+  return assetIds;
+}
+
+/**
+ * Check if all required assets for the pending batch are available.
+ * @returns true if all required assets are registered
+ */
+function hasAllRequiredAssets(): boolean {
+  if (!pendingBatch) return false;
+
+  for (const assetId of pendingBatch.requiredAssetIds) {
+    // Check both image assets and fonts
+    if (textRenderSlave.getAsset(assetId) === undefined && !textRenderSlave.hasFont(assetId)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Handle asset data message from Asset Manager.
  * @param message - Asset data message
  */
@@ -154,40 +179,11 @@ function handleAssetData(message: AssetManagerToSlaveMessage): void {
   if (message.assetType === 'image' && message.data instanceof ImageBitmap) {
     textRenderSlave.registerAsset(message.id, message.data);
   } else if (message.assetType === 'font' && message.data instanceof ArrayBuffer) {
-    // For fonts, we need the family name which should be passed in the message
-    // For now, use a placeholder - in production, extend the message protocol
-    // to include font family information
     textRenderSlave.registerFont(message.id, `font-${String(message.id)}`, message.data);
   }
 
-  // Track received assets for synchronization
-  if (expectedAssetIds.has(message.id)) {
-    receivedAssetIds.add(message.id);
-
-    // Check if all expected assets have been received
-    if (!assetsReadySent && receivedAssetIds.size === expectedAssetCount) {
-      assetsReadySent = true;
-      sendAssetsReady();
-    }
-  }
-}
-
-/**
- * Handle prepare-assets message from Master.
- * Sets up tracking for expected assets and sends ready immediately if count is zero.
- * @param message - Prepare assets message
- */
-function handlePrepareAssets(message: PrepareAssetsMessage): void {
-  expectedAssetCount = message.expectedCount;
-  expectedAssetIds = new Set(message.assetIds);
-  receivedAssetIds.clear();
-  assetsReadySent = false;
-
-  // If expecting zero assets, immediately signal ready
-  if (expectedAssetCount === 0) {
-    assetsReadySent = true;
-    sendAssetsReady();
-  }
+  // Check if this completes our pending batch requirements
+  void tryRender();
 }
 
 /**
@@ -200,13 +196,6 @@ function handleInit(): void {
 
 /**
  * Apply effect to a rasterized text mask based on the effect type.
- *
- * @param layer - Text layer descriptor
- * @param rasterizedMask - Rasterized text canvas
- * @param textHeight - Height of the rasterized text (for emboss threshold)
- * @param width - Canvas width
- * @param height - Canvas height
- * @returns Canvas with effect applied, or null on failure
  */
 function applyEffect(
   layer: TextLayerDescriptor,
@@ -234,18 +223,10 @@ function applyEffect(
 
     case 'embroidery':
       if (!hasWebGL2) {
-        // Fall back to no-effect without WebGL2
         console.warn('WebGL2 not available, falling back to no-effect for embroidery');
         return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
       }
-      return processEmbroideryEffectLayer(
-        layer,
-        width,
-        height,
-        rasterizedMask,
-        textHeight,
-        texture
-      );
+      return processEmbroideryEffectLayer(layer, width, height, rasterizedMask, textHeight, texture);
 
     case 'engraving':
       return processEngravingEffectLayer(layer, width, height, rasterizedMask, textHeight);
@@ -258,7 +239,6 @@ function applyEffect(
 
     case 'foil':
       if (!hasWebGL2) {
-        // Fall back to no-effect without WebGL2 (foil uses alpha erode)
         console.warn('WebGL2 not available, falling back to no-effect for foil');
         return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
       }
@@ -269,33 +249,18 @@ function applyEffect(
 
     case 'normal':
       if (!hasWebGL2) {
-        // Fall back to no-effect without WebGL2 (normal uses colorScale and normalMap)
         console.warn('WebGL2 not available, falling back to no-effect for normal');
         return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
       }
       return processNormalEffectLayer(layer, width, height, rasterizedMask, texture);
 
     default:
-      // No effect or unrecognized effect - use no-effect pipeline
       return processNoEffectLayer(layer, width, height, rasterizedMask, texture);
   }
 }
 
 /**
  * Render a single text layer with full pipeline.
- *
- * Pipeline:
- * 1. Load fonts if needed
- * 2. Rasterize text content
- * 3. Apply effect (based on mask.effect)
- * 4. Apply 2D transforms (translation, rotation, scale)
- * 5. Apply post-mask (destination-in composite)
- *
- * @param layer - Text layer descriptor
- * @param width - Canvas width
- * @param height - Canvas height
- * @param index - Layer index
- * @returns Rendered bitmap result or null if aborted/failed
  */
 async function renderTextLayer(
   layer: TextLayerDescriptor,
@@ -308,7 +273,6 @@ async function renderTextLayer(
   compositemode: string;
   compositealpha: number;
 } | null> {
-  // Check for abort
   if (textRenderSlave.isAborted()) {
     return null;
   }
@@ -324,7 +288,6 @@ async function renderTextLayer(
   // Step 2: Rasterize text
   const rasterized = textRenderSlave.rasterizeText(maskData, width, height);
 
-  // Check abort again after potentially slow operation
   if (textRenderSlave.isAborted()) {
     return null;
   }
@@ -343,7 +306,6 @@ async function renderTextLayer(
     return null;
   }
 
-  // Check abort again
   if (textRenderSlave.isAborted()) {
     return null;
   }
@@ -356,15 +318,11 @@ async function renderTextLayer(
     throw new Error('Failed to create output context');
   }
 
-  // Get text alignment for transform origin calculation
   const alignment: TextAlignment = maskData.type?.alignment ?? 'center';
 
-  // Apply transforms and draw
   if (hasActiveTransform(maskData.transform)) {
-    // Use transform-based drawing
     applyTransformAndDraw(outputCtx, effectCanvas, maskData.transform, width, height, alignment);
   } else {
-    // No transforms: draw at origin (effect canvas is already full-size)
     outputCtx.drawImage(effectCanvas, 0, 0);
   }
 
@@ -380,7 +338,6 @@ async function renderTextLayer(
     }
   }
 
-  // Convert to ImageBitmap
   const bitmap = await canvasToImageBitmap(outputCanvas);
 
   return {
@@ -392,24 +349,21 @@ async function renderTextLayer(
 }
 
 /**
- * Handle batch message - render all text layers and return segments.
- * @param layers - Text layer descriptors to render
- * @param width - Canvas width
- * @param height - Canvas height
+ * Try to render if we have both a pending batch and all required assets.
  */
-async function handleBatch(
-  layers: TextLayerDescriptor[],
-  width: number,
-  height: number
-): Promise<void> {
-  try {
-    // Reset abort flag for new batch
-    textRenderSlave.resetAbort();
+async function tryRender(): Promise<void> {
+  if (!pendingBatch || !hasAllRequiredAssets()) {
+    return;
+  }
 
+  // Capture batch info and clear pending state
+  const { layers, width, height } = pendingBatch;
+  pendingBatch = null;
+
+  try {
     const results: RenderSegment[] = [];
 
     for (let i = 0; i < layers.length; i++) {
-      // Check for abort between layers
       if (textRenderSlave.isAborted()) {
         break;
       }
@@ -424,13 +378,10 @@ async function handleBatch(
       }
     }
 
-    // Check if we were aborted during rendering
     if (textRenderSlave.isAborted()) {
-      // Don't send result if aborted
       return;
     }
 
-    // Send result to master
     sendResult(results);
   } catch (error) {
     if (!textRenderSlave.isAborted()) {
@@ -440,20 +391,31 @@ async function handleBatch(
 }
 
 /**
+ * Handle batch message - store batch and try to render if assets are ready.
+ */
+function handleBatch(layers: TextLayerDescriptor[], width: number, height: number): void {
+  textRenderSlave.resetAbort();
+
+  const requiredAssetIds = extractRequiredAssetIds(layers);
+  pendingBatch = { layers, width, height, requiredAssetIds };
+
+  void tryRender();
+}
+
+/**
  * Handle abort message - cancel current rendering.
  */
 function handleAbort(): void {
   textRenderSlave.abort();
+  pendingBatch = null;
 }
 
 /**
  * Handle incoming messages from the Master.
  */
-self.onmessage = async (event: MessageEvent<MasterToSlaveMessage>) => {
+self.onmessage = (event: MessageEvent<MasterToSlaveMessage>) => {
   const message = event.data;
 
-  // Check if this is a port transfer for asset manager communication
-  // The master sends the asset port via a special init message with transferred port
   const ports = event.ports as readonly (MessagePort | undefined)[];
   if (ports.length > 0 && ports[0]) {
     assetPort = ports[0];
@@ -465,16 +427,8 @@ self.onmessage = async (event: MessageEvent<MasterToSlaveMessage>) => {
   try {
     if (isInitMessage(message)) {
       handleInit();
-    } else if (isPrepareAssetsMessage(message)) {
-      handlePrepareAssets(message);
     } else if (isBatchMessage(message)) {
-      // The batch message contains layers, but for text slaves these should be TextLayerDescriptors
-      // The master is responsible for routing the correct layer type to the correct slave
-      await handleBatch(
-        message.layers as unknown as TextLayerDescriptor[],
-        message.width,
-        message.height
-      );
+      handleBatch(message.layers as unknown as TextLayerDescriptor[], message.width, message.height);
     } else if (isAbortMessage(message)) {
       handleAbort();
     }
@@ -483,9 +437,6 @@ self.onmessage = async (event: MessageEvent<MasterToSlaveMessage>) => {
   }
 };
 
-/**
- * Handle worker errors.
- */
 self.onerror = (event: string | Event) => {
   if (typeof event === 'string') {
     sendError(new Error(event));
@@ -494,21 +445,13 @@ self.onerror = (event: string | Event) => {
   }
 };
 
-/**
- * Handle unhandled promise rejections.
- */
 self.onunhandledrejection = (event: PromiseRejectionEvent) => {
   sendError(event.reason);
 };
 
-/**
- * Cleanup function for worker termination.
- * Note: This is called when the worker is about to be terminated via Worker.terminate().
- * In practice, the browser handles memory cleanup, but we do explicit cleanup for
- * orderly shutdown and to support testing scenarios.
- */
 function cleanup(): void {
   textRenderSlave.destroy();
+  pendingBatch = null;
   if (assetPort) {
     assetPort.onmessage = null;
     assetPort.close();
@@ -516,7 +459,6 @@ function cleanup(): void {
   }
 }
 
-// Handle beforeunload for cleanup (if supported in worker context)
 if (typeof self.onbeforeunload !== 'undefined') {
   self.onbeforeunload = cleanup;
 }
