@@ -13,7 +13,13 @@ import { RenderSlave } from '../render-slave';
 import { batchSegmentResults } from '../render-slave/batch-segmenter';
 import { probeCapabilities } from '../renderer/capability-probe';
 import { wrapError } from '../errors';
-import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../types';
+import {
+  isInitMessage,
+  isBatchMessage,
+  isAbortMessage,
+  isAssetDataMessage,
+  isPrepareAssetsMessage,
+} from '../types';
 import type {
   MasterToSlaveMessage,
   AssetManagerToSlaveMessage,
@@ -21,9 +27,11 @@ import type {
   ResultMessage,
   ErrorMessage,
   ReadyMessage,
+  AssetsReadyMessage,
   SlaveToMasterMessage,
   RenderSegment,
   LayerDescriptor,
+  PrepareAssetsMessage,
 } from '../types';
 import type { VirtualSlavePort, VirtualSlaveOptions } from './types';
 import { createVirtualMessageEvent } from './types';
@@ -52,6 +60,12 @@ export class VirtualStandardSlave implements VirtualSlavePort {
 
   /** Whether the slave has been terminated */
   private terminated = false;
+
+  /** Asset synchronization tracking */
+  private expectedAssetCount = 0;
+  private expectedAssetIds = new Set<number>();
+  private receivedAssetIds = new Set<number>();
+  private assetsReadySent = false;
 
   constructor(options: VirtualSlaveOptions = {}) {
     this.deferMessages = options.deferMessages ?? true;
@@ -112,6 +126,8 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     try {
       if (isInitMessage(message)) {
         this.handleInit();
+      } else if (isPrepareAssetsMessage(message)) {
+        this.handlePrepareAssets(message);
       } else if (isBatchMessage(message)) {
         // Handle async batch rendering
         void this.handleBatch(message.layers, message.width, message.height);
@@ -139,6 +155,34 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     if (message.assetType === 'image') {
       // Asset data for images is always ImageBitmap after decoding
       this.renderSlave.registerAsset(message.id, message.data as ImageBitmap);
+
+      // Track received assets for synchronization
+      if (this.expectedAssetIds.has(message.id)) {
+        this.receivedAssetIds.add(message.id);
+
+        // Check if all expected assets have been received
+        if (!this.assetsReadySent && this.receivedAssetIds.size === this.expectedAssetCount) {
+          this.assetsReadySent = true;
+          this.sendAssetsReady();
+        }
+      }
+    }
+  }
+
+  /**
+   * Handle prepare-assets message from Master.
+   * Sets up tracking for expected assets and sends ready immediately if count is zero.
+   */
+  private handlePrepareAssets(message: PrepareAssetsMessage): void {
+    this.expectedAssetCount = message.expectedCount;
+    this.expectedAssetIds = new Set(message.assetIds);
+    this.receivedAssetIds.clear();
+    this.assetsReadySent = false;
+
+    // If expecting zero assets, immediately signal ready
+    if (this.expectedAssetCount === 0) {
+      this.assetsReadySent = true;
+      this.sendAssetsReady();
     }
   }
 
@@ -218,6 +262,17 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   private sendReady(): void {
     const msg: ReadyMessage = {
       type: 'ready',
+    };
+    this.dispatchMessage(msg);
+  }
+
+  /**
+   * Send assets-ready message.
+   * Indicates that all expected assets have been received.
+   */
+  private sendAssetsReady(): void {
+    const msg: AssetsReadyMessage = {
+      type: 'assets-ready',
     };
     this.dispatchMessage(msg);
   }

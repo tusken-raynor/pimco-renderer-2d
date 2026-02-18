@@ -18,7 +18,13 @@ import { RenderSlave } from '../js/render-slave';
 import { batchSegmentResults } from '../js/render-slave/batch-segmenter';
 import { probeCapabilities } from '../js/renderer/capability-probe';
 import { wrapError } from '../js/errors';
-import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../js/types';
+import {
+  isInitMessage,
+  isBatchMessage,
+  isAbortMessage,
+  isAssetDataMessage,
+  isPrepareAssetsMessage,
+} from '../js/types';
 import type {
   MasterToSlaveMessage,
   AssetManagerToSlaveMessage,
@@ -26,8 +32,10 @@ import type {
   ResultMessage,
   ErrorMessage,
   ReadyMessage,
+  AssetsReadyMessage,
   RenderSegment,
   LayerDescriptor,
+  PrepareAssetsMessage,
 } from '../js/types';
 
 // Create the render slave instance
@@ -35,6 +43,12 @@ const renderSlave = new RenderSlave();
 
 // Track the asset manager port for receiving assets
 let assetPort: MessagePort | null = null;
+
+// Asset synchronization tracking
+let expectedAssetCount = 0;
+let expectedAssetIds = new Set<number>();
+let receivedAssetIds = new Set<number>();
+let assetsReadySent = false;
 
 /**
  * Send capabilities message to master.
@@ -55,6 +69,17 @@ function sendCapabilities(): void {
 function sendReady(): void {
   const msg: ReadyMessage = {
     type: 'ready',
+  };
+  self.postMessage(msg);
+}
+
+/**
+ * Send assets-ready message to master.
+ * Indicates that all expected assets have been received.
+ */
+function sendAssetsReady(): void {
+  const msg: AssetsReadyMessage = {
+    type: 'assets-ready',
   };
   self.postMessage(msg);
 }
@@ -101,6 +126,35 @@ function handleAssetData(message: AssetManagerToSlaveMessage): void {
   // Only handle image assets (standard slave doesn't need fonts or meshes)
   if (message.assetType === 'image' && message.data instanceof ImageBitmap) {
     renderSlave.registerAsset(message.id, message.data);
+
+    // Track received assets for synchronization
+    if (expectedAssetIds.has(message.id)) {
+      receivedAssetIds.add(message.id);
+
+      // Check if all expected assets have been received
+      if (!assetsReadySent && receivedAssetIds.size === expectedAssetCount) {
+        assetsReadySent = true;
+        sendAssetsReady();
+      }
+    }
+  }
+}
+
+/**
+ * Handle prepare-assets message from Master.
+ * Sets up tracking for expected assets and sends ready immediately if count is zero.
+ * @param message - Prepare assets message
+ */
+function handlePrepareAssets(message: PrepareAssetsMessage): void {
+  expectedAssetCount = message.expectedCount;
+  expectedAssetIds = new Set(message.assetIds);
+  receivedAssetIds.clear();
+  assetsReadySent = false;
+
+  // If expecting zero assets, immediately signal ready
+  if (expectedAssetCount === 0) {
+    assetsReadySent = true;
+    sendAssetsReady();
   }
 }
 
@@ -176,6 +230,8 @@ self.onmessage = async (event: MessageEvent<MasterToSlaveMessage>) => {
   try {
     if (isInitMessage(message)) {
       handleInit();
+    } else if (isPrepareAssetsMessage(message)) {
+      handlePrepareAssets(message);
     } else if (isBatchMessage(message)) {
       await handleBatch(message.layers, message.width, message.height);
     } else if (isAbortMessage(message)) {

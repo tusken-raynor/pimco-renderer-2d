@@ -44,6 +44,7 @@ import {
   isErrorMessage,
   isFetchCompleteMessage,
   isDistributeCompleteMessage,
+  isAssetsReadyMessage,
 } from '../types';
 import { isStandardLayerMask, isTextLayerMask } from '../types/pimco';
 import { classifyLayers, type ClassificationResult } from './layer-classifier';
@@ -121,6 +122,8 @@ interface SlaveState {
   renderResolver: ((segments: RenderSegment[]) => void) | null;
   /** Current render promise rejecter */
   renderRejecter: ((error: Error) => void) | null;
+  /** Assets-ready confirmation resolver (for synchronization) */
+  assetsReadyResolver: (() => void) | null;
 }
 
 /**
@@ -310,6 +313,7 @@ export class RenderMaster {
         assetChannel,
         renderResolver: null,
         renderRejecter: null,
+        assetsReadyResolver: null,
       };
 
       // Create ready promise
@@ -378,6 +382,7 @@ export class RenderMaster {
         assetChannel,
         renderResolver: null,
         renderRejecter: null,
+        assetsReadyResolver: null,
       };
 
       // Create ready promise
@@ -447,6 +452,7 @@ export class RenderMaster {
         assetChannel,
         renderResolver: null,
         renderRejecter: null,
+        assetsReadyResolver: null,
       };
 
       // Create ready promise
@@ -515,6 +521,7 @@ export class RenderMaster {
         assetChannel,
         renderResolver: null,
         renderRejecter: null,
+        assetsReadyResolver: null,
       };
 
       // Create ready promise
@@ -581,6 +588,15 @@ export class RenderMaster {
   private handleSlaveMessage(slave: SlaveState, message: SlaveToMasterMessage): void {
     if (isCapabilitiesMessage(message)) {
       slave.capabilities = message;
+      return;
+    }
+
+    if (isAssetsReadyMessage(message)) {
+      // Slave has confirmed receipt of all expected assets
+      if (slave.assetsReadyResolver) {
+        slave.assetsReadyResolver();
+        slave.assetsReadyResolver = null;
+      }
       return;
     }
 
@@ -1049,19 +1065,70 @@ export class RenderMaster {
     const slaveAssetIds = this.collectSlaveAssetIds(distribution);
     const textSlaveAssetIds = this.collectTextSlaveAssetIds(textDistribution);
 
-    // Distribute assets to all slaves (standard and text)
+    // Build deliveries and prepare-assets messages for all slaves
     const deliveries: AssetDelivery[] = [];
-    for (const [slaveId, assetIds] of slaveAssetIds) {
+    const assetsReadyPromises: Promise<void>[] = [];
+
+    // Send prepare-assets to standard slaves and set up confirmation tracking
+    for (const slave of this.slaves) {
+      const assetIds = slaveAssetIds.get(slave.id) ?? [];
+
+      // Create promise for assets-ready confirmation
+      const readyPromise = new Promise<void>((resolve) => {
+        if (assetIds.length === 0) {
+          // No assets expected, resolve immediately (slave will also send ready immediately)
+          resolve();
+        } else {
+          slave.assetsReadyResolver = resolve;
+        }
+      });
+      assetsReadyPromises.push(readyPromise);
+
+      // Send prepare-assets message to slave
+      slave.worker.postMessage({
+        type: 'prepare-assets',
+        expectedCount: assetIds.length,
+        assetIds,
+      });
+
       if (assetIds.length > 0) {
-        deliveries.push({ slaveId, assetIds });
+        deliveries.push({ slaveId: slave.id, assetIds });
       }
     }
-    for (const [slaveId, assetIds] of textSlaveAssetIds) {
+
+    // Send prepare-assets to text slaves and set up confirmation tracking
+    for (const textSlave of this.textSlaves) {
+      const assetIds = textSlaveAssetIds.get(textSlave.id) ?? [];
+
+      // Create promise for assets-ready confirmation
+      const readyPromise = new Promise<void>((resolve) => {
+        if (assetIds.length === 0) {
+          // No assets expected, resolve immediately (slave will also send ready immediately)
+          resolve();
+        } else {
+          textSlave.assetsReadyResolver = resolve;
+        }
+      });
+      assetsReadyPromises.push(readyPromise);
+
+      // Send prepare-assets message to text slave
+      textSlave.worker.postMessage({
+        type: 'prepare-assets',
+        expectedCount: assetIds.length,
+        assetIds,
+      });
+
       if (assetIds.length > 0) {
-        deliveries.push({ slaveId, assetIds });
+        deliveries.push({ slaveId: textSlave.id, assetIds });
       }
     }
+
+    // Distribute assets to all slaves (via Asset Manager)
     await this.distributeAssets(deliveries);
+
+    // Wait for all slaves to confirm asset receipt before sending batch messages
+    // This prevents the race condition where batch messages arrive before assets
+    await Promise.all(assetsReadyPromises);
 
     // Check for abort again (signal may be aborted during await above)
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition

@@ -21,7 +21,13 @@
 import { TextRenderSlave } from '../js/text-render-slave';
 import { probeCapabilities } from '../js/renderer/capability-probe';
 import { wrapError } from '../js/errors';
-import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../js/types';
+import {
+  isInitMessage,
+  isBatchMessage,
+  isAbortMessage,
+  isAssetDataMessage,
+  isPrepareAssetsMessage,
+} from '../js/types';
 import type {
   MasterToSlaveMessage,
   AssetManagerToSlaveMessage,
@@ -29,8 +35,10 @@ import type {
   ResultMessage,
   ErrorMessage,
   ReadyMessage,
+  AssetsReadyMessage,
   RenderSegment,
   TextLayerDescriptor,
+  PrepareAssetsMessage,
 } from '../js/types';
 
 // Import effects for routing
@@ -61,6 +69,12 @@ let assetPort: MessagePort | null = null;
 // Track capabilities for effect routing
 let hasWebGL2 = false;
 
+// Asset synchronization tracking
+let expectedAssetCount = 0;
+let expectedAssetIds = new Set<number>();
+let receivedAssetIds = new Set<number>();
+let assetsReadySent = false;
+
 /**
  * Send capabilities message to master.
  */
@@ -82,6 +96,17 @@ function sendCapabilities(): void {
 function sendReady(): void {
   const msg: ReadyMessage = {
     type: 'ready',
+  };
+  self.postMessage(msg);
+}
+
+/**
+ * Send assets-ready message to master.
+ * Indicates that all expected assets have been received.
+ */
+function sendAssetsReady(): void {
+  const msg: AssetsReadyMessage = {
+    type: 'assets-ready',
   };
   self.postMessage(msg);
 }
@@ -133,6 +158,35 @@ function handleAssetData(message: AssetManagerToSlaveMessage): void {
     // For now, use a placeholder - in production, extend the message protocol
     // to include font family information
     textRenderSlave.registerFont(message.id, `font-${String(message.id)}`, message.data);
+  }
+
+  // Track received assets for synchronization
+  if (expectedAssetIds.has(message.id)) {
+    receivedAssetIds.add(message.id);
+
+    // Check if all expected assets have been received
+    if (!assetsReadySent && receivedAssetIds.size === expectedAssetCount) {
+      assetsReadySent = true;
+      sendAssetsReady();
+    }
+  }
+}
+
+/**
+ * Handle prepare-assets message from Master.
+ * Sets up tracking for expected assets and sends ready immediately if count is zero.
+ * @param message - Prepare assets message
+ */
+function handlePrepareAssets(message: PrepareAssetsMessage): void {
+  expectedAssetCount = message.expectedCount;
+  expectedAssetIds = new Set(message.assetIds);
+  receivedAssetIds.clear();
+  assetsReadySent = false;
+
+  // If expecting zero assets, immediately signal ready
+  if (expectedAssetCount === 0) {
+    assetsReadySent = true;
+    sendAssetsReady();
   }
 }
 
@@ -411,6 +465,8 @@ self.onmessage = async (event: MessageEvent<MasterToSlaveMessage>) => {
   try {
     if (isInitMessage(message)) {
       handleInit();
+    } else if (isPrepareAssetsMessage(message)) {
+      handlePrepareAssets(message);
     } else if (isBatchMessage(message)) {
       // The batch message contains layers, but for text slaves these should be TextLayerDescriptors
       // The master is responsible for routing the correct layer type to the correct slave

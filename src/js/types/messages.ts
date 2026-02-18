@@ -42,9 +42,21 @@ export interface AbortMessage {
 }
 
 /**
+ * Prepare slave to receive a specific set of assets.
+ * Sent before asset distribution to enable synchronization.
+ */
+export interface PrepareAssetsMessage {
+  type: 'prepare-assets';
+  /** Number of assets the slave should expect to receive */
+  expectedCount: number;
+  /** Asset IDs the slave should expect */
+  assetIds: number[];
+}
+
+/**
  * Union type for all messages from Master to Slave.
  */
-export type MasterToSlaveMessage = InitMessage | BatchMessage | AbortMessage;
+export type MasterToSlaveMessage = InitMessage | BatchMessage | AbortMessage | PrepareAssetsMessage;
 
 // =============================================================================
 // Slave → Master Messages
@@ -91,13 +103,22 @@ export interface ErrorMessage {
 }
 
 /**
+ * Slave has received all expected assets and is ready to render.
+ * Sent after processing all asset-data messages specified in prepare-assets.
+ */
+export interface AssetsReadyMessage {
+  type: 'assets-ready';
+}
+
+/**
  * Union type for all messages from Slave to Master.
  */
 export type SlaveToMasterMessage =
   | ReadyMessage
   | CapabilitiesMessage
   | ResultMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | AssetsReadyMessage;
 
 // =============================================================================
 // Master → Asset Manager Messages
@@ -444,6 +465,20 @@ export function isDistributeCompleteMessage(msg: unknown): msg is DistributeComp
  */
 export function isAssetDataMessage(msg: unknown): msg is AssetDataMessage {
   return isMessageOfType(msg, 'asset-data');
+}
+
+/**
+ * Type guard for PrepareAssetsMessage.
+ */
+export function isPrepareAssetsMessage(msg: unknown): msg is PrepareAssetsMessage {
+  return isMessageOfType(msg, 'prepare-assets');
+}
+
+/**
+ * Type guard for AssetsReadyMessage.
+ */
+export function isAssetsReadyMessage(msg: unknown): msg is AssetsReadyMessage {
+  return isMessageOfType(msg, 'assets-ready');
 }
 
 /**
