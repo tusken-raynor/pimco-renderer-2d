@@ -284,7 +284,18 @@ async function renderTextLayer(
   const alignment: TextAlignment = maskData.type?.alignment ?? 'center';
 
   if (hasActiveTransform(maskData.transform)) {
-    applyTransformAndDraw(outputCtx, effectCanvas, maskData.transform, width, height, alignment);
+    // Pass the rasterized text width for alignment offset calculation
+    // This is critical because effectCanvas is full-sized but alignment offset
+    // should be based on the original text width
+    applyTransformAndDraw(
+      outputCtx,
+      effectCanvas,
+      maskData.transform,
+      width,
+      height,
+      alignment,
+      rasterized.width
+    );
   } else {
     outputCtx.drawImage(effectCanvas, 0, 0);
   }
