@@ -12,6 +12,14 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
+    proxy: {
+      '/show-imgs': {
+        target: 'https://nokona-configurator-assets.nyc3.digitaloceanspaces.com',
+        changeOrigin: true,
+        secure: false,
+        ws: false,
+      },
+    },
   },
   build: {
     outDir: resolve(__dirname, 'dist'),
