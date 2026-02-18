@@ -129,7 +129,7 @@ Implement the bug fix with appropriate testing to verify the issue is resolved.
 
 ---
 
-### [ ] Step: Create PR For Review
+### [x] Step: Create PR For Review
 <!-- chat-id: 175970b1-650d-4c72-82e7-80fe47665884 -->
 
 Create GitHub pull request and send notification via ntfy.
