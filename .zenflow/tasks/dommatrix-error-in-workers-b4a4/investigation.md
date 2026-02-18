@@ -19,7 +19,13 @@ The `DOMMatrix` constructor has two forms:
    - A numeric array `[a, b, c, d, e, f]` for 2D or 16 values for 3D (works everywhere)
    - A CSS transform string like `"translate(10px, 20px) rotate(45deg)"` (**only works in main thread**)
 
-The CSS string parsing relies on the CSS parser, which is not available in Web Worker contexts. This is a known browser limitation.
+The CSS string parsing relies on the CSS parser, which is not available in Web Worker contexts. This is **by design per the W3C specification**, not a browser bug.
+
+**References:**
+- [MDN content issue #10351](https://github.com/mdn/content/issues/10351) - Documents this limitation
+- [W3C fxtf-drafts issue #346](https://github.com/w3c/fxtf-drafts/issues/346) - Discusses it as a "code portability footgun"
+
+**Key insight:** `DOMMatrix` *is* available in workers. The `new DOMMatrix()` constructor and all methods like `.translate()`, `.scale()`, `.rotate()` work fine. Only the **string argument** to the constructor fails because it requires CSS parsing infrastructure.
 
 ### Location of the Bug
 
