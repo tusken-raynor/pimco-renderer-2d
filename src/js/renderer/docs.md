@@ -506,6 +506,98 @@ interface CompositorContext {
 
 ---
 
+## SoftwareCompositor (`software-compositor.ts`)
+
+The SoftwareCompositor provides ImageData-based composition for Scenario F, where neither OffscreenCanvas nor Canvas is available (worker context without OffscreenCanvas support).
+
+### Purpose
+
+In Scenario F, the renderer runs in a worker context without OffscreenCanvas support. Since canvas APIs are unavailable, composition must be performed entirely in software using pixel buffer operations.
+
+### How It Works
+
+1. **Pixel Buffers**: Uses Float32Array for precision during blending calculations
+2. **Blend Operations**: Implements all Canvas composite operations in software
+3. **Conversion**: Converts between ImageBitmap, PixelBuffer, and ImageData
+
+### Supported Blend Operations
+
+| Category | Operations |
+|----------|------------|
+| Porter-Duff | `source-over`, `source-in`, `source-out`, `source-atop`, `destination-over`, `destination-in`, `destination-out`, `destination-atop`, `copy`, `xor` |
+| Blend Modes | `multiply`, `screen`, `overlay`, `darken`, `lighten`, `lighter`, `color-dodge`, `color-burn`, `hard-light`, `soft-light`, `difference`, `exclusion` |
+
+### Interface
+
+```typescript
+// Pixel buffer for software composition
+interface PixelBuffer {
+  data: Float32Array;  // RGBA values normalized to 0-1
+  width: number;
+  height: number;
+}
+
+// Create an empty pixel buffer
+function createPixelBuffer(width: number, height: number): PixelBuffer;
+
+// Convert ImageBitmap to pixel buffer
+function imageBitmapToPixelBuffer(
+  bitmap: ImageBitmap,
+  targetWidth: number,
+  targetHeight: number
+): PixelBuffer;
+
+// Convert pixel buffer to ImageBitmap
+function pixelBufferToImageBitmap(buffer: PixelBuffer): Promise<ImageBitmap>;
+
+// Blend source buffer onto destination
+function blendBuffers(
+  dst: PixelBuffer,
+  src: PixelBuffer,
+  operation: CanvasCompositeOperation,
+  alpha: number
+): void;
+
+// Compose segments using software blending
+function composeSoftware(
+  segments: RenderSegment[],
+  width: number,
+  height: number
+): Promise<ImageBitmap>;
+
+// Class API for managed composition
+class SoftwareCompositor {
+  compose(segments: RenderSegment[], width: number, height: number): Promise<ImageBitmap>;
+  destroy(): void;
+}
+```
+
+### Usage
+
+```typescript
+import { SoftwareCompositor } from './software-compositor';
+
+const compositor = new SoftwareCompositor();
+
+// Compose segments
+const result = await compositor.compose(segments, 1024, 1024);
+
+// Cleanup
+compositor.destroy();
+```
+
+### Performance Considerations
+
+The software compositor is significantly slower than canvas-based composition because:
+
+1. Every pixel is processed in JavaScript
+2. No GPU acceleration
+3. ImageBitmap extraction requires a temporary canvas when available
+
+This is a fallback path for browsers with very limited support. Modern browsers should use Scenarios A-E with canvas-based composition.
+
+---
+
 ## Tests
 
 Unit tests in `index.test.ts` cover:
@@ -531,6 +623,28 @@ Unit tests in `index.test.ts` cover:
 3. **Error Handling**:
    - AbortError creation and properties
    - WorkerError handling
+
+Unit tests in `software-compositor.test.ts` cover:
+
+1. **Pixel Buffer Operations**:
+   - Buffer creation with correct dimensions
+   - Initialization to transparent black
+   - Float-to-byte conversion with clamping
+
+2. **Blend Operations**:
+   - Source-over (Porter-Duff)
+   - Multiply, screen, overlay blend modes
+   - Darken, lighten, lighter modes
+   - Color-dodge, color-burn modes
+   - Hard-light, soft-light modes
+   - Difference, exclusion modes
+   - Porter-Duff composites (source-in, destination-in, xor, etc.)
+
+3. **SoftwareCompositor Class**:
+   - Buffer reuse for same dimensions
+   - Buffer recreation for different dimensions
+   - Multi-segment composition
+   - Resource cleanup
 
 ---
 
