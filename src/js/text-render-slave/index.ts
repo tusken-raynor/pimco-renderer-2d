@@ -410,6 +410,7 @@ export function textResultsToSegments(results: TextLayerResult[]): RenderSegment
     bitmap: r.bitmap,
     compositemode: r.compositemode,
     compositealpha: r.compositealpha,
+    orderIndex: r.index,
   }));
 }
 

@@ -123,7 +123,8 @@ export class VirtualStandardSlave implements VirtualSlavePort {
       if (isInitMessage(message)) {
         this.handleInit();
       } else if (isBatchMessage(message)) {
-        this.handleBatch(message.layers, message.width, message.height);
+        // Handle async batch rendering
+        void this.handleBatch(message.layers, message.indices, message.width, message.height);
       } else if (isAbortMessage(message)) {
         this.handleAbort();
       }
@@ -164,16 +165,12 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   /**
    * Handle batch message - delegate to coordinator.
    */
-  private handleBatch(layers: LayerDescriptor[], width: number, height: number): void {
-    this.renderSlave.resetAbort();
-    this.batchCoordinator.handleBatch(layers, width, height);
-  }
-
-  /**
-   * Execute rendering when batch and assets are ready.
-   */
-  private async executeRender(batch: PendingBatch<LayerDescriptor>): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  private async handleBatch(
+    layers: LayerDescriptor[],
+    indices: number[],
+    width: number,
+    height: number
+  ): Promise<void> {
     if (this.terminated) {
       return;
     }
@@ -181,7 +178,8 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     const { layers, width, height } = batch;
 
     try {
-      const results = await this.renderSlave.renderBatch(layers, width, height);
+      // Render all layers in the batch with original indices
+      const results = await this.renderSlave.renderBatch(layers, width, height, indices);
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.renderSlave.isAborted() || this.terminated) {

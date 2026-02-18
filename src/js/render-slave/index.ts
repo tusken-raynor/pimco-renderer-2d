@@ -282,12 +282,14 @@ export class RenderSlave {
    * @param layers - Array of layer descriptors
    * @param width - Canvas width
    * @param height - Canvas height
+   * @param indices - Optional original layer indices for composition ordering
    * @returns Array of layer results (in original order)
    */
   async renderBatch(
     layers: LayerDescriptor[],
     width: number,
-    height: number
+    height: number,
+    indices?: number[]
   ): Promise<LayerResult[]> {
     this.resetAbort();
     const results: LayerResult[] = [];
@@ -298,7 +300,9 @@ export class RenderSlave {
         break;
       }
 
-      const result = await this.renderLayer(layers[i], width, height, i);
+      // Use original index from indices array if provided, otherwise use local index
+      const originalIndex = indices?.[i] ?? i;
+      const result = await this.renderLayer(layers[i], width, height, originalIndex);
       if (result) {
         results.push(result);
       }
@@ -338,5 +342,6 @@ export function resultsToSegments(results: LayerResult[]): RenderSegment[] {
     bitmap: r.bitmap,
     compositemode: r.compositemode,
     compositealpha: r.compositealpha,
+    orderIndex: r.index,
   }));
 }

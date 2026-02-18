@@ -855,11 +855,27 @@ export class RenderMaster {
   }
 
   /**
+   * Build a map from original pimco layer index to approved order index.
+   * The approved order index is the position in classification.all, which
+   * represents the continuous z-order of all layers that will be rendered.
+   * This ensures that skipped/failed layers don't create gaps in the index sequence.
+   */
+  private buildOrderIndexMap(classification: ClassificationResult): Map<number, number> {
+    const orderIndexMap = new Map<number, number>();
+    for (let i = 0; i < classification.all.length; i++) {
+      // Map original pimco index -> position in approved layer list
+      orderIndexMap.set(classification.all[i].index, i);
+    }
+    return orderIndexMap;
+  }
+
+  /**
    * Distribute standard layers across available standard slaves.
-   * Returns a map of slave ID to layer descriptors and original indices.
+   * Returns a map of slave ID to layer descriptors and order indices.
    */
   private distributeLayersToSlaves(
-    classification: ClassificationResult
+    classification: ClassificationResult,
+    orderIndexMap: Map<number, number>
   ): Map<number, { descriptors: LayerDescriptor[]; indices: number[] }> {
     const distribution = new Map<number, { descriptors: LayerDescriptor[]; indices: number[] }>();
 
@@ -876,10 +892,13 @@ export class RenderMaster {
       const layerInfo = standardLayers[i];
       const descriptor = this.layerToDescriptor(layerInfo.layer);
 
+      // Use order index (position in approved list) not raw pimco index
+      const orderIndex = orderIndexMap.get(layerInfo.index) ?? i;
+
       const slaveData = distribution.get(slave.id);
       if (slaveData) {
         slaveData.descriptors.push(descriptor);
-        slaveData.indices.push(layerInfo.index);
+        slaveData.indices.push(orderIndex);
       }
     }
 
@@ -888,10 +907,11 @@ export class RenderMaster {
 
   /**
    * Distribute text layers across available text slaves.
-   * Returns a map of slave ID to text layer descriptors and original indices.
+   * Returns a map of slave ID to text layer descriptors and order indices.
    */
   private distributeTextLayersToSlaves(
-    classification: ClassificationResult
+    classification: ClassificationResult,
+    orderIndexMap: Map<number, number>
   ): Map<number, { descriptors: TextLayerDescriptor[]; indices: number[] }> {
     const distribution = new Map<
       number,
@@ -924,10 +944,13 @@ export class RenderMaster {
 
       const descriptor = this.textLayerToDescriptor(layerInfo.layer, maskData);
 
+      // Use order index (position in approved list) not raw pimco index
+      const orderIndex = orderIndexMap.get(layerInfo.index) ?? i;
+
       const slaveData = distribution.get(slave.id);
       if (slaveData) {
         slaveData.descriptors.push(descriptor);
-        slaveData.indices.push(layerInfo.index);
+        slaveData.indices.push(orderIndex);
       }
     }
 
@@ -1056,9 +1079,12 @@ export class RenderMaster {
       throw new AbortError('Render aborted');
     }
 
+    // Build order index map for continuous z-order indices
+    const orderIndexMap = this.buildOrderIndexMap(classification);
+
     // Distribute layers to slaves
-    const distribution = this.distributeLayersToSlaves(classification);
-    const textDistribution = this.distributeTextLayersToSlaves(classification);
+    const distribution = this.distributeLayersToSlaves(classification, orderIndexMap);
+    const textDistribution = this.distributeTextLayersToSlaves(classification, orderIndexMap);
 
     // Collect asset IDs for each slave
     const slaveAssetIds = this.collectSlaveAssetIds(distribution);
@@ -1139,10 +1165,11 @@ export class RenderMaster {
 
       slavePromises.push(slavePromise);
 
-      // Send batch to slave
+      // Send batch to slave with original indices for ordering
       slave.worker.postMessage({
         type: 'batch',
         layers: slaveData.descriptors,
+        indices: slaveData.indices,
         width: renderWidth,
         height: renderHeight,
       });
@@ -1172,6 +1199,7 @@ export class RenderMaster {
       textSlave.worker.postMessage({
         type: 'batch',
         layers: slaveData.descriptors,
+        indices: slaveData.indices,
         width: renderWidth,
         height: renderHeight,
       });
@@ -1197,23 +1225,17 @@ export class RenderMaster {
         throw new AbortError('Render aborted');
       }
 
-      // Build composed layers with original indices
+      // Build composed layers with original indices from segments
       const composedLayers: ComposedLayer[] = [];
 
-      for (const { slaveId, segments, isTextSlave } of slaveResults) {
-        // Get the correct assignments based on slave type
-        const indices = isTextSlave
-          ? (textSlaveAssignments.get(slaveId) ?? [])
-          : (slaveAssignments.get(slaveId) ?? []);
-
-        // Each segment corresponds to one or more original layers
-        // Since we use batch segmentation, segments may be grouped
-        // For now, we assign segments sequentially to original indices
-        for (let i = 0; i < segments.length; i++) {
-          const originalIndex = indices[i] ?? i;
+      for (const { segments } of slaveResults) {
+        // Each segment carries its orderIndex - the highest original layer index
+        // in the segment. This correctly handles batch segmentation where multiple
+        // layers may be combined into one segment.
+        for (const segment of segments) {
           composedLayers.push({
-            segment: segments[i],
-            originalIndex,
+            segment,
+            originalIndex: segment.orderIndex,
           });
         }
       }

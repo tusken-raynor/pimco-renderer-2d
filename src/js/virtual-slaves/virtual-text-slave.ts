@@ -147,6 +147,7 @@ export class VirtualTextSlave implements VirtualSlavePort {
       } else if (isBatchMessage(message)) {
         this.handleBatch(
           message.layers as unknown as TextLayerDescriptor[],
+          message.indices,
           message.width,
           message.height
         );
@@ -367,8 +368,12 @@ export class VirtualTextSlave implements VirtualSlavePort {
   /**
    * Execute rendering when batch and assets are ready.
    */
-  private async executeRender(batch: PendingBatch<TextLayerDescriptor>): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  private async handleBatch(
+    layers: TextLayerDescriptor[],
+    indices: number[],
+    width: number,
+    height: number
+  ): Promise<void> {
     if (this.terminated) {
       return;
     }
@@ -384,12 +389,17 @@ export class VirtualTextSlave implements VirtualSlavePort {
           break;
         }
 
-        const result = await this.renderTextLayer(layers[i], width, height, i);
+        // Use original index from indices array for correct composition ordering
+        const originalIndex = indices[i] ?? i;
+        const result = await this.renderTextLayer(layers[i], width, height, originalIndex);
         if (result) {
+          // Text slaves don't batch layers, so each layer is its own segment
+          // with orderIndex set to the original layer index
           results.push({
             bitmap: result.bitmap,
             compositemode: result.compositemode as RenderSegment['compositemode'],
             compositealpha: result.compositealpha,
+            orderIndex: originalIndex,
           });
         }
       }

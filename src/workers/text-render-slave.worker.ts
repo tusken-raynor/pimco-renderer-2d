@@ -312,10 +312,21 @@ async function renderTextLayer(
 }
 
 /**
- * Execute rendering when batch and assets are ready.
+ * Handle batch message - render all text layers and return segments.
+ * @param layers - Text layer descriptors to render
+ * @param indices - Original layer indices for ordering
+ * @param width - Canvas width
+ * @param height - Canvas height
  */
-async function executeRender(batch: PendingBatch<TextLayerDescriptor>): Promise<void> {
-  const { layers, width, height } = batch;
+async function handleBatch(
+  layers: TextLayerDescriptor[],
+  indices: number[],
+  width: number,
+  height: number
+): Promise<void> {
+  try {
+    // Reset abort flag for new batch
+    textRenderSlave.resetAbort();
 
   try {
     const results: RenderSegment[] = [];
@@ -325,12 +336,17 @@ async function executeRender(batch: PendingBatch<TextLayerDescriptor>): Promise<
         break;
       }
 
-      const result = await renderTextLayer(layers[i], width, height, i);
+      // Use original index from indices array for correct composition ordering
+      const originalIndex = indices[i] ?? i;
+      const result = await renderTextLayer(layers[i], width, height, originalIndex);
       if (result) {
+        // Text slaves don't batch layers, so each layer is its own segment
+        // with orderIndex set to the original layer index
         results.push({
           bitmap: result.bitmap,
           compositemode: result.compositemode as RenderSegment['compositemode'],
           compositealpha: result.compositealpha,
+          orderIndex: originalIndex,
         });
       }
     }
@@ -381,7 +397,14 @@ self.onmessage = (event: MessageEvent<MasterToSlaveMessage>) => {
     if (isInitMessage(message)) {
       handleInit();
     } else if (isBatchMessage(message)) {
-      handleBatch(message.layers as unknown as TextLayerDescriptor[], message.width, message.height);
+      // The batch message contains layers, but for text slaves these should be TextLayerDescriptors
+      // The master is responsible for routing the correct layer type to the correct slave
+      await handleBatch(
+        message.layers as unknown as TextLayerDescriptor[],
+        message.indices,
+        message.width,
+        message.height
+      );
     } else if (isAbortMessage(message)) {
       handleAbort();
     }

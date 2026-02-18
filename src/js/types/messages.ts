@@ -28,6 +28,8 @@ export interface BatchMessage {
   type: 'batch';
   /** Layers to render with asset IDs resolved */
   layers: LayerDescriptor[];
+  /** Original layer indices for each layer in the batch (for composition ordering) */
+  indices: number[];
   /** Output canvas width */
   width: number;
   /** Output canvas height */
@@ -239,6 +241,12 @@ export interface RenderSegment {
   compositemode: CanvasCompositeOperation;
   /** Composite opacity for this segment (0-1) */
   compositealpha: number;
+  /**
+   * Original layer index for ordering during final composition.
+   * When multiple layers are combined into one segment, this is the
+   * highest (topmost) layer index in the segment.
+   */
+  orderIndex: number;
 }
 
 /**

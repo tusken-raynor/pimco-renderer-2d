@@ -48,6 +48,8 @@ export function isCombinableMode(mode: CanvasCompositeOperation): boolean {
 interface PendingSegment {
   /** Layer results in this segment */
   layers: LayerResult[];
+  /** Original layer indices included in this segment */
+  originalIndices: number[];
   /** Composite mode for this segment (from first layer) */
   compositemode: CanvasCompositeOperation;
   /** Composite alpha for this segment (from first layer) */
@@ -75,11 +77,20 @@ export function segmentLayerResults(results: LayerResult[]): PendingSegment[] {
   for (const result of results) {
     const isCombinable = isCombinableMode(result.compositemode);
 
-    if (isCombinable) {
-      // Combinable mode: try to add to current segment
+    // Check for index gap - if there's a gap in indices, we must break the segment
+    // because another slave (e.g., text slave) has layers that need to be
+    // sandwiched between these layers during final composition
+    const hasIndexGap =
+      current !== null &&
+      current.originalIndices.length > 0 &&
+      result.index !== current.originalIndices[current.originalIndices.length - 1] + 1;
+
+    if (isCombinable && !hasIndexGap) {
+      // Combinable mode with no index gap: try to add to current segment
       if (current && isCombinableMode(current.compositemode)) {
         // Extend current combinable segment
         current.layers.push(result);
+        current.originalIndices.push(result.index);
       } else {
         // Start new combinable segment
         if (current) {
@@ -87,23 +98,36 @@ export function segmentLayerResults(results: LayerResult[]): PendingSegment[] {
         }
         current = {
           layers: [result],
+          originalIndices: [result.index],
           compositemode: result.compositemode,
           compositealpha: result.compositealpha,
         };
       }
     } else {
-      // Non-combinable mode: must be standalone segment
+      // Non-combinable mode OR index gap: must start new segment
       if (current) {
         segments.push(current);
       }
-      // Create standalone segment for this layer
-      current = {
-        layers: [result],
-        compositemode: result.compositemode,
-        compositealpha: result.compositealpha,
-      };
-      segments.push(current);
-      current = null;
+
+      if (isCombinable) {
+        // Combinable mode but had index gap - start new combinable segment
+        current = {
+          layers: [result],
+          originalIndices: [result.index],
+          compositemode: result.compositemode,
+          compositealpha: result.compositealpha,
+        };
+      } else {
+        // Non-combinable mode: standalone segment
+        current = {
+          layers: [result],
+          originalIndices: [result.index],
+          compositemode: result.compositemode,
+          compositealpha: result.compositealpha,
+        };
+        segments.push(current);
+        current = null;
+      }
     }
   }
 
@@ -224,12 +248,16 @@ export async function batchSegmentResults(
   const ctx = createSegmentationContext(width, height);
 
   for (const pending of pendingSegments) {
+    // Use the highest original index as the orderIndex (topmost layer in segment)
+    const orderIndex = Math.max(...pending.originalIndices);
+
     if (pending.layers.length === 1) {
       // Single layer segment - no composition needed
       segments.push({
         bitmap: pending.layers[0].bitmap,
         compositemode: pending.compositemode,
         compositealpha: pending.compositealpha,
+        orderIndex,
       });
     } else {
       // Multi-layer segment - compose into single bitmap
@@ -238,6 +266,7 @@ export async function batchSegmentResults(
         bitmap: composedBitmap,
         compositemode: pending.compositemode,
         compositealpha: pending.compositealpha,
+        orderIndex,
       });
     }
   }

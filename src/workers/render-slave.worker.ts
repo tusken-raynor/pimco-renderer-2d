@@ -164,12 +164,19 @@ function handleInit(): void {
 /**
  * Handle batch message - delegate to coordinator.
  * @param layers - Layer descriptors to render
+ * @param indices - Original layer indices for ordering
  * @param width - Canvas width
  * @param height - Canvas height
  */
-function handleBatch(layers: LayerDescriptor[], width: number, height: number): void {
-  // Reset abort flag for new batch
-  renderSlave.resetAbort();
+async function handleBatch(
+  layers: LayerDescriptor[],
+  indices: number[],
+  width: number,
+  height: number
+): Promise<void> {
+  try {
+    // Render all layers in the batch with original indices
+    const results = await renderSlave.renderBatch(layers, width, height, indices);
 
   // Delegate to coordinator
   batchCoordinator.handleBatch(layers, width, height);
@@ -203,7 +210,7 @@ self.onmessage = (event: MessageEvent<MasterToSlaveMessage>) => {
     if (isInitMessage(message)) {
       handleInit();
     } else if (isBatchMessage(message)) {
-      handleBatch(message.layers, message.width, message.height);
+      await handleBatch(message.layers, message.indices, message.width, message.height);
     } else if (isAbortMessage(message)) {
       handleAbort();
     }
