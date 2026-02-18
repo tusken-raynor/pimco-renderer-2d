@@ -312,21 +312,18 @@ async function renderTextLayer(
 }
 
 /**
- * Handle batch message - render all text layers and return segments.
- * @param layers - Text layer descriptors to render
- * @param indices - Original layer indices for ordering
- * @param width - Canvas width
- * @param height - Canvas height
+ * Store pending indices for the current batch (PendingBatch doesn't include them).
  */
-async function handleBatch(
-  layers: TextLayerDescriptor[],
-  indices: number[],
-  width: number,
-  height: number
-): Promise<void> {
-  try {
-    // Reset abort flag for new batch
-    textRenderSlave.resetAbort();
+let pendingIndices: number[] = [];
+
+/**
+ * Execute rendering when batch and assets are ready.
+ * Called by batchCoordinator when a batch is ready to render.
+ * @param batch - Pending batch with layers, dimensions, and required asset IDs
+ */
+async function executeRender(batch: PendingBatch<TextLayerDescriptor>): Promise<void> {
+  const { layers, width, height } = batch;
+  const indices = pendingIndices;
 
   try {
     const results: RenderSegment[] = [];
@@ -365,9 +362,20 @@ async function handleBatch(
 
 /**
  * Handle batch message - delegate to coordinator.
+ * @param layers - Text layer descriptors to render
+ * @param indices - Original layer indices for ordering
+ * @param width - Canvas width
+ * @param height - Canvas height
  */
-function handleBatch(layers: TextLayerDescriptor[], width: number, height: number): void {
+function handleBatch(
+  layers: TextLayerDescriptor[],
+  indices: number[],
+  width: number,
+  height: number
+): void {
   textRenderSlave.resetAbort();
+  // Store indices separately since PendingBatch doesn't include them
+  pendingIndices = indices;
   batchCoordinator.handleBatch(layers, width, height);
 }
 
@@ -399,7 +407,7 @@ self.onmessage = (event: MessageEvent<MasterToSlaveMessage>) => {
     } else if (isBatchMessage(message)) {
       // The batch message contains layers, but for text slaves these should be TextLayerDescriptors
       // The master is responsible for routing the correct layer type to the correct slave
-      await handleBatch(
+      handleBatch(
         message.layers as unknown as TextLayerDescriptor[],
         message.indices,
         message.width,

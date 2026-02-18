@@ -88,6 +88,9 @@ export class VirtualTextSlave implements VirtualSlavePort {
   /** WebGL2 availability (cached for effect routing) */
   private hasWebGL2 = false;
 
+  /** Pending indices for the current batch (stored separately from PendingBatch) */
+  private pendingIndices: number[] = [];
+
   constructor(options: VirtualSlaveOptions = {}) {
     this.deferMessages = options.deferMessages ?? true;
     this.textRenderSlave = new TextRenderSlave();
@@ -201,10 +204,13 @@ export class VirtualTextSlave implements VirtualSlavePort {
    */
   private handleBatch(
     layers: TextLayerDescriptor[],
+    indices: number[],
     width: number,
     height: number
   ): void {
     this.textRenderSlave.resetAbort();
+    // Store indices separately since PendingBatch doesn't include them
+    this.pendingIndices = indices;
     this.batchCoordinator.handleBatch(layers, width, height);
   }
 
@@ -368,17 +374,18 @@ export class VirtualTextSlave implements VirtualSlavePort {
   /**
    * Execute rendering when batch and assets are ready.
    */
-  private async handleBatch(
-    layers: TextLayerDescriptor[],
-    indices: number[],
-    width: number,
-    height: number
-  ): Promise<void> {
+  /**
+   * Execute rendering when batch and assets are ready.
+   * Called by batchCoordinator when a batch is ready to render.
+   */
+  private async executeRender(batch: PendingBatch<TextLayerDescriptor>): Promise<void> {
     if (this.terminated) {
       return;
     }
 
     const { layers, width, height } = batch;
+    // Use the stored indices from handleBatch
+    const indices = this.pendingIndices;
 
     try {
       const results: RenderSegment[] = [];
