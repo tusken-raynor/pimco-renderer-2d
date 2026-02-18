@@ -7,10 +7,17 @@
  *
  * The virtual slave provides the same MessagePort interface as a real worker,
  * allowing it to be used interchangeably by the RenderMaster.
+ *
+ * Synchronization:
+ * The slave waits until both conditions are met before rendering:
+ * 1. A batch message has been received from the master
+ * 2. All assets referenced in the batch (non-negative IDs) have been received
+ * Either the batch arrival or an asset arrival can trigger rendering.
  */
 
 import { RenderSlave } from '../render-slave';
 import { batchSegmentResults } from '../render-slave/batch-segmenter';
+import { createStandardBatchCoordinator, type PendingBatch } from '../render-slave/batch-coordinator';
 import { probeCapabilities } from '../renderer/capability-probe';
 import { wrapError } from '../errors';
 import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../types';
@@ -38,6 +45,9 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   /** Internal render slave instance */
   private renderSlave: RenderSlave;
 
+  /** Batch coordinator for synchronizing batch and asset arrival */
+  private batchCoordinator;
+
   /** Message handler */
   onmessage: ((event: MessageEvent<SlaveToMasterMessage>) => void) | null = null;
 
@@ -56,14 +66,17 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   constructor(options: VirtualSlaveOptions = {}) {
     this.deferMessages = options.deferMessages ?? true;
     this.renderSlave = new RenderSlave();
+
+    // Create batch coordinator with render callback
+    this.batchCoordinator = createStandardBatchCoordinator(
+      this.renderSlave,
+      (batch) => void this.executeRender(batch)
+    );
   }
 
   /**
    * Post a message to the virtual slave.
    * Emulates Worker.postMessage() behavior.
-   *
-   * @param message - Message to handle
-   * @param transfer - Transferable objects (ports are extracted, others ignored)
    */
   postMessage(message: MasterToSlaveMessage, transfer?: Transferable[]): void {
     if (this.terminated) {
@@ -92,9 +105,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
 
   /**
    * Handle an incoming message.
-   *
-   * @param message - The message to handle
-   * @param ports - Any MessagePorts transferred with the message
    */
   private handleMessage(message: MasterToSlaveMessage, ports: MessagePort[]): void {
     if (this.terminated) {
@@ -113,8 +123,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
       if (isInitMessage(message)) {
         this.handleInit();
       } else if (isBatchMessage(message)) {
-        // Handle async batch rendering
-        void this.handleBatch(message.layers, message.width, message.height);
+        this.handleBatch(message.layers, message.width, message.height);
       } else if (isAbortMessage(message)) {
         this.handleAbort();
       }
@@ -137,8 +146,10 @@ export class VirtualStandardSlave implements VirtualSlavePort {
 
     // Only handle image assets (standard slave doesn't need fonts or meshes)
     if (message.assetType === 'image') {
-      // Asset data for images is always ImageBitmap after decoding
       this.renderSlave.registerAsset(message.id, message.data as ImageBitmap);
+
+      // Notify coordinator that an asset was received
+      this.batchCoordinator.handleAssetReceived();
     }
   }
 
@@ -151,38 +162,39 @@ export class VirtualStandardSlave implements VirtualSlavePort {
   }
 
   /**
-   * Handle batch message - render all layers and return segments.
+   * Handle batch message - delegate to coordinator.
    */
-  private async handleBatch(
-    layers: LayerDescriptor[],
-    width: number,
-    height: number
-  ): Promise<void> {
+  private handleBatch(layers: LayerDescriptor[], width: number, height: number): void {
+    this.renderSlave.resetAbort();
+    this.batchCoordinator.handleBatch(layers, width, height);
+  }
+
+  /**
+   * Execute rendering when batch and assets are ready.
+   */
+  private async executeRender(batch: PendingBatch<LayerDescriptor>): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (this.terminated) {
       return;
     }
 
+    const { layers, width, height } = batch;
+
     try {
-      // Render all layers in the batch
       const results = await this.renderSlave.renderBatch(layers, width, height);
 
-      // Check if we were aborted during async rendering
-      // (state may change during await - disable lint)
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.renderSlave.isAborted() || this.terminated) {
         return;
       }
 
-      // Convert to optimized segments with batching
       const segments = await batchSegmentResults(results, width, height);
 
-      // Check abort again after async segmentation
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.renderSlave.isAborted() || this.terminated) {
         return;
       }
 
-      // Send result
       this.sendResult(segments);
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -197,6 +209,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
    */
   private handleAbort(): void {
     this.renderSlave.abort();
+    this.batchCoordinator.clear();
   }
 
   /**
@@ -287,7 +300,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    // Only 'message' event type is supported
     void type;
     this.messageListeners.add(listener);
   }
@@ -299,7 +311,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     type: 'message',
     listener: (event: MessageEvent<SlaveToMasterMessage>) => void
   ): void {
-    // Only 'message' event type is supported
     void type;
     this.messageListeners.delete(listener);
   }
@@ -315,6 +326,7 @@ export class VirtualStandardSlave implements VirtualSlavePort {
     this.terminated = true;
     this.renderSlave.abort();
     this.renderSlave.destroy();
+    this.batchCoordinator.clear();
     this.onmessage = null;
     this.onerror = null;
     this.messageListeners.clear();
@@ -329,10 +341,6 @@ export class VirtualStandardSlave implements VirtualSlavePort {
 
   /**
    * Directly register an asset (bypasses MessagePort).
-   * Useful for testing or when not using Asset Manager.
-   *
-   * @param id - Asset ID
-   * @param bitmap - Asset ImageBitmap
    */
   registerAssetDirect(id: number, bitmap: ImageBitmap): void {
     if (!this.terminated) {
