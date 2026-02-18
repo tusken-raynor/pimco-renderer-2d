@@ -511,6 +511,254 @@ describe('hasActiveTransform', () => {
   });
 });
 
+/**
+ * Test that verifies the numeric matrix construction matches the legacy CSS string approach.
+ * This is the critical regression test for the transformation order bug.
+ *
+ * CSS transform strings are evaluated RIGHT-TO-LEFT:
+ *   translate(tx, ty) scale(sx, sy) rotate(r) translate(offset, 0)
+ * is evaluated as:
+ *   1. translate(offset, 0)  - alignment offset FIRST
+ *   2. rotate(r)             - rotation SECOND
+ *   3. scale(sx, sy)         - scale THIRD
+ *   4. translate(tx, ty)     - position LAST
+ *
+ * DOMMatrix method chaining is LEFT-TO-RIGHT, so to match we must call:
+ *   matrix.translate(offset, 0).rotate(r).scale(sx, sy).translate(tx, ty)
+ */
+describe('buildTransformMatrix matches CSS string-based DOMMatrix', () => {
+  const canvasWidth = 1000;
+  const canvasHeight = 800;
+  const sourceWidth = 200;
+
+  /**
+   * Build a DOMMatrix using the legacy CSS string approach.
+   * This is what the old code did and produces correct results.
+   */
+  function buildCSSStringMatrix(
+    translateX: number,
+    translateY: number,
+    scaleX: number,
+    scaleY: number,
+    rotation: number,
+    alignmentOffset: number
+  ): DOMMatrix {
+    // The old code calculated center position like this:
+    const centerX = canvasWidth * 0.5 + translateX;
+    const centerY = canvasHeight * 0.5 + translateY;
+
+    // Build scale string
+    let scaleStr = '';
+    if (scaleX !== 1 || scaleY !== 1) {
+      scaleStr = `scale(${scaleX}, ${scaleY})`;
+    }
+
+    // Build rotation string
+    let rotateStr = '';
+    if (rotation !== 0) {
+      rotateStr = `rotate(${rotation}deg)`;
+    }
+
+    // Build the CSS transform string exactly as the old code did
+    const cssString = `translate(${centerX}px, ${centerY}px) ${scaleStr} ${rotateStr} translate(${alignmentOffset}px, 0px)`;
+
+    return new DOMMatrix(cssString);
+  }
+
+  it('should match CSS string matrix with identity transform', () => {
+    const parsed = {
+      translateX: 0,
+      translateY: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+    };
+    const alignmentOffset = 0;
+
+    const numericMatrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);
+    const cssMatrix = buildCSSStringMatrix(0, 0, 1, 1, 0, 0);
+
+    expect(numericMatrix.a).toBeCloseTo(cssMatrix.a, 5);
+    expect(numericMatrix.b).toBeCloseTo(cssMatrix.b, 5);
+    expect(numericMatrix.c).toBeCloseTo(cssMatrix.c, 5);
+    expect(numericMatrix.d).toBeCloseTo(cssMatrix.d, 5);
+    expect(numericMatrix.e).toBeCloseTo(cssMatrix.e, 5);
+    expect(numericMatrix.f).toBeCloseTo(cssMatrix.f, 5);
+  });
+
+  it('should match CSS string matrix with translation only', () => {
+    const parsed = {
+      translateX: 100,
+      translateY: -50,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+    };
+    const alignmentOffset = 0;
+
+    const numericMatrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);
+    const cssMatrix = buildCSSStringMatrix(100, -50, 1, 1, 0, 0);
+
+    expect(numericMatrix.a).toBeCloseTo(cssMatrix.a, 5);
+    expect(numericMatrix.b).toBeCloseTo(cssMatrix.b, 5);
+    expect(numericMatrix.c).toBeCloseTo(cssMatrix.c, 5);
+    expect(numericMatrix.d).toBeCloseTo(cssMatrix.d, 5);
+    expect(numericMatrix.e).toBeCloseTo(cssMatrix.e, 5);
+    expect(numericMatrix.f).toBeCloseTo(cssMatrix.f, 5);
+  });
+
+  it('should match CSS string matrix with scale only', () => {
+    const parsed = {
+      translateX: 0,
+      translateY: 0,
+      rotation: 0,
+      scaleX: 2,
+      scaleY: 0.5,
+    };
+    const alignmentOffset = 0;
+
+    const numericMatrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);
+    const cssMatrix = buildCSSStringMatrix(0, 0, 2, 0.5, 0, 0);
+
+    expect(numericMatrix.a).toBeCloseTo(cssMatrix.a, 5);
+    expect(numericMatrix.b).toBeCloseTo(cssMatrix.b, 5);
+    expect(numericMatrix.c).toBeCloseTo(cssMatrix.c, 5);
+    expect(numericMatrix.d).toBeCloseTo(cssMatrix.d, 5);
+    expect(numericMatrix.e).toBeCloseTo(cssMatrix.e, 5);
+    expect(numericMatrix.f).toBeCloseTo(cssMatrix.f, 5);
+  });
+
+  it('should match CSS string matrix with rotation only', () => {
+    const parsed = {
+      translateX: 0,
+      translateY: 0,
+      rotation: 45,
+      scaleX: 1,
+      scaleY: 1,
+    };
+    const alignmentOffset = 0;
+
+    const numericMatrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);
+    const cssMatrix = buildCSSStringMatrix(0, 0, 1, 1, 45, 0);
+
+    expect(numericMatrix.a).toBeCloseTo(cssMatrix.a, 5);
+    expect(numericMatrix.b).toBeCloseTo(cssMatrix.b, 5);
+    expect(numericMatrix.c).toBeCloseTo(cssMatrix.c, 5);
+    expect(numericMatrix.d).toBeCloseTo(cssMatrix.d, 5);
+    expect(numericMatrix.e).toBeCloseTo(cssMatrix.e, 5);
+    expect(numericMatrix.f).toBeCloseTo(cssMatrix.f, 5);
+  });
+
+  it('should match CSS string matrix with alignment offset only', () => {
+    const parsed = {
+      translateX: 0,
+      translateY: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+    };
+    const alignmentOffset = sourceWidth / 2; // Left alignment
+
+    const numericMatrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);
+    const cssMatrix = buildCSSStringMatrix(0, 0, 1, 1, 0, alignmentOffset);
+
+    expect(numericMatrix.a).toBeCloseTo(cssMatrix.a, 5);
+    expect(numericMatrix.b).toBeCloseTo(cssMatrix.b, 5);
+    expect(numericMatrix.c).toBeCloseTo(cssMatrix.c, 5);
+    expect(numericMatrix.d).toBeCloseTo(cssMatrix.d, 5);
+    expect(numericMatrix.e).toBeCloseTo(cssMatrix.e, 5);
+    expect(numericMatrix.f).toBeCloseTo(cssMatrix.f, 5);
+  });
+
+  it('should match CSS string matrix with rotation and alignment offset', () => {
+    // This is the key test case that reveals the bug:
+    // When rotation is applied, the alignment offset should be rotated too
+    const parsed = {
+      translateX: 0,
+      translateY: 0,
+      rotation: 90,
+      scaleX: 1,
+      scaleY: 1,
+    };
+    const alignmentOffset = 100; // Left alignment offset
+
+    const numericMatrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);
+    const cssMatrix = buildCSSStringMatrix(0, 0, 1, 1, 90, alignmentOffset);
+
+    expect(numericMatrix.a).toBeCloseTo(cssMatrix.a, 5);
+    expect(numericMatrix.b).toBeCloseTo(cssMatrix.b, 5);
+    expect(numericMatrix.c).toBeCloseTo(cssMatrix.c, 5);
+    expect(numericMatrix.d).toBeCloseTo(cssMatrix.d, 5);
+    expect(numericMatrix.e).toBeCloseTo(cssMatrix.e, 5);
+    expect(numericMatrix.f).toBeCloseTo(cssMatrix.f, 5);
+  });
+
+  it('should match CSS string matrix with scale and alignment offset', () => {
+    // Another key test: scale should affect the alignment offset
+    const parsed = {
+      translateX: 0,
+      translateY: 0,
+      rotation: 0,
+      scaleX: 2,
+      scaleY: 1,
+    };
+    const alignmentOffset = 100;
+
+    const numericMatrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);
+    const cssMatrix = buildCSSStringMatrix(0, 0, 2, 1, 0, alignmentOffset);
+
+    expect(numericMatrix.a).toBeCloseTo(cssMatrix.a, 5);
+    expect(numericMatrix.b).toBeCloseTo(cssMatrix.b, 5);
+    expect(numericMatrix.c).toBeCloseTo(cssMatrix.c, 5);
+    expect(numericMatrix.d).toBeCloseTo(cssMatrix.d, 5);
+    expect(numericMatrix.e).toBeCloseTo(cssMatrix.e, 5);
+    expect(numericMatrix.f).toBeCloseTo(cssMatrix.f, 5);
+  });
+
+  it('should match CSS string matrix with full transform (translation, scale, rotation, alignment)', () => {
+    // Full complex transform - this is the most comprehensive test
+    const parsed = {
+      translateX: 100,
+      translateY: -50,
+      rotation: 45,
+      scaleX: 2,
+      scaleY: 1.5,
+    };
+    const alignmentOffset = 100; // Left alignment
+
+    const numericMatrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);
+    const cssMatrix = buildCSSStringMatrix(100, -50, 2, 1.5, 45, alignmentOffset);
+
+    expect(numericMatrix.a).toBeCloseTo(cssMatrix.a, 5);
+    expect(numericMatrix.b).toBeCloseTo(cssMatrix.b, 5);
+    expect(numericMatrix.c).toBeCloseTo(cssMatrix.c, 5);
+    expect(numericMatrix.d).toBeCloseTo(cssMatrix.d, 5);
+    expect(numericMatrix.e).toBeCloseTo(cssMatrix.e, 5);
+    expect(numericMatrix.f).toBeCloseTo(cssMatrix.f, 5);
+  });
+
+  it('should match CSS string matrix with negative rotation and right alignment', () => {
+    const parsed = {
+      translateX: 0,
+      translateY: 0,
+      rotation: -30,
+      scaleX: 1,
+      scaleY: 1,
+    };
+    const alignmentOffset = -100; // Right alignment
+
+    const numericMatrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);
+    const cssMatrix = buildCSSStringMatrix(0, 0, 1, 1, -30, alignmentOffset);
+
+    expect(numericMatrix.a).toBeCloseTo(cssMatrix.a, 5);
+    expect(numericMatrix.b).toBeCloseTo(cssMatrix.b, 5);
+    expect(numericMatrix.c).toBeCloseTo(cssMatrix.c, 5);
+    expect(numericMatrix.d).toBeCloseTo(cssMatrix.d, 5);
+    expect(numericMatrix.e).toBeCloseTo(cssMatrix.e, 5);
+    expect(numericMatrix.f).toBeCloseTo(cssMatrix.f, 5);
+  });
+});
+
 describe('applyTransformAndDraw', () => {
   let mockCtx: CanvasRenderingContext2D;
   let mockSource: { width: number; height: number };
