@@ -183,9 +183,6 @@ export class RenderMaster {
   /** Asset ID mapping */
   private assetMapping: AssetMapping;
 
-  /** URLs that have failed to load (404 or other errors) */
-  private failedUrls: Set<string> = new Set();
-
   /** Current pending render */
   private pendingRender: PendingRender | null = null;
 
@@ -621,17 +618,12 @@ export class RenderMaster {
 
   /**
    * Get or create an asset ID for a URL.
-   * Returns -1 for URLs that have previously failed to load.
+   * Returns -1 for URLs that have previously failed to load (stored as -1 in urlToId).
    */
   private getAssetId(url: string): number {
-    // Return -1 for known failed URLs to prevent re-requesting
-    if (this.failedUrls.has(url)) {
-      return -1;
-    }
-
     const existing = this.assetMapping.urlToId.get(url);
     if (existing !== undefined) {
-      return existing;
+      return existing; // Returns -1 for failed URLs, positive ID for successful ones
     }
 
     const id = this.assetMapping.nextId++;
@@ -667,21 +659,24 @@ export class RenderMaster {
 
   /**
    * Extract all asset URLs from layers and create fetch requests.
-   * Skips URLs that have previously failed to load.
+   * Skips URLs that have previously failed to load (ID of -1 in urlToId map).
    */
   private extractAssetRequests(layers: ProductImageComponent[]): AssetRequest[] {
     const requests: AssetRequest[] = [];
     const seen = new Set<string>();
 
     const addImageRequest = (url: string | undefined): void => {
-      // Skip known failed URLs to prevent re-requesting
-      if (url && !seen.has(url) && !this.failedUrls.has(url)) {
-        seen.add(url);
-        requests.push({
-          id: this.getAssetId(url),
-          url,
-          assetType: 'image',
-        });
+      if (url && !seen.has(url)) {
+        const id = this.getAssetId(url);
+        // Skip known failed URLs (ID of -1) to prevent re-requesting
+        if (id !== -1) {
+          seen.add(url);
+          requests.push({
+            id,
+            url,
+            assetType: 'image',
+          });
+        }
       }
     };
 
@@ -1046,11 +1041,12 @@ export class RenderMaster {
       const failedUrlsList = failedAssets.map((id) => this.assetMapping.idToUrl.get(id) ?? String(id));
       console.warn('Some assets failed to load:', failedUrlsList);
 
-      // Mark these URLs as failed so they won't be re-requested on subsequent renders
+      // Mark these URLs as failed by setting their ID to -1 in urlToId map
+      // This prevents re-requesting on subsequent renders
       for (const id of failedAssets) {
         const url = this.assetMapping.idToUrl.get(id);
         if (url) {
-          this.failedUrls.add(url);
+          this.assetMapping.urlToId.set(url, -1);
         }
       }
     }
@@ -1400,10 +1396,9 @@ export class RenderMaster {
     // (Virtual slaves use the main thread WebGL context)
     destroyWebGLBuddy();
 
-    // Clear asset mapping and failed URLs
+    // Clear asset mapping
     this.assetMapping.urlToId.clear();
     this.assetMapping.idToUrl.clear();
-    this.failedUrls.clear();
   }
 }
 
