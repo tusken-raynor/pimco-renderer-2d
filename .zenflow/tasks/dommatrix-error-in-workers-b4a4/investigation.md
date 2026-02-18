@@ -133,6 +133,54 @@ export function buildTransformMatrix(
    - `old-src-ref/` (legacy reference code)
    - Test files (mocks)
 
+## Implementation Notes
+
+### Changes Made
+
+**File: `src/js/text-render-slave/transforms.ts`**
+
+Replaced the CSS string-based `DOMMatrix` construction with method chaining:
+
+```typescript
+// Before (broken in workers):
+return new DOMMatrix(transformParts.join(' '));
+
+// After (works in all contexts):
+let matrix = new DOMMatrix();
+matrix = matrix.translate(centerX, centerY);
+if (parsed.scaleX !== 1 || parsed.scaleY !== 1) {
+  matrix = matrix.scale(parsed.scaleX, parsed.scaleY);
+}
+if (parsed.rotation !== 0) {
+  matrix = matrix.rotate(parsed.rotation);
+}
+if (alignmentOffset !== 0) {
+  matrix = matrix.translate(alignmentOffset, 0);
+}
+return matrix;
+```
+
+**File: `src/js/text-render-slave/transforms.test.ts`**
+
+Updated the mock `DOMMatrix` to support method-based operations (`translate()`, `scale()`, `rotate()`) in addition to the legacy string parsing. This ensures tests work with both approaches.
+
+### Key Points
+
+1. **Same mathematical result**: The method-based approach produces identical transformation matrices to the CSS string approach
+2. **No API changes**: The `buildTransformMatrix` function signature and return type remain unchanged
+3. **Backwards compatible**: Existing code calling this function continues to work without modification
+
 ## Test Results
 
-To be completed during implementation phase.
+All tests pass:
+
+```
+ ✓ src/js/text-render-slave/transforms.test.ts (48 tests) 6ms
+```
+
+Full test suite (711 tests passing, 93 skipped - skips are pre-existing):
+
+```
+ Test Files  27 passed (27)
+      Tests  711 passed | 93 skipped (804)
+```

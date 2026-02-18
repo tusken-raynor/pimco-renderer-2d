@@ -174,30 +174,32 @@ export function buildTransformMatrix(
   const centerX = canvasWidth * 0.5 + parsed.translateX;
   const centerY = canvasHeight * 0.5 + parsed.translateY;
 
-  // Build the transform string in the order: translate, scale, rotate, alignment
-  // Note: CSS transform order is right-to-left, so we write left-to-right for visual clarity
-  const transformParts: string[] = [];
+  // Build the transform matrix using numeric operations.
+  // This approach works in Web Workers where DOMMatrix string parsing is not available.
+  // Transform order: translate, scale, rotate, alignment (applied left-to-right)
+
+  // Start with identity matrix
+  let matrix = new DOMMatrix();
 
   // 1. Translate to center + offset
-  transformParts.push(`translate(${String(centerX)}px, ${String(centerY)}px)`);
+  matrix = matrix.translate(centerX, centerY);
 
-  // 2. Scale
+  // 2. Scale (if non-identity)
   if (parsed.scaleX !== 1 || parsed.scaleY !== 1) {
-    transformParts.push(`scale(${String(parsed.scaleX)}, ${String(parsed.scaleY)})`);
+    matrix = matrix.scale(parsed.scaleX, parsed.scaleY);
   }
 
-  // 3. Rotate
+  // 3. Rotate (if non-zero) - DOMMatrix.rotate() takes degrees
   if (parsed.rotation !== 0) {
-    transformParts.push(`rotate(${String(parsed.rotation)}deg)`);
+    matrix = matrix.rotate(parsed.rotation);
   }
 
   // 4. Alignment offset (moves the origin for left/right aligned text)
   if (alignmentOffset !== 0) {
-    transformParts.push(`translate(${String(alignmentOffset)}px, 0px)`);
+    matrix = matrix.translate(alignmentOffset, 0);
   }
 
-  // Create DOMMatrix from the combined transform string
-  return new DOMMatrix(transformParts.join(' '));
+  return matrix;
 }
 
 /**

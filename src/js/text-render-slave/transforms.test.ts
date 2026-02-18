@@ -18,9 +18,19 @@ import type { PimcoMaskSubstitutionTransformation } from '../types/pimco';
 /**
  * Mock DOMMatrix for Node.js environment.
  * This provides a minimal implementation for testing transform calculations.
+ * Supports both string-based (legacy) and method-based (worker-compatible) construction.
  */
+interface MockDOMMatrixValues {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+}
+
 function createMockDOMMatrix(init?: string | number[]): DOMMatrix {
-  const matrix = {
+  const values: MockDOMMatrixValues = {
     a: 1,
     b: 0,
     c: 0,
@@ -41,8 +51,8 @@ function createMockDOMMatrix(init?: string | number[]): DOMMatrix {
         if (translateMatch) {
           const tx = parseFloat(translateMatch[1]);
           const ty = parseFloat(translateMatch[2]);
-          matrix.e += matrix.a * tx + matrix.c * ty;
-          matrix.f += matrix.b * tx + matrix.d * ty;
+          values.e += values.a * tx + values.c * ty;
+          values.f += values.b * tx + values.d * ty;
         }
       } else if (t.startsWith('scale(')) {
         const scaleRegex = /scale\((-?[\d.]+)(?:,\s*(-?[\d.]+))?\)/;
@@ -50,10 +60,10 @@ function createMockDOMMatrix(init?: string | number[]): DOMMatrix {
         if (scaleMatch) {
           const sx = parseFloat(scaleMatch[1]);
           const sy = scaleMatch[2] ? parseFloat(scaleMatch[2]) : sx;
-          matrix.a *= sx;
-          matrix.b *= sx;
-          matrix.c *= sy;
-          matrix.d *= sy;
+          values.a *= sx;
+          values.b *= sx;
+          values.c *= sy;
+          values.d *= sy;
         }
       } else if (t.startsWith('rotate(')) {
         const rotateRegex = /rotate\((-?[\d.]+)deg\)/;
@@ -62,20 +72,75 @@ function createMockDOMMatrix(init?: string | number[]): DOMMatrix {
           const angle = (parseFloat(rotateMatch[1]) * Math.PI) / 180;
           const cos = Math.cos(angle);
           const sin = Math.sin(angle);
-          const a = matrix.a;
-          const b = matrix.b;
-          const c = matrix.c;
-          const d = matrix.d;
-          matrix.a = a * cos + c * sin;
-          matrix.b = b * cos + d * sin;
-          matrix.c = c * cos - a * sin;
-          matrix.d = d * cos - b * sin;
+          const a = values.a;
+          const b = values.b;
+          const c = values.c;
+          const d = values.d;
+          values.a = a * cos + c * sin;
+          values.b = b * cos + d * sin;
+          values.c = c * cos - a * sin;
+          values.d = d * cos - b * sin;
         }
       }
     }
   } else if (Array.isArray(init) && init.length === 6) {
-    [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f] = init;
+    [values.a, values.b, values.c, values.d, values.e, values.f] = init;
   }
+
+  // Create an object with the matrix values and methods that return new matrices
+  const matrix = {
+    ...values,
+
+    /**
+     * Returns a new DOMMatrix with a translation applied.
+     * The translation is applied by multiplying: this * translate(tx, ty)
+     */
+    translate(tx: number, ty: number): DOMMatrix {
+      const result = createMockDOMMatrix();
+      result.a = this.a;
+      result.b = this.b;
+      result.c = this.c;
+      result.d = this.d;
+      result.e = this.e + this.a * tx + this.c * ty;
+      result.f = this.f + this.b * tx + this.d * ty;
+      return result;
+    },
+
+    /**
+     * Returns a new DOMMatrix with a scale applied.
+     * The scale is applied by multiplying: this * scale(sx, sy)
+     */
+    scale(sx: number, sy?: number): DOMMatrix {
+      const scaleY = sy ?? sx;
+      const result = createMockDOMMatrix();
+      result.a = this.a * sx;
+      result.b = this.b * sx;
+      result.c = this.c * scaleY;
+      result.d = this.d * scaleY;
+      result.e = this.e;
+      result.f = this.f;
+      return result;
+    },
+
+    /**
+     * Returns a new DOMMatrix with a rotation applied.
+     * The rotation is applied by multiplying: this * rotate(angle)
+     * @param angle - Rotation angle in degrees
+     */
+    rotate(angle: number): DOMMatrix {
+      const radians = (angle * Math.PI) / 180;
+      const cos = Math.cos(radians);
+      const sin = Math.sin(radians);
+      const result = createMockDOMMatrix();
+      result.a = this.a * cos + this.c * sin;
+      result.b = this.b * cos + this.d * sin;
+      result.c = this.c * cos - this.a * sin;
+      result.d = this.d * cos - this.b * sin;
+      result.e = this.e;
+      result.f = this.f;
+      return result;
+    },
+  };
 
   return matrix as unknown as DOMMatrix;
 }
