@@ -12,10 +12,17 @@
  *
  * The worker also receives asset-data messages from the Asset Manager via
  * a separate MessagePort registered by the master.
+ *
+ * Synchronization:
+ * The slave waits until both conditions are met before rendering:
+ * 1. A batch message has been received from the master
+ * 2. All assets referenced in the batch (non-negative IDs) have been received
+ * Either the batch arrival or an asset arrival can trigger rendering.
  */
 
 import { RenderSlave } from '../js/render-slave';
 import { batchSegmentResults } from '../js/render-slave/batch-segmenter';
+import { createStandardBatchCoordinator, type PendingBatch } from '../js/render-slave/batch-coordinator';
 import { probeCapabilities } from '../js/renderer/capability-probe';
 import { wrapError } from '../js/errors';
 import { isInitMessage, isBatchMessage, isAbortMessage, isAssetDataMessage } from '../js/types';
@@ -35,6 +42,12 @@ const renderSlave = new RenderSlave();
 
 // Track the asset manager port for receiving assets
 let assetPort: MessagePort | null = null;
+
+// Create batch coordinator with render callback
+const batchCoordinator = createStandardBatchCoordinator(
+  renderSlave,
+  (batch) => void executeRender(batch)
+);
 
 /**
  * Send capabilities message to master.
@@ -90,48 +103,18 @@ function sendError(error: unknown): void {
 }
 
 /**
- * Handle asset data message from Asset Manager.
- * @param message - Asset data message
+ * Execute rendering when batch and assets are ready.
+ * @param batch - Pending batch with all required assets available
  */
-function handleAssetData(message: AssetManagerToSlaveMessage): void {
-  if (!isAssetDataMessage(message)) {
-    return;
-  }
+async function executeRender(batch: PendingBatch<LayerDescriptor>): Promise<void> {
+  const { layers, width, height } = batch;
 
-  // Only handle image assets (standard slave doesn't need fonts or meshes)
-  if (message.assetType === 'image' && message.data instanceof ImageBitmap) {
-    renderSlave.registerAsset(message.id, message.data);
-  }
-}
-
-/**
- * Handle init message - probe capabilities and report ready.
- */
-function handleInit(): void {
-  sendCapabilities();
-  sendReady();
-}
-
-/**
- * Handle batch message - render all layers and return segments.
- * @param layers - Layer descriptors to render
- * @param indices - Original layer indices for ordering
- * @param width - Canvas width
- * @param height - Canvas height
- */
-async function handleBatch(
-  layers: LayerDescriptor[],
-  indices: number[],
-  width: number,
-  height: number
-): Promise<void> {
   try {
-    // Render all layers in the batch with original indices
-    const results = await renderSlave.renderBatch(layers, width, height, indices);
+    // Render all layers in the batch
+    const results = await renderSlave.renderBatch(layers, width, height);
 
     // Check if we were aborted during rendering
     if (renderSlave.isAborted()) {
-      // Don't send result if aborted
       return;
     }
 
@@ -153,16 +136,64 @@ async function handleBatch(
 }
 
 /**
+ * Handle asset data message from Asset Manager.
+ * @param message - Asset data message
+ */
+function handleAssetData(message: AssetManagerToSlaveMessage): void {
+  if (!isAssetDataMessage(message)) {
+    return;
+  }
+
+  // Only handle image assets (standard slave doesn't need fonts or meshes)
+  if (message.assetType === 'image' && message.data instanceof ImageBitmap) {
+    renderSlave.registerAsset(message.id, message.data);
+
+    // Notify coordinator that an asset was received
+    batchCoordinator.handleAssetReceived();
+  }
+}
+
+/**
+ * Handle init message - probe capabilities and report ready.
+ */
+function handleInit(): void {
+  sendCapabilities();
+  sendReady();
+}
+
+/**
+ * Handle batch message - delegate to coordinator.
+ * @param layers - Layer descriptors to render
+ * @param indices - Original layer indices for ordering
+ * @param width - Canvas width
+ * @param height - Canvas height
+ */
+async function handleBatch(
+  layers: LayerDescriptor[],
+  indices: number[],
+  width: number,
+  height: number
+): Promise<void> {
+  try {
+    // Render all layers in the batch with original indices
+    const results = await renderSlave.renderBatch(layers, width, height, indices);
+
+  // Delegate to coordinator
+  batchCoordinator.handleBatch(layers, width, height);
+}
+
+/**
  * Handle abort message - cancel current rendering.
  */
 function handleAbort(): void {
   renderSlave.abort();
+  batchCoordinator.clear();
 }
 
 /**
  * Handle incoming messages from the Master.
  */
-self.onmessage = async (event: MessageEvent<MasterToSlaveMessage>) => {
+self.onmessage = (event: MessageEvent<MasterToSlaveMessage>) => {
   const message = event.data;
 
   // Check if this is a port transfer for asset manager communication
@@ -208,12 +239,10 @@ self.onunhandledrejection = (event: PromiseRejectionEvent) => {
 
 /**
  * Cleanup function for worker termination.
- * Note: This is called when the worker is about to be terminated via Worker.terminate().
- * In practice, the browser handles memory cleanup, but we do explicit cleanup for
- * orderly shutdown and to support testing scenarios.
  */
 function cleanup(): void {
   renderSlave.destroy();
+  batchCoordinator.clear();
   if (assetPort) {
     assetPort.onmessage = null;
     assetPort.close();
