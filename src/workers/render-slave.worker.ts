@@ -103,15 +103,21 @@ function sendError(error: unknown): void {
 }
 
 /**
+ * Store pending indices for the current batch (PendingBatch doesn't include them).
+ */
+let pendingIndices: number[] = [];
+
+/**
  * Execute rendering when batch and assets are ready.
  * @param batch - Pending batch with all required assets available
  */
 async function executeRender(batch: PendingBatch<LayerDescriptor>): Promise<void> {
   const { layers, width, height } = batch;
+  const indices = pendingIndices;
 
   try {
     // Render all layers in the batch
-    const results = await renderSlave.renderBatch(layers, width, height);
+    const results = await renderSlave.renderBatch(layers, width, height, indices);
 
     // Check if we were aborted during rendering
     if (renderSlave.isAborted()) {
@@ -164,17 +170,19 @@ function handleInit(): void {
 /**
  * Handle batch message - delegate to coordinator.
  * @param layers - Layer descriptors to render
- * @param _indices - Original layer indices (not used, stored separately if needed)
+ * @param indices - Original layer indices for composition ordering
  * @param width - Canvas width
  * @param height - Canvas height
  */
 function handleBatch(
   layers: LayerDescriptor[],
-  _indices: number[],
+  indices: number[],
   width: number,
   height: number
 ): void {
   renderSlave.resetAbort();
+  // Store indices separately since PendingBatch doesn't include them
+  pendingIndices = indices;
   // Delegate to coordinator for asset synchronization
   batchCoordinator.handleBatch(layers, width, height);
 }
