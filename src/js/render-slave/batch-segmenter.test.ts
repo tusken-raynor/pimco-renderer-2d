@@ -473,15 +473,19 @@ describe('orderIndex tracking', () => {
 
   it('should handle non-sequential indices correctly', async () => {
     // Simulate when slaves receive non-sequential layers (e.g., text layers filtered out)
+    // Gaps in indices indicate sandwiched layers from other slaves, so we must NOT combine
     const results = [
       createLayerResult(0, 'source-over'),
       createLayerResult(2, 'screen'), // Note: index 1 is missing (handled by text slave)
-      createLayerResult(4, 'lighten'),
+      createLayerResult(4, 'lighten'), // Note: index 3 is missing (handled by text slave)
     ];
     const segments = await batchSegmentResults(results, 100, 100);
 
-    expect(segments.length).toBe(1);
-    expect(segments[0].orderIndex).toBe(4); // Highest index in combined segment
+    // Each layer becomes its own segment due to gaps
+    expect(segments.length).toBe(3);
+    expect(segments[0].orderIndex).toBe(0);
+    expect(segments[1].orderIndex).toBe(2);
+    expect(segments[2].orderIndex).toBe(4);
   });
 
   it('should preserve orderIndex for each non-combinable layer', async () => {
@@ -517,6 +521,109 @@ describe('orderIndex tracking', () => {
     expect(segments[2].orderIndex).toBe(4); // 3+4 combined, top is 4
     expect(segments[3].orderIndex).toBe(5); // standalone
     expect(segments[4].orderIndex).toBe(6); // single layer
+  });
+});
+
+describe('index gap detection (sandwiched text layers)', () => {
+  it('should NOT combine layers across index gaps', async () => {
+    // Scenario: Standard slave gets layers 1, 2, 3, 5 (layer 4 is text, sent to text slave)
+    // Even though all layers are combinable (source-over), we should NOT combine
+    // layers 1-3 with layer 5 because layer 4 needs to be sandwiched between them
+    const results = [
+      createLayerResult(1, 'source-over'),
+      createLayerResult(2, 'source-over'),
+      createLayerResult(3, 'source-over'),
+      createLayerResult(5, 'source-over'), // Gap at index 4!
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    // Should create TWO segments, not one
+    expect(segments.length).toBe(2);
+    expect(segments[0].orderIndex).toBe(3); // Layers 1+2+3 combined, top is 3
+    expect(segments[1].orderIndex).toBe(5); // Layer 5 alone
+  });
+
+  it('should detect gaps at the beginning of batch', async () => {
+    // Layers 0 sent to text slave, standard slave gets 1, 2, 3
+    const results = [
+      createLayerResult(1, 'source-over'), // Note: starts at 1, not 0
+      createLayerResult(2, 'source-over'),
+      createLayerResult(3, 'source-over'),
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    // All consecutive, should combine
+    expect(segments.length).toBe(1);
+    expect(segments[0].orderIndex).toBe(3);
+  });
+
+  it('should handle multiple gaps in sequence', async () => {
+    // Text layers at indices 1 and 4
+    // Standard slave gets: 0, 2, 3, 5, 6
+    const results = [
+      createLayerResult(0, 'source-over'),
+      createLayerResult(2, 'source-over'), // Gap at 1
+      createLayerResult(3, 'source-over'),
+      createLayerResult(5, 'source-over'), // Gap at 4
+      createLayerResult(6, 'source-over'),
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    // Should create THREE segments: [0], [2+3], [5+6]
+    expect(segments.length).toBe(3);
+    expect(segments[0].orderIndex).toBe(0); // Layer 0 alone (gap after)
+    expect(segments[1].orderIndex).toBe(3); // Layers 2+3 combined
+    expect(segments[2].orderIndex).toBe(6); // Layers 5+6 combined
+  });
+
+  it('should break segments at gaps even with large consecutive runs', async () => {
+    // Many consecutive layers, then a gap, then more
+    const results = [
+      createLayerResult(0, 'source-over'),
+      createLayerResult(1, 'source-over'),
+      createLayerResult(2, 'source-over'),
+      createLayerResult(3, 'source-over'),
+      createLayerResult(4, 'source-over'),
+      // Gap at index 5 (text layer)
+      createLayerResult(6, 'source-over'),
+      createLayerResult(7, 'source-over'),
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    expect(segments.length).toBe(2);
+    expect(segments[0].orderIndex).toBe(4); // Layers 0-4 combined
+    expect(segments[1].orderIndex).toBe(7); // Layers 6-7 combined
+  });
+
+  it('should handle gap followed by non-combinable mode', async () => {
+    // Gap at index 2, and layer 3 is non-combinable
+    const results = [
+      createLayerResult(0, 'source-over'),
+      createLayerResult(1, 'source-over'),
+      // Gap at index 2
+      createLayerResult(3, 'multiply'), // Non-combinable
+      createLayerResult(4, 'source-over'),
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    expect(segments.length).toBe(3);
+    expect(segments[0].orderIndex).toBe(1); // 0+1 combined
+    expect(segments[1].orderIndex).toBe(3); // standalone multiply
+    expect(segments[2].orderIndex).toBe(4); // standalone source-over
+  });
+
+  it('should still combine consecutive layers when there are no gaps', async () => {
+    // No gaps - normal behavior should still work
+    const results = [
+      createLayerResult(0, 'source-over'),
+      createLayerResult(1, 'screen'),
+      createLayerResult(2, 'lighten'),
+      createLayerResult(3, 'lighter'),
+    ];
+    const segments = await batchSegmentResults(results, 100, 100);
+
+    expect(segments.length).toBe(1);
+    expect(segments[0].orderIndex).toBe(3);
   });
 });
 
