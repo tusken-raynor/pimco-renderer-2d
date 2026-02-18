@@ -211,12 +211,17 @@ export function buildTransformMatrix(
  * 3. Draws the source centered at origin
  * 4. Restores context state
  *
+ * IMPORTANT: The alignment offset should be based on the original text width,
+ * not the source canvas width. When the source canvas is full-sized (same as
+ * canvasWidth x canvasHeight), pass the original text width as `textWidth`.
+ *
  * @param targetCtx - Target canvas 2D context
  * @param source - Source canvas or ImageBitmap to draw
  * @param transform - Transform data from mask
  * @param canvasWidth - Target canvas width
  * @param canvasHeight - Target canvas height
  * @param alignment - Text alignment for offset calculation
+ * @param textWidth - Original text width for alignment offset (defaults to source.width)
  */
 export function applyTransformAndDraw(
   targetCtx: Canvas2DContext,
@@ -224,7 +229,8 @@ export function applyTransformAndDraw(
   transform: PimcoMaskSubstitutionTransformation | undefined,
   canvasWidth: number,
   canvasHeight: number,
-  alignment?: TextAlignment
+  alignment?: TextAlignment,
+  textWidth?: number
 ): void {
   // Get source dimensions
   const sourceWidth = source.width;
@@ -233,8 +239,10 @@ export function applyTransformAndDraw(
   // Parse transform data
   const parsed = parseTransform(transform, canvasWidth, canvasHeight);
 
-  // Calculate alignment offset
-  const alignmentOffset = calculateAlignmentOffset(alignment, sourceWidth);
+  // Calculate alignment offset using text width (not source canvas width)
+  // This is critical when source is a full-sized canvas but text is smaller
+  const alignmentWidth = textWidth ?? sourceWidth;
+  const alignmentOffset = calculateAlignmentOffset(alignment, alignmentWidth);
 
   // Build the transform matrix
   const matrix = buildTransformMatrix(parsed, canvasWidth, canvasHeight, alignmentOffset);

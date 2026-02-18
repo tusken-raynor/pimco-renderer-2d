@@ -317,13 +317,15 @@ export class TextRenderSlave {
     // Apply transforms and draw
     if (hasActiveTransform(maskData.transform)) {
       // Use transform-based drawing (handles translation, rotation, scale)
+      // Note: rasterized.canvas is tight-fitted to text, so its width equals text width
       applyTransformAndDraw(
         outputCtx,
         rasterized.canvas,
         maskData.transform,
         width,
         height,
-        alignment
+        alignment,
+        rasterized.width
       );
     } else {
       // No transforms: simple centered positioning

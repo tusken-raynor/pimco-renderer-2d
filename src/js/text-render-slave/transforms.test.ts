@@ -907,4 +907,74 @@ describe('applyTransformAndDraw', () => {
     expect(matrix).toHaveProperty('a');
     expect(matrix).toHaveProperty('e');
   });
+
+  it('should use textWidth for alignment when provided', () => {
+    // This tests the case where source canvas is full-sized but text is smaller
+    // The alignment offset should be based on textWidth, not source.width
+    const fullSizeSource = {
+      width: 1000, // Full canvas width
+      height: 800, // Full canvas height
+    };
+    const textWidth = 200; // Actual text width
+
+    applyTransformAndDraw(
+      mockCtx,
+      fullSizeSource as ImageBitmap,
+      undefined,
+      1000,
+      800,
+      'left',
+      textWidth
+    );
+
+    const matrix = getAppliedMatrix();
+    // Center (500, 400) + left alignment offset (textWidth/2 = 100) = (600, 400)
+    // NOT center + fullSizeSource.width/2 = (500 + 500 = 1000)
+    expect(matrix.e).toBe(600);
+    expect(matrix.f).toBe(400);
+  });
+
+  it('should use source.width for alignment when textWidth not provided', () => {
+    applyTransformAndDraw(
+      mockCtx,
+      mockSource as ImageBitmap,
+      undefined,
+      1000,
+      800,
+      'left'
+      // textWidth not provided, should use mockSource.width = 200
+    );
+
+    const matrix = getAppliedMatrix();
+    // Center (500, 400) + left alignment offset (sourceWidth/2 = 100) = (600, 400)
+    expect(matrix.e).toBe(600);
+    expect(matrix.f).toBe(400);
+  });
+
+  it('should correctly apply rotation with textWidth-based alignment', () => {
+    // This is the critical test: rotation should transform the alignment offset correctly
+    // even when using a separate textWidth value
+    const fullSizeSource = {
+      width: 1000,
+      height: 800,
+    };
+    const textWidth = 200;
+
+    applyTransformAndDraw(
+      mockCtx,
+      fullSizeSource as ImageBitmap,
+      { rotation: 90 },
+      1000,
+      800,
+      'left',
+      textWidth
+    );
+
+    const matrix = getAppliedMatrix();
+    // With 90-degree rotation and left alignment (textWidth/2 = 100):
+    // The alignment offset (100, 0) gets rotated by 90 degrees to (0, 100)
+    // Combined with center (500, 400), we get approximately (500, 500)
+    expect(matrix.e).toBeCloseTo(500, 5);
+    expect(matrix.f).toBeCloseTo(500, 5);
+  });
 });
