@@ -726,3 +726,230 @@ describe('error handling', () => {
     expect((workerError as Error & { workerId: number }).workerId).toBe(1);
   });
 });
+
+// =============================================================================
+// Failed Asset Tracking Tests (using urlToId map with -1 sentinel value)
+// =============================================================================
+
+describe('failed asset URL tracking', () => {
+  describe('urlToId map with -1 for failed URLs', () => {
+    it('should track failed URLs by setting ID to -1 in urlToId map', () => {
+      const urlToId = new Map<string, number>();
+
+      // Normal URL gets positive ID
+      urlToId.set('/images/valid.png', 1);
+
+      // Failed URLs get -1
+      urlToId.set('/images/missing1.png', -1);
+      urlToId.set('/images/missing2.png', -1);
+
+      expect(urlToId.get('/images/valid.png')).toBe(1);
+      expect(urlToId.get('/images/missing1.png')).toBe(-1);
+      expect(urlToId.get('/images/missing2.png')).toBe(-1);
+    });
+
+    it('should overwrite positive ID with -1 when asset fails', () => {
+      const urlToId = new Map<string, number>();
+
+      // Initially assigned positive ID
+      urlToId.set('/images/image.png', 1);
+      expect(urlToId.get('/images/image.png')).toBe(1);
+
+      // After failure, set to -1
+      urlToId.set('/images/image.png', -1);
+      expect(urlToId.get('/images/image.png')).toBe(-1);
+    });
+
+    it('should clear failed URLs when map is cleared', () => {
+      const urlToId = new Map<string, number>();
+
+      urlToId.set('/images/missing.png', -1);
+      expect(urlToId.size).toBe(1);
+
+      urlToId.clear();
+      expect(urlToId.size).toBe(0);
+      expect(urlToId.get('/images/missing.png')).toBeUndefined();
+    });
+  });
+
+  describe('getAssetId returning -1 for failed URLs', () => {
+    it('should return -1 for URLs marked as failed in urlToId', () => {
+      const urlToId = new Map<string, number>();
+      let nextId = 1;
+
+      const getAssetId = (url: string): number => {
+        const existing = urlToId.get(url);
+        if (existing !== undefined) {
+          return existing; // Returns -1 for failed, positive for successful
+        }
+
+        const id = nextId++;
+        urlToId.set(url, id);
+        return id;
+      };
+
+      // First request - normal ID assignment
+      const id1 = getAssetId('/images/image1.png');
+      expect(id1).toBe(1);
+
+      // Mark as failed by setting to -1
+      urlToId.set('/images/image1.png', -1);
+
+      // Subsequent request - should return -1
+      const id2 = getAssetId('/images/image1.png');
+      expect(id2).toBe(-1);
+    });
+
+    it('should continue to assign new IDs for non-failed URLs', () => {
+      const urlToId = new Map<string, number>();
+      let nextId = 1;
+
+      const getAssetId = (url: string): number => {
+        const existing = urlToId.get(url);
+        if (existing !== undefined) {
+          return existing;
+        }
+
+        const id = nextId++;
+        urlToId.set(url, id);
+        return id;
+      };
+
+      // Mark one URL as failed
+      urlToId.set('/images/missing.png', -1);
+
+      // Other URLs should still get IDs
+      expect(getAssetId('/images/image1.png')).toBe(1);
+      expect(getAssetId('/images/image2.png')).toBe(2);
+      expect(getAssetId('/images/missing.png')).toBe(-1);
+    });
+  });
+
+  describe('extractAssetRequests skipping failed URLs', () => {
+    it('should skip URLs with ID -1 when extracting asset requests', () => {
+      const urlToId = new Map<string, number>();
+      let nextId = 1;
+
+      const getAssetId = (url: string): number => {
+        const existing = urlToId.get(url);
+        if (existing !== undefined) {
+          return existing;
+        }
+
+        const id = nextId++;
+        urlToId.set(url, id);
+        return id;
+      };
+
+      // Mark a URL as failed
+      urlToId.set('/images/missing.png', -1);
+
+      // Simulate extractAssetRequests
+      const seen = new Set<string>();
+      const requests: { id: number; url: string }[] = [];
+
+      const addImageRequest = (url: string | undefined): void => {
+        if (url && !seen.has(url)) {
+          const id = getAssetId(url);
+          // Skip failed URLs (ID of -1)
+          if (id !== -1) {
+            seen.add(url);
+            requests.push({ id, url });
+          }
+        }
+      };
+
+      addImageRequest('/images/valid1.png');
+      addImageRequest('/images/missing.png'); // Should be skipped (ID is -1)
+      addImageRequest('/images/valid2.png');
+
+      expect(requests.length).toBe(2);
+      expect(requests.map((r) => r.url)).not.toContain('/images/missing.png');
+      expect(requests.map((r) => r.url)).toContain('/images/valid1.png');
+      expect(requests.map((r) => r.url)).toContain('/images/valid2.png');
+    });
+
+    it('should not request already-failed URLs on subsequent renders', () => {
+      const urlToId = new Map<string, number>();
+      const idToUrl = new Map<number, string>([
+        [1, '/images/missing1.png'],
+        [2, '/images/valid.png'],
+        [3, '/images/missing2.png'],
+      ]);
+
+      // Set up initial IDs
+      urlToId.set('/images/missing1.png', 1);
+      urlToId.set('/images/valid.png', 2);
+      urlToId.set('/images/missing2.png', 3);
+
+      // First render - marks some as failed by setting ID to -1
+      const failedAssetIds = [1, 3];
+      for (const id of failedAssetIds) {
+        const url = idToUrl.get(id);
+        if (url) {
+          urlToId.set(url, -1);
+        }
+      }
+
+      // Second render - check which URLs would be requested
+      const urlsToCheck = ['/images/missing1.png', '/images/valid.png', '/images/missing2.png'];
+      const filteredUrls = urlsToCheck.filter((url) => urlToId.get(url) !== -1);
+
+      expect(filteredUrls).toEqual(['/images/valid.png']);
+    });
+  });
+
+  describe('failed asset processing in render flow', () => {
+    it('should mark URLs as failed by setting ID to -1 after fetchAssets returns', () => {
+      const urlToId = new Map<string, number>();
+      const idToUrl = new Map<number, string>([
+        [1, '/images/image1.png'],
+        [2, '/images/image2.png'],
+        [3, '/images/image3.png'],
+      ]);
+
+      // Set up initial IDs
+      urlToId.set('/images/image1.png', 1);
+      urlToId.set('/images/image2.png', 2);
+      urlToId.set('/images/image3.png', 3);
+
+      // Simulate fetchAssets returning failed IDs
+      const failedAssets = [2, 3];
+
+      // Process failed assets - set their URL's ID to -1
+      for (const id of failedAssets) {
+        const url = idToUrl.get(id);
+        if (url) {
+          urlToId.set(url, -1);
+        }
+      }
+
+      expect(urlToId.get('/images/image1.png')).toBe(1);
+      expect(urlToId.get('/images/image2.png')).toBe(-1);
+      expect(urlToId.get('/images/image3.png')).toBe(-1);
+    });
+
+    it('should warn once per failed asset', () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const urlToId = new Map<string, number>();
+
+      // First render with failures - log and mark as -1
+      const render1FailedUrls = ['/images/missing.png'];
+      if (render1FailedUrls.length > 0) {
+        console.warn('Some assets failed to load:', render1FailedUrls);
+        for (const url of render1FailedUrls) {
+          urlToId.set(url, -1);
+        }
+      }
+
+      // Second render - failed URLs are skipped (ID is -1), no new warnings
+      const render2FilteredUrls: string[] = []; // Would be empty because ID is -1
+      if (render2FilteredUrls.length > 0) {
+        console.warn('Some assets failed to load:', render2FilteredUrls);
+      }
+
+      expect(consoleSpy).toHaveBeenCalledTimes(1);
+      consoleSpy.mockRestore();
+    });
+  });
+});

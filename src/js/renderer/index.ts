@@ -618,11 +618,12 @@ export class RenderMaster {
 
   /**
    * Get or create an asset ID for a URL.
+   * Returns -1 for URLs that have previously failed to load (stored as -1 in urlToId).
    */
   private getAssetId(url: string): number {
     const existing = this.assetMapping.urlToId.get(url);
     if (existing !== undefined) {
-      return existing;
+      return existing; // Returns -1 for failed URLs, positive ID for successful ones
     }
 
     const id = this.assetMapping.nextId++;
@@ -658,6 +659,7 @@ export class RenderMaster {
 
   /**
    * Extract all asset URLs from layers and create fetch requests.
+   * Skips URLs that have previously failed to load (ID of -1 in urlToId map).
    */
   private extractAssetRequests(layers: ProductImageComponent[]): AssetRequest[] {
     const requests: AssetRequest[] = [];
@@ -665,12 +667,16 @@ export class RenderMaster {
 
     const addImageRequest = (url: string | undefined): void => {
       if (url && !seen.has(url)) {
-        seen.add(url);
-        requests.push({
-          id: this.getAssetId(url),
-          url,
-          assetType: 'image',
-        });
+        const id = this.getAssetId(url);
+        // Skip known failed URLs (ID of -1) to prevent re-requesting
+        if (id !== -1) {
+          seen.add(url);
+          requests.push({
+            id,
+            url,
+            assetType: 'image',
+          });
+        }
       }
     };
 
@@ -1032,8 +1038,17 @@ export class RenderMaster {
     const failedAssets = await this.fetchAssets(assetRequests);
 
     if (failedAssets.length > 0) {
-      const failedUrls = failedAssets.map((id) => this.assetMapping.idToUrl.get(id) ?? String(id));
-      console.warn('Some assets failed to load:', failedUrls);
+      const failedUrlsList = failedAssets.map((id) => this.assetMapping.idToUrl.get(id) ?? String(id));
+      console.warn('Some assets failed to load:', failedUrlsList);
+
+      // Mark these URLs as failed by setting their ID to -1 in urlToId map
+      // This prevents re-requesting on subsequent renders
+      for (const id of failedAssets) {
+        const url = this.assetMapping.idToUrl.get(id);
+        if (url) {
+          this.assetMapping.urlToId.set(url, -1);
+        }
+      }
     }
 
     // Check for abort
