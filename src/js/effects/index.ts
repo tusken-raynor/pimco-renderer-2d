@@ -46,6 +46,26 @@ export function myWebGLBuddy(): WebGLPostProcessor | null {
 }
 
 /**
+ * Destroy the WebGL PostProcessor singleton and release GPU resources.
+ * Call this when shutting down the renderer to prevent GPU memory leaks.
+ *
+ * Note: This should be called when the renderer is destroyed, not between renders.
+ * The singleton is designed to be reused for performance.
+ */
+export function destroyWebGLBuddy(): void {
+  if (webGLBuddy) {
+    try {
+      webGLBuddy.sleep();
+      // Note: webgl-postprocessor's sleep() releases active WebGL state.
+      // Setting to null allows garbage collection.
+    } catch {
+      // Ignore cleanup errors
+    }
+    webGLBuddy = null;
+  }
+}
+
+/**
  * Check if WebGL2 effects are available.
  *
  * @returns true if WebGL2 is supported
@@ -617,6 +637,7 @@ function boundCoordinates(
 export default {
   // WebGL effects
   myWebGLBuddy,
+  destroyWebGLBuddy,
   isWebGL2EffectsAvailable,
   alphaErode,
   emboss,

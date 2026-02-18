@@ -531,3 +531,132 @@ Unit tests in `index.test.ts` cover:
 3. **Error Handling**:
    - AbortError creation and properties
    - WorkerError handling
+
+---
+
+## Memory Management
+
+The renderer implements careful memory management to prevent leaks, particularly for GPU-backed resources like `ImageBitmap` objects.
+
+### ImageBitmap Lifecycle
+
+ImageBitmaps are GPU-accelerated image objects that must be explicitly closed to release memory:
+
+1. **Asset Manager**: Images are loaded as ImageBitmaps and transferred to slaves
+2. **Render Slaves**: Close ImageBitmaps in `clearAssets()` using `bitmap.close()`
+3. **Text Render Slaves**: Same pattern, with additional handling for font ArrayBuffers
+4. **MasterCompositor**: Close segment bitmaps after composition with `closeSegments()`
+
+### Resource Cleanup
+
+The `RenderMaster.destroy()` method performs comprehensive cleanup:
+
+```typescript
+destroy(): void {
+  // 1. Abort any pending render
+  // 2. Terminate workers (standard + text slaves)
+  // 3. Close all MessageChannel ports
+  // 4. Destroy compositors
+  // 5. Clean up WebGL resources (destroyWebGLBuddy())
+  // 6. Clear asset mapping caches
+}
+```
+
+### Worker Cleanup
+
+Worker entry points (`render-slave.worker.ts`, `text-render-slave.worker.ts`) include cleanup handlers:
+
+- Destroy RenderSlave/TextRenderSlave instances
+- Close asset ports
+- Handle `beforeunload` event (if supported)
+
+### WebGL Resources
+
+The effects module manages a singleton WebGLPostProcessor. Call `destroyWebGLBuddy()` when shutting down to release GPU resources.
+
+---
+
+## Performance Characteristics
+
+### Architecture Performance Benefits
+
+1. **Multi-threaded Rendering**: Layer rendering is parallelized across Web Workers
+   - Standard slaves: Process image-based layers
+   - Text slaves: Process text/effect layers
+   - Asset Manager: Handles image loading in background
+
+2. **Batch Segmentation**: Consecutive layers with combinable blend modes are merged
+   - Combinable modes: `source-over`, `screen`, `lighten`, `lighter`
+   - Reduces composition operations and data transfer
+
+3. **Asset Caching**: URL-to-ID mapping prevents redundant asset loading
+   - Images fetched once, distributed to all slaves via `MessagePort`
+   - Uses `structuredClone` for efficient ImageBitmap transfer
+
+### Hot Paths and Optimizations
+
+| Hot Path | Optimization Applied |
+|----------|---------------------|
+| Layer rendering | Pipeline context reuse (`createPipelineContext`) |
+| Batch composition | Segmentation context reuse (`createSegmentationContext`) |
+| Asset transfer | Transferable objects (no copy) |
+| Text measurement | Single temporary canvas per measurement |
+| WebGL effects | Shader program reuse (`hasProgram`/`useProgram`) |
+| Final composition | Canvas context reuse (`MasterCompositor`) |
+
+### Memory Efficiency
+
+1. **Canvas Reuse**: Pipeline and segmentation contexts are created once per batch, not per layer
+2. **ImageBitmap Transfer**: Uses `transfer` option to move ownership without copying
+3. **Explicit Cleanup**: `ImageBitmap.close()` calls release GPU memory immediately
+4. **Lazy WebGL Initialization**: WebGL context created only when effects are needed
+
+### Recommended Usage Patterns
+
+```typescript
+// ✅ Good: Reuse RenderMaster across renders
+const master = new RenderMaster();
+await master.render(layers1);
+await master.render(layers2);
+master.destroy(); // Clean up when done
+
+// ❌ Bad: Create new RenderMaster per render
+const master1 = new RenderMaster();
+await master1.render(layers1);
+master1.destroy();
+const master2 = new RenderMaster(); // Wasteful!
+await master2.render(layers2);
+master2.destroy();
+```
+
+### Performance Tuning
+
+Configure RenderMaster options based on workload:
+
+```typescript
+const master = new RenderMaster({
+  slaveCount: navigator.hardwareConcurrency, // Default: use all cores
+  textSlaveCount: 2, // Default: 2 for text/effect layers
+});
+```
+
+- **Many image layers**: Increase `slaveCount`
+- **Many text/effect layers**: Increase `textSlaveCount`
+- **Memory-constrained**: Reduce slave counts (fewer workers = less memory)
+
+### Profiling Tips
+
+1. Use browser DevTools Performance tab to analyze worker activity
+2. Monitor memory with DevTools Memory tab - watch for ImageBitmap leaks
+3. Check WebGL inspector for texture memory usage
+4. Use `console.time()` around `render()` calls to measure end-to-end latency
+
+### Benchmark Metrics
+
+When profiling, consider these key metrics:
+
+- **Asset Load Time**: Time to fetch and convert images to ImageBitmap
+- **Layer Render Time**: Time for slaves to process their assigned layers
+- **Composition Time**: Time for MasterCompositor to produce final output
+- **Transfer Overhead**: Time spent transferring data between workers
+- **Memory Peak**: Maximum memory usage during render (includes all ImageBitmaps)

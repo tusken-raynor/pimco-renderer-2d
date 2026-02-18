@@ -169,9 +169,21 @@ export class TextRenderSlave {
   }
 
   /**
-   * Clear all registered assets and fonts.
+   * Clear all registered assets and fonts, closing ImageBitmaps to free memory.
    */
   clearAssets(): void {
+    // Close all ImageBitmaps to release GPU memory
+    // Check if ImageBitmap is defined (may not be in test environments like jsdom)
+    const hasImageBitmap = typeof ImageBitmap !== 'undefined';
+    for (const asset of this.assets.values()) {
+      if (hasImageBitmap && asset instanceof ImageBitmap) {
+        try {
+          asset.close();
+        } catch {
+          // Ignore errors from already-closed bitmaps
+        }
+      }
+    }
     this.assets.clear();
     this.fonts.clear();
   }
@@ -373,10 +385,17 @@ export class TextRenderSlave {
 
   /**
    * Destroy the render slave and release resources.
+   * Ensures all ImageBitmaps are closed and font data is released.
    */
   destroy(): void {
+    // Clear and close all registered assets
     this.clearAssets();
+
+    // Destroy the text rasterizer
     this.rasterizer.destroy();
+
+    // Reset abort state
+    this.aborted = false;
   }
 }
 

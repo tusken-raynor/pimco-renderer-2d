@@ -444,3 +444,23 @@ self.onerror = (event: string | Event) => {
 self.onunhandledrejection = (event: PromiseRejectionEvent) => {
   sendError(event.reason);
 };
+
+/**
+ * Cleanup function for worker termination.
+ * Note: This is called when the worker is about to be terminated via Worker.terminate().
+ * In practice, the browser handles memory cleanup, but we do explicit cleanup for
+ * orderly shutdown and to support testing scenarios.
+ */
+function cleanup(): void {
+  textRenderSlave.destroy();
+  if (assetPort) {
+    assetPort.onmessage = null;
+    assetPort.close();
+    assetPort = null;
+  }
+}
+
+// Handle beforeunload for cleanup (if supported in worker context)
+if (typeof self.onbeforeunload !== 'undefined') {
+  self.onbeforeunload = cleanup;
+}

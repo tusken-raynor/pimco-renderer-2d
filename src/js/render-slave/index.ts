@@ -88,9 +88,20 @@ export class RenderSlave {
   }
 
   /**
-   * Clear all registered assets.
+   * Clear all registered assets and close ImageBitmaps to free memory.
    */
   clearAssets(): void {
+    // Close all ImageBitmaps to release GPU memory
+    // Note: ImageBitmap.close() may not exist in some test environments
+    for (const bitmap of this.assets.values()) {
+      try {
+        if (typeof bitmap.close === 'function') {
+          bitmap.close();
+        }
+      } catch {
+        // Ignore errors from already-closed bitmaps
+      }
+    }
     this.assets.clear();
   }
 
@@ -298,10 +309,21 @@ export class RenderSlave {
 
   /**
    * Destroy the render slave and release resources.
+   * Ensures all ImageBitmaps are closed and canvas references are released.
    */
   destroy(): void {
+    // Clear and close all registered assets
     this.clearAssets();
+
+    // Release pipeline context resources
+    // Note: Canvas elements don't have explicit cleanup, but nullifying
+    // allows garbage collection when no longer referenced
     this.pipelineCtx = null;
+    this.width = 0;
+    this.height = 0;
+
+    // Reset abort state
+    this.aborted = false;
   }
 }
 

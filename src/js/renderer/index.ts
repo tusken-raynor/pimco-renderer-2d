@@ -52,6 +52,7 @@ import { MasterCompositor, type ComposedLayer, closeSegments } from './master-co
 import { SoftwareCompositor } from './software-compositor';
 import { RenderError, AbortError, WorkerError, wrapError } from '../errors';
 import { VirtualStandardSlave, VirtualTextSlave } from '../virtual-slaves';
+import { destroyWebGLBuddy } from '../effects';
 
 // Worker URLs - Vite handles the bundling
 import AssetManagerWorkerUrl from '../../workers/asset-manager.worker.ts?worker&url';
@@ -1320,6 +1321,14 @@ export class RenderMaster {
 
   /**
    * Destroy all workers and release resources.
+   *
+   * This method performs comprehensive cleanup:
+   * - Aborts any in-progress renders
+   * - Terminates all worker threads and virtual slaves
+   * - Closes all MessageChannel ports
+   * - Releases compositor resources
+   * - Cleans up WebGL resources (if used)
+   * - Clears asset mapping caches
    */
   destroy(): void {
     if (this.destroyed) {
@@ -1367,6 +1376,10 @@ export class RenderMaster {
       this.softwareCompositor.destroy();
       this.softwareCompositor = null;
     }
+
+    // Clean up WebGL PostProcessor singleton if running in main thread
+    // (Virtual slaves use the main thread WebGL context)
+    destroyWebGLBuddy();
 
     // Clear asset mapping
     this.assetMapping.urlToId.clear();
