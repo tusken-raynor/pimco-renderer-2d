@@ -667,13 +667,15 @@ export class RenderMaster {
 
   /**
    * Extract all asset URLs from layers and create fetch requests.
+   * Skips URLs that have previously failed to load.
    */
   private extractAssetRequests(layers: ProductImageComponent[]): AssetRequest[] {
     const requests: AssetRequest[] = [];
     const seen = new Set<string>();
 
     const addImageRequest = (url: string | undefined): void => {
-      if (url && !seen.has(url)) {
+      // Skip known failed URLs to prevent re-requesting
+      if (url && !seen.has(url) && !this.failedUrls.has(url)) {
         seen.add(url);
         requests.push({
           id: this.getAssetId(url),
@@ -1041,8 +1043,16 @@ export class RenderMaster {
     const failedAssets = await this.fetchAssets(assetRequests);
 
     if (failedAssets.length > 0) {
-      const failedUrls = failedAssets.map((id) => this.assetMapping.idToUrl.get(id) ?? String(id));
-      console.warn('Some assets failed to load:', failedUrls);
+      const failedUrlsList = failedAssets.map((id) => this.assetMapping.idToUrl.get(id) ?? String(id));
+      console.warn('Some assets failed to load:', failedUrlsList);
+
+      // Mark these URLs as failed so they won't be re-requested on subsequent renders
+      for (const id of failedAssets) {
+        const url = this.assetMapping.idToUrl.get(id);
+        if (url) {
+          this.failedUrls.add(url);
+        }
+      }
     }
 
     // Check for abort
@@ -1390,9 +1400,10 @@ export class RenderMaster {
     // (Virtual slaves use the main thread WebGL context)
     destroyWebGLBuddy();
 
-    // Clear asset mapping
+    // Clear asset mapping and failed URLs
     this.assetMapping.urlToId.clear();
     this.assetMapping.idToUrl.clear();
+    this.failedUrls.clear();
   }
 }
 
