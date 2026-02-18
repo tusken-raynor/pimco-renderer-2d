@@ -734,19 +734,20 @@ Audit memory usage and optimize performance.
 
 ---
 
-### [ ] Step: E2E Tests via Dev App
+### [x] Step: E2E Tests via Dev App
+<!-- chat-id: e5eac674-7b4c-4fc6-97b0-2f29ca89aa3b -->
 
 Create end-to-end tests using Playwright.
 
 **Tasks:**
-- [ ] Create `src/tests/e2e/dev-app-render.spec.ts`
+- [x] Create `src/tests/e2e/dev-app-render.spec.ts`
   - Upload JSON → render → verify canvas has content
-- [ ] Create `src/tests/e2e/dev-app-errors.spec.ts`
+- [x] Create `src/tests/e2e/dev-app-errors.spec.ts`
   - Invalid JSON handling
   - Missing asset handling
-- [ ] Create `src/tests/e2e/dev-app-timing.spec.ts`
+- [x] Create `src/tests/e2e/dev-app-timing.spec.ts`
   - Render timing display verification
-- [ ] Update `src/tests/e2e/docs.md` with test documentation
+- [x] Update `src/tests/e2e/docs.md` with test documentation
 
 **Verification:**
 - All E2E tests pass
