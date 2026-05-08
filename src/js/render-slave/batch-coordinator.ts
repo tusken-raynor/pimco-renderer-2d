@@ -62,11 +62,11 @@ export function extractStandardLayerAssetIds(layers: LayerDescriptor[]): Set<num
     const ids = layer.assetIds;
 
     // Add all non-negative asset IDs (id >= 0 means valid asset)
-    if (ids.image >= 0) assetIds.add(ids.image);
-    if (ids.mask !== undefined && ids.mask >= 0) assetIds.add(ids.mask);
-    if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
-    if (ids.hlimage1 !== undefined && ids.hlimage1 >= 0) assetIds.add(ids.hlimage1);
-    if (ids.hlimage2 !== undefined && ids.hlimage2 >= 0) assetIds.add(ids.hlimage2);
+    if (ids.image >= 0) {assetIds.add(ids.image);}
+    if (ids.mask !== undefined && ids.mask >= 0) {assetIds.add(ids.mask);}
+    if (ids.texture !== undefined && ids.texture >= 0) {assetIds.add(ids.texture);}
+    if (ids.hlimage1 !== undefined && ids.hlimage1 >= 0) {assetIds.add(ids.hlimage1);}
+    if (ids.hlimage2 !== undefined && ids.hlimage2 >= 0) {assetIds.add(ids.hlimage2);}
   }
 
   return assetIds;
@@ -139,9 +139,25 @@ export class BatchCoordinator<TLayer> {
    * @param layers - Layer descriptors to render
    * @param width - Canvas width
    * @param height - Canvas height
+   * @param extraAssetIds - Additional asset IDs to gate on, beyond what the
+   *   layer descriptors themselves carry. Used by the text path to wait for
+   *   font asset IDs that are routed by family-name resolution rather than
+   *   embedded per-layer.
    */
-  handleBatch(layers: TLayer[], width: number, height: number): void {
+  handleBatch(
+    layers: TLayer[],
+    width: number,
+    height: number,
+    extraAssetIds?: Iterable<number>
+  ): void {
     const requiredAssetIds = this.extractAssetIds(layers);
+    if (extraAssetIds) {
+      for (const id of extraAssetIds) {
+        if (id >= 0) {
+          requiredAssetIds.add(id);
+        }
+      }
+    }
     this.pendingBatch = { layers, width, height, requiredAssetIds };
     this.tryRender();
   }

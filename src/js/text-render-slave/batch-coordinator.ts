@@ -9,20 +9,28 @@ import type { TextLayerDescriptor } from '../types/messages';
 import { BatchCoordinator, type AssetChecker, type PendingBatch } from '../render-slave/batch-coordinator';
 
 /**
- * Extended asset checker for text layers.
- * Text layers can have both image assets and font assets.
+ * Extended asset checker for text layers. Distinguishes between fonts that
+ * are merely registered and fonts that are fully loaded — the gate must
+ * wait on `isFontLoaded` so layout uses real font metrics rather than the
+ * fallback face's metrics. Meshes have their own check because they live
+ * outside the image asset map (parsed OBJ buffers, not ImageBitmaps).
  */
 export interface TextAssetChecker extends AssetChecker {
   /**
-   * Check if a font with the given ID is available.
-   * @param id - Font ID
-   * @returns true if the font is registered
+   * Check if a font with the given ID is fully loaded (FontFace.load
+   * resolved AND added to `self.fonts`).
    */
-  hasFont(id: number): boolean;
+  isFontLoaded(id: number): boolean;
+  /**
+   * Check if a mesh with the given ID has been registered and successfully
+   * parsed into the slave's mesh cache.
+   */
+  hasMesh(id: number): boolean;
 }
 
 /**
- * Wrapper that checks both assets and fonts for text layers.
+ * Wrapper that treats either an image asset, a fully-loaded font, or a parsed
+ * mesh as "available" so the existing single-set gate works for all three.
  */
 class TextAssetCheckerWrapper implements AssetChecker {
   private checker: TextAssetChecker;
@@ -32,32 +40,26 @@ class TextAssetCheckerWrapper implements AssetChecker {
   }
 
   hasAsset(id: number): boolean {
-    // For text layers, an "asset" can be either an image asset or a font
-    return this.checker.hasAsset(id) || this.checker.hasFont(id);
+    return (
+      this.checker.hasAsset(id) ||
+      this.checker.isFontLoaded(id) ||
+      this.checker.hasMesh(id)
+    );
   }
 }
 
 /**
- * Extract all required asset IDs from text layer descriptors.
- *
- * Text layers can reference:
- * - texture: Optional texture asset
- * - font: Optional font asset
- * - postmask: Optional post-mask asset
- *
- * @param layers - Text layer descriptors
- * @returns Set of required asset IDs (excluding undefined and negative values)
+ * Extract image asset IDs from text layer descriptors. Font asset IDs are
+ * routed via `BatchMessage.requiredFontIds` and unioned in by the caller —
+ * fonts are not 1:1 with layers.
  */
 export function extractTextLayerAssetIds(layers: TextLayerDescriptor[]): Set<number> {
   const assetIds = new Set<number>();
 
   for (const layer of layers) {
     const ids = layer.assetIds;
-
-    // Add all non-negative asset IDs (id >= 0 means valid asset)
-    if (ids.texture !== undefined && ids.texture >= 0) assetIds.add(ids.texture);
-    if (ids.font !== undefined && ids.font >= 0) assetIds.add(ids.font);
-    if (ids.postmask !== undefined && ids.postmask >= 0) assetIds.add(ids.postmask);
+    if (ids.texture !== undefined && ids.texture >= 0) {assetIds.add(ids.texture);}
+    if (ids.postmask !== undefined && ids.postmask >= 0) {assetIds.add(ids.postmask);}
   }
 
   return assetIds;

@@ -8,7 +8,14 @@ import type {
   CanvasCompositeOperation,
   ImagePlacementDefinition,
   PimcoMaskSubstitutionCompiled,
+  FontFaceDescriptor,
 } from './pimco';
+
+/**
+ * FontFace constructor descriptors carried alongside a font asset.
+ * `url` is intentionally omitted — the URL is the asset's `url` field.
+ */
+export type FontFaceDeliveryDescriptors = Omit<FontFaceDescriptor, 'url'>;
 
 // =============================================================================
 // Master → Slave Messages
@@ -34,6 +41,31 @@ export interface BatchMessage {
   width: number;
   /** Output canvas height */
   height: number;
+  /**
+   * Active pimco lifecycle subscription patterns the master is currently
+   * tracking. Slaves use these to decide per-event whether to do the
+   * createImageBitmap copy and post a PimcoEventMessage — only emit if the
+   * topic matches at least one pattern.
+   *
+   * Empty / missing array means "no subscribers, skip all emission". Patterns
+   * use the same wildcard format as `master.on(eventName, ...)`:
+   *   pimcoRender:abc, pimcoRenderPart:*:text, pimcoRender:*, etc.
+   */
+  eventSubscriptions?: string[];
+  /**
+   * Font asset IDs the slave must have fully loaded (FontFace.load resolved
+   * and added to `self.fonts`) before this batch begins rendering. Populated
+   * by the master from the families resolved for each text layer; left
+   * unspecified for standard slaves and for batches with no text.
+   */
+  requiredFontIds?: number[];
+  /**
+   * Mesh asset IDs the slave must have parsed and cached before this batch
+   * begins rendering. Populated by the master from `mask.projection.mesh`
+   * URLs across the text layers in the batch; left unspecified when no
+   * projection layers are present and for standard slaves.
+   */
+  requiredMeshIds?: number[];
 }
 
 /**
@@ -93,13 +125,45 @@ export interface ErrorMessage {
 }
 
 /**
+ * Lifecycle event emitted by a slave during a layer's render pipeline. The
+ * master constructs a topic string from the structured fields (e.g.
+ * `pimcoRender:abc` for stage='render', `pimcoRenderPart:abc:text` for
+ * stage='render-part'+part='text') and dispatches to listeners that subscribed
+ * to that topic (or a matching wildcard).
+ *
+ * Slaves only emit these when BatchMessage.emitLifecycle is true, set by the
+ * master based on whether any subscribers are registered.
+ *
+ * Stages:
+ *   - 'render'      — the final isolated bitmap for a single pimco layer
+ *                     (after effect, transform, and post-mask). `part` is
+ *                     unused.
+ *   - 'render-part' — an intermediate stage (rasterized text, embossed
+ *                     handle copy, etc.). `part` names the stage.
+ */
+export interface PimcoEventMessage {
+  type: 'pimco-event';
+  /** Lifecycle stage. */
+  stage: 'render' | 'render-part';
+  /** The pimco layer's id. Used as the second topic segment. */
+  pimcoId: string;
+  /** Sub-part name (required when stage is 'render-part'). */
+  part?: string;
+  /** Snapshot bitmap (transferable). */
+  bitmap: ImageBitmap;
+  /** Free-form metadata (e.g. dimensions, effect params, timings). */
+  meta?: Record<string, unknown>;
+}
+
+/**
  * Union type for all messages from Slave to Master.
  */
 export type SlaveToMasterMessage =
   | ReadyMessage
   | CapabilitiesMessage
   | ResultMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | PimcoEventMessage;
 
 // =============================================================================
 // Master → Asset Manager Messages
@@ -107,18 +171,30 @@ export type SlaveToMasterMessage =
 
 /**
  * Request to fetch assets by URL.
+ *
+ * `requestId` correlates the response (`FetchCompleteMessage`) with this
+ * specific request — the master can have multiple concurrent fetches in
+ * flight (e.g. parallel `loadFontFamily` calls) and must wait for *its*
+ * response, not whichever fetch-complete happens to arrive first.
  */
 export interface FetchMessage {
   type: 'fetch';
+  /** Master-generated correlation ID echoed back in the response. */
+  requestId: number;
   /** Assets to fetch */
   assets: AssetRequest[];
 }
 
 /**
  * Request to distribute loaded assets to slaves.
+ *
+ * `requestId` correlates the response (`DistributeCompleteMessage`) with
+ * this specific request — same rationale as `FetchMessage`.
  */
 export interface DistributeMessage {
   type: 'distribute';
+  /** Master-generated correlation ID echoed back in the response. */
+  requestId: number;
   /** Delivery specifications */
   deliveries: AssetDelivery[];
 }
@@ -157,19 +233,28 @@ export type MasterToAssetManagerMessage =
 // =============================================================================
 
 /**
- * Fetch operation completed.
+ * Fetch operation completed. `requestId` echoes the originating
+ * `FetchMessage.requestId` so the master can correlate this response with
+ * the right pending promise — multiple concurrent fetches each have their
+ * own ID.
  */
 export interface FetchCompleteMessage {
   type: 'fetch-complete';
+  /** Echo of `FetchMessage.requestId` */
+  requestId: number;
   /** IDs of assets that failed to load */
   failed: number[];
 }
 
 /**
- * Distribution operation completed.
+ * Distribution operation completed. `requestId` echoes the originating
+ * `DistributeMessage.requestId` for the same correlation reason as
+ * `FetchCompleteMessage`.
  */
 export interface DistributeCompleteMessage {
   type: 'distribute-complete';
+  /** Echo of `DistributeMessage.requestId` */
+  requestId: number;
 }
 
 /**
@@ -192,6 +277,10 @@ export interface AssetDataMessage {
   assetType: AssetType;
   /** Asset data (ImageBitmap for images, ArrayBuffer for fonts/meshes) */
   data: ImageBitmap | ArrayBuffer;
+  /** Font family name; present when assetType === 'font' */
+  fontFamily?: string;
+  /** FontFace constructor descriptors; present when assetType === 'font' */
+  fontDescriptors?: FontFaceDeliveryDescriptors;
 }
 
 /**
@@ -218,6 +307,10 @@ export interface AssetRequest {
   url: string;
   /** Type of asset */
   assetType: AssetType;
+  /** Font family name; present when assetType === 'font' */
+  fontFamily?: string;
+  /** FontFace constructor descriptors; present when assetType === 'font' */
+  fontDescriptors?: FontFaceDeliveryDescriptors;
 }
 
 /**
@@ -310,8 +403,8 @@ export interface TextLayerDescriptor {
     texture?: number;
     /** Post-mask asset ID (optional) */
     postmask?: number;
-    /** Font asset ID (optional) */
-    font?: number;
+    /** Mesh asset ID (optional, for `mask.projection`) */
+    mesh?: number;
   };
   /** Color mode */
   mode: 'color' | 'image';
@@ -396,6 +489,13 @@ export function isCapabilitiesMessage(msg: unknown): msg is CapabilitiesMessage 
  */
 export function isResultMessage(msg: unknown): msg is ResultMessage {
   return isMessageOfType(msg, 'result');
+}
+
+/**
+ * Type guard for PimcoEventMessage.
+ */
+export function isPimcoEventMessage(msg: unknown): msg is PimcoEventMessage {
+  return isMessageOfType(msg, 'pimco-event');
 }
 
 /**

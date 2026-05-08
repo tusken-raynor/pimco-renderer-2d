@@ -1,197 +1,227 @@
 /**
- * Metal Effect Pipeline
+ * Metal Effect Pipeline (GPU)
  *
- * Creates a metallic/brushed metal appearance for text layers.
- * Pipeline:
- * 1. Tile texture pattern (brushed metal texture)
- * 2. Color multiply (tints the metal)
- * 3. Apply dual emboss (if text is large enough)
- * 4. Apply mask (destination-in composite)
+ * Brushed-metal appearance: tiled metal texture × uniform color tint plus a
+ * sharp directional bevel from a custom emboss kernel. Shape mirrors hotstamp
+ * but with (a) a tiled texture in the fill, (b) a custom non-zero-sum metal
+ * kernel for the darkening pass, and (c) heavier overlay weights (0.7 / 0.3).
  *
- * The metal effect uses a custom emboss matrix for a more pronounced
- * metallic bevel appearance, different from embroidery.
+ * Pipeline (single shader chain, one CPU readback at the end):
+ *   1. (GPU, conditional) For text taller than EMBOSS_HEIGHT_THRESHOLD: emboss
+ *      twice — METAL kernel + top-row clear, INVERTED kernel + bottom-2px
+ *      clear. The METAL kernel has sum = -1 in legacy form, so the shader's
+ *      uOffset argument carries that bias (see emboss.frag.glsl header).
+ *   2. (GPU) metal-compose shader takes the mask, tiled texture, dual emboss
+ *      handles, and uniform tint, and writes the final layer to the result
+ *      canvas in one pass.
  */
+
+import WebGLPostProcessor, { Uniforms, type GPUTextureHandle } from 'webgl-postprocessor';
 
 import type { TextLayerDescriptor } from '../types/messages';
 import type { Canvas2DContext, AnyCanvas } from '../utils/canvas';
 import { createCanvasWithContext } from '../utils/canvas';
-import { emboss2D, invert, whiteToAlpha, blackToAlpha, tile } from './index';
-import { extractDefaultColorCode } from './no-effect';
+import { parseHexColor } from '../utils/color';
+import {
+  BUILTIN_SHADER_SOURCES,
+  EMBOSS_MATRIX_INVERTED,
+  FBO_VERTEX_SRC,
+  PROGRAMS,
+  ensureProgram,
+  type EffectOutput,
+  type Mat3Tuple,
+} from './effect-utils';
+import { myWebGLBuddy } from './index';
+import { extractDefaultColorCode, applyNoEffect } from './no-effect';
 
-/**
- * Minimum text height threshold for applying embossing effects.
- * Text smaller than this is rendered without emboss highlights.
- */
+import metalComposeFragSrc from '@/shaders/metal-compose.frag.glsl?raw';
+
+/** Text-height threshold below which the dual-emboss step is skipped. */
 const EMBOSS_HEIGHT_THRESHOLD = 43.5;
 
-/**
- * Custom emboss matrix for metal effect.
- * Creates a more pronounced 3D bevel look.
- */
-const METAL_EMBOSS_MATRIX: number[][] = [
-  [-1, -1, -1],
-  [-1, -1, 1],
-  [1, 1, 1],
-];
+/** Legacy weights for the dark/bright overlays (source-over / plus-lighter). */
+const DARK_OVERLAY_ALPHA = 0.7;
+const BRIGHT_OVERLAY_ALPHA = 0.3;
+
+/** Stable program name for the metal compose shader. */
+const METAL_COMPOSE_PROGRAM = 'pimco_metal_compose';
 
 /**
- * Parameters for the metal effect pipeline.
+ * Custom metal emboss kernel.
+ *
+ * Negation of the legacy black-on-white kernel
+ *   [-1, -1, -1; -1, -1, 1; 1, 1, 1]
+ * for use on white-on-black-opaque masks. Unlike STANDARD/INVERTED, this
+ * kernel has non-zero sum (legacy sum = -1, ours therefore = +1), so the
+ * "negate the matrix" trick alone doesn't recover the legacy unclamped value
+ * — see EMBOSS_OFFSET_METAL.
  */
+const EMBOSS_MATRIX_METAL: Mat3Tuple = [1, 1, 1, 1, 1, -1, -1, -1, -1];
+
+/**
+ * Constant offset added to the convolution sum before clamp, to compensate
+ * for the legacy kernel's non-zero sum. Equals `sum(M_legacy) = -1`.
+ */
+const EMBOSS_OFFSET_METAL = -1;
+
 export interface MetalEffectParams {
-  /** Canvas width */
   width: number;
-  /** Canvas height */
   height: number;
-  /** Metal tint color (CSS color string) */
+  /** Metal tint color (CSS color string). */
   color: string;
-  /** Layer alpha (0-1) */
+  /** Layer alpha (0-1). */
   alpha: number;
-  /** Mask image (defines text shape) */
+  /** Mask image — white-on-black-opaque, .r = inside text. */
   mask: ImageBitmap | AnyCanvas;
-  /** Texture image for brushed metal pattern */
+  /** Optional brushed-metal texture, tiled across the canvas. */
   texture?: ImageBitmap;
-  /** Text height in pixels (for emboss threshold) */
+  /** Text height in pixels — controls whether the emboss step runs. */
   textHeight: number;
 }
 
-/**
- * Result of the metal effect pipeline.
- */
 export interface MetalEffectResult {
-  /** Result canvas */
   canvas: AnyCanvas;
-  /** Result context */
   ctx: Canvas2DContext;
 }
 
 /**
- * Dual emboss result containing both highlight and shadow canvases.
+ * Run a single emboss pass and return the FBO handle. No blur — metal keeps
+ * the bevel crisp. `margins` is `(top, right, bottom, left)` in original-image
+ * pixels.
  */
-export interface DualEmbossResult {
-  /** Highlight emboss (custom metal matrix, creates sharp highlight) */
-  highlight: { canvas: AnyCanvas; ctx: Canvas2DContext };
-  /** Shadow emboss (inverted matrix, creates shadow) */
-  shadow: { canvas: AnyCanvas; ctx: Canvas2DContext };
-}
-
-/**
- * Create dual emboss canvases for metal effect.
- * Uses a custom metal matrix and inverted matrix for a sharp metallic bevel.
- *
- * @param mask - Source mask canvas
- * @param width - Canvas width
- * @param height - Canvas height
- * @returns Dual emboss result with highlight and shadow canvases
- */
-export function createMetalEmboss(
+function renderMetalEdge(
+  buddy: WebGLPostProcessor,
   mask: ImageBitmap | AnyCanvas,
-  width: number,
-  height: number
-): DualEmbossResult {
-  // Create highlight emboss canvas (custom metal matrix)
-  const { canvas: highlightCanvas, ctx: highlightCtx } = createCanvasWithContext(width, height);
-  highlightCtx.fillStyle = '#fff';
-  highlightCtx.fillRect(0, 0, width, height);
-  highlightCtx.drawImage(mask, 0, 0);
-
-  // Create shadow emboss canvas (copy from highlight before processing)
-  const { canvas: shadowCanvas, ctx: shadowCtx } = createCanvasWithContext(width, height);
-  shadowCtx.drawImage(highlightCanvas, 0, 0);
-
-  // Process highlight: custom metal emboss matrix
-  emboss2D(highlightCtx, width, height, METAL_EMBOSS_MATRIX);
-  // Process shadow: inverted emboss matrix
-  emboss2D(shadowCtx, width, height, true);
-
-  // Clean up edge artifacts
-  highlightCtx.fillStyle = '#000';
-  shadowCtx.fillStyle = '#000';
-  highlightCtx.fillRect(0, 0, width, 1); // Top edge
-  shadowCtx.fillRect(0, height - 2, width, 2); // Bottom edge
-
-  // Convert to alpha masks
-  invert(highlightCtx, width, height);
-  whiteToAlpha(highlightCtx, width, height);
-  blackToAlpha(shadowCtx, width, height);
-
-  return {
-    highlight: { canvas: highlightCanvas, ctx: highlightCtx },
-    shadow: { canvas: shadowCanvas, ctx: shadowCtx },
-  };
+  matrix: Mat3Tuple,
+  offset: number,
+  margins: [number, number, number, number]
+): GPUTextureHandle {
+  const w = mask.width;
+  const h = mask.height;
+  buddy.useProgram(PROGRAMS.emboss);
+  buddy.setUniforms({
+    uTexelSizeX: { type: Uniforms.FLOAT1, value: 1 / w },
+    uTexelSizeY: { type: Uniforms.FLOAT1, value: 1 / h },
+    uMatrix: { type: Uniforms.FLOAT1V, value: matrix },
+    uOffset: { type: Uniforms.FLOAT1, value: offset },
+    uMargins: { type: Uniforms.FLOAT4, value: margins },
+    uSize: { type: Uniforms.FLOAT2, value: [w, h] },
+    uInput: { type: Uniforms.TEXTURE2D, value: mask },
+  });
+  return buddy.toFramebuffer(w, h);
 }
 
-/**
- * Apply the metal effect pipeline.
- *
- * Pipeline:
- * 1. Tile texture pattern (brushed metal)
- * 2. Apply color with multiply blend
- * 3. Apply dual emboss highlights (if text is large enough)
- * 4. Apply mask using destination-in
- *
- * @param params - Effect parameters
- * @returns Result with canvas and context
- */
-export function applyMetalEffect(params: MetalEffectParams): MetalEffectResult {
+/** Apply the metal effect (GPU). Falls back to flat no-effect when WebGL2 is missing. */
+export function applyMetalEffect(params: MetalEffectParams): MetalEffectResult;
+export function applyMetalEffect(
+  params: MetalEffectParams,
+  output: { kind: 'canvas' }
+): MetalEffectResult;
+export function applyMetalEffect(
+  params: MetalEffectParams,
+  output: { kind: 'handle' }
+): GPUTextureHandle | null;
+export function applyMetalEffect(
+  params: MetalEffectParams,
+  output: EffectOutput = { kind: 'canvas' }
+): MetalEffectResult | GPUTextureHandle | null {
   const { width, height, color, alpha, mask, texture, textHeight } = params;
 
-  // Create the draw canvas
-  const { canvas, ctx } = createCanvasWithContext(width, height);
-
-  // Step 1: Tile texture (if provided)
-  if (texture) {
-    const tiled = tile(texture, width, height);
-    if (tiled) {
-      ctx.drawImage(tiled, 0, 0);
-    }
+  const buddy = myWebGLBuddy();
+  if (!buddy) {
+    if (output.kind === 'handle') return null;
+    return applyNoEffect({
+      width,
+      height,
+      color,
+      alpha,
+      blend: 'normal',
+      mask,
+      ...(texture ? { texture } : {}),
+    });
   }
 
-  // Step 2: Apply color with multiply blend
-  ctx.fillStyle = color;
-  ctx.globalAlpha = alpha;
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.fillRect(0, 0, width, height);
+  // Run the entire pipeline at the mask's own dimensions (text-fitted raster).
+  const w = mask.width;
+  const h = mask.height;
 
-  // Step 3: Apply emboss if text is large enough
+  buddy.wake();
+  buddy.setResolution(w, h);
+
+  ensureProgram(buddy, PROGRAMS.emboss, BUILTIN_SHADER_SOURCES[PROGRAMS.emboss], FBO_VERTEX_SRC);
+  ensureProgram(buddy, METAL_COMPOSE_PROGRAM, metalComposeFragSrc);
+
+  let darken: GPUTextureHandle | null = null;
+  let brighten: GPUTextureHandle | null = null;
   if (textHeight > EMBOSS_HEIGHT_THRESHOLD) {
-    const { highlight, shadow } = createMetalEmboss(mask, width, height);
-
-    // Apply highlight emboss (pronounced for metallic look)
-    ctx.globalAlpha = 0.7;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(highlight.canvas, 0, 0);
-
-    // Apply shadow emboss with lighter blend
-    ctx.globalAlpha = 0.3;
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.drawImage(shadow.canvas, 0, 0);
+    darken = renderMetalEdge(
+      buddy,
+      mask,
+      EMBOSS_MATRIX_METAL,
+      EMBOSS_OFFSET_METAL,
+      [1, 0, 0, 0]
+    );
+    brighten = renderMetalEdge(
+      buddy,
+      mask,
+      EMBOSS_MATRIX_INVERTED,
+      0,
+      [0, 0, 2, 0]
+    );
   }
 
-  // Step 4: Apply mask
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'destination-in';
-  ctx.drawImage(mask, 0, 0);
+  // Convert tint color to a 0..1 vec3 for the shader uniform.
+  const layerRgb = parseHexColor(color) ?? [0, 0, 0];
+  const colorVec: [number, number, number] = [
+    layerRgb[0] / 255,
+    layerRgb[1] / 255,
+    layerRgb[2] / 255,
+  ];
 
-  // Reset context state
-  ctx.globalCompositeOperation = 'source-over';
+  // Tile scale: how many copies of the texture span the canvas. Matches
+  // Canvas2D `createPattern('repeat')` which aligns the pattern to (0, 0) of
+  // the destination — same as fract(uv * scale) anchored at outFragCoord 0.
+  // When there's no texture asset, we upload a 1×1 opaque-white pixel via
+  // the lib's color-to-texture path (passing the 0xRRGGBBAA-packed number
+  // makes WebGLPostProcessor decode it into ImageData of size 1). Tile scale
+  // becomes irrelevant in that case — fract() of any value samples the same
+  // single white texel, and the multiply collapses the formula to the
+  // "no-texture" Canvas2D result.
+  const tileScale: [number, number] = texture
+    ? [w / texture.width, h / texture.height]
+    : [1, 1];
 
+  buddy.useProgram(METAL_COMPOSE_PROGRAM);
+  buddy.setUniforms({
+    uMask: { type: Uniforms.TEXTURE2D, value: mask },
+    // 0xFFFFFFFF = opaque white as a 1×1 pixel; multiplying by it is a no-op
+    // so it serves as the identity texture when no asset is provided.
+    uTexture: { type: Uniforms.TEXTURE2D, value: texture ?? 0xffffffff },
+    // Bind the mask as a placeholder for unused edge samplers — the binding
+    // must stay valid; the shader guards reads with uHasEdges.
+    uDarken: { type: Uniforms.TEXTURE2D, value: darken ?? mask },
+    uBrighten: { type: Uniforms.TEXTURE2D, value: brighten ?? mask },
+    uTileScale: { type: Uniforms.FLOAT2, value: tileScale },
+    uColor: { type: Uniforms.FLOAT3, value: colorVec },
+    uOpacity: { type: Uniforms.FLOAT1, value: alpha },
+    uDarkAlpha: { type: Uniforms.FLOAT1, value: DARK_OVERLAY_ALPHA },
+    uBrightAlpha: { type: Uniforms.FLOAT1, value: BRIGHT_OVERLAY_ALPHA },
+    uHasEdges: { type: Uniforms.INT1, value: darken !== null ? 1 : 0 },
+  });
+
+  if (output.kind === 'handle') {
+    const handle = buddy.toFramebuffer(w, h);
+    buddy.unsetTextureUniforms('uMask', 'uTexture', 'uDarken', 'uBrighten');
+    return handle;
+  }
+
+  const { canvas, ctx } = createCanvasWithContext(w, h);
+  buddy.to(ctx);
+  buddy.unsetTextureUniforms('uMask', 'uTexture', 'uDarken', 'uBrighten');
   return { canvas, ctx };
 }
 
-/**
- * Process a text layer with metal effect pipeline.
- *
- * This is a convenience function that extracts parameters from a
- * TextLayerDescriptor and applies the metal effect pipeline.
- *
- * @param layer - Text layer descriptor
- * @param width - Canvas width
- * @param height - Canvas height
- * @param mask - Rasterized text mask
- * @param textHeight - Height of the text (for emboss threshold)
- * @param texture - Optional texture bitmap for brushed metal pattern
- * @returns Result canvas or null on failure
- */
+/** Convenience wrapper: applies metal from a `TextLayerDescriptor`. */
 export function processMetalEffectLayer(
   layer: TextLayerDescriptor,
   width: number,
@@ -199,10 +229,36 @@ export function processMetalEffectLayer(
   mask: ImageBitmap | AnyCanvas,
   textHeight: number,
   texture?: ImageBitmap
-): AnyCanvas | null {
+): AnyCanvas | null;
+export function processMetalEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  textHeight: number,
+  texture: ImageBitmap | undefined,
+  output: { kind: 'canvas' }
+): AnyCanvas | null;
+export function processMetalEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  textHeight: number,
+  texture: ImageBitmap | undefined,
+  output: { kind: 'handle' }
+): GPUTextureHandle | null;
+export function processMetalEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  textHeight: number,
+  texture?: ImageBitmap,
+  output: EffectOutput = { kind: 'canvas' }
+): AnyCanvas | GPUTextureHandle | null {
   const color = extractDefaultColorCode(layer.color);
 
-  // Build params, only including optional fields if defined
   const params: MetalEffectParams = {
     width,
     height,
@@ -211,22 +267,17 @@ export function processMetalEffectLayer(
     mask,
     textHeight,
   };
-
   if (texture !== undefined) {
     params.texture = texture;
   }
 
-  const result = applyMetalEffect(params);
-
-  return result.canvas;
+  if (output.kind === 'handle') {
+    return applyMetalEffect(params, output);
+  }
+  return applyMetalEffect(params, output).canvas;
 }
 
-/**
- * Get the metal emboss matrix used for the effect.
- * Useful for debugging or preview purposes.
- *
- * @returns The 3x3 metal emboss matrix
- */
-export function getMetalEmbossMatrix(): number[][] {
-  return METAL_EMBOSS_MATRIX.map((row) => [...row]);
+/** The custom metal emboss kernel (white-on-black-opaque mask form). */
+export function getMetalEmbossMatrix(): Mat3Tuple {
+  return [...EMBOSS_MATRIX_METAL] as Mat3Tuple;
 }

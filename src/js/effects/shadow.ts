@@ -1,68 +1,109 @@
 /**
- * Shadow Effect Pipeline
+ * Shadow Effect Pipeline (GPU)
  *
- * Creates a shadow/drop-shadow effect for text layers.
- * Pipeline:
- * 1. Spread - Expand the mask using blur + brightness/contrast
- * 2. White-to-alpha - Convert white background to transparency
- * 3. Color fill - Fill with shadow color (source-in composite)
- * 4. Blur - Apply Gaussian blur for soft shadow edges
- * 5. Multi-pass alpha - Stack shadow with alpha for intensity control
+ * Drop-shadow effect for text layers: takes the rasterized text mask,
+ * expands it (the legacy `ShadowSpread` parameter), softens it (the legacy
+ * `ShadowBlur` parameter), tints it with the layer color, and stacks the
+ * result via a multi-pass alpha buildup that mirrors legacy's iterated
+ * `drawImage` source-over loop.
+ *
+ * Pipeline (single shader chain, one CPU readback at the end):
+ *   1. (GPU) place(mask) into an expanded canvas of size
+ *      `(maskW + 2·(spread + blur), maskH + 2·(spread + blur))`. Pixels
+ *      outside the mask region get vec4(0) — a hard border so the
+ *      downstream blurs don't clip the halo at the canvas edge.
+ *   2. (GPU, conditional) blur(σ = scaledSpread) with brightness/contrast on
+ *      the V pass to soft-threshold the halo into a hard expansion. The bc
+ *      params are tuned for our white-on-black mask format and produce an
+ *      expansion of approximately `spread` pixels.
+ *   3. (GPU, conditional) blur(σ = scaledBlur) for the soft falloff.
+ *   4. (GPU) shadow-compose: tint by uColor and apply multi-pass alpha
+ *      buildup analytically (single draw, matches legacy's iteration).
  *
  * Effect parameters (from mask.effectparams):
- * - ShadowSpread: Spread radius in pixels (scaled to canvas size)
- * - ShadowBlur: Blur radius in pixels (scaled to canvas size)
+ *   ShadowSpread - Spread radius in pixels at the 2048px base resolution.
+ *   ShadowBlur   - Blur radius in pixels at the 2048px base resolution.
+ *
+ * Note: legacy used Canvas2D's `blur(σ) brightness(58%) contrast(700σ%)`
+ * filter chain on a black-on-white mask to produce a soft-then-hard
+ * expansion. That bc threshold direction reverses on our white-on-black
+ * format, so we use a different fixed bc pair (b=10, c=1.2) that gives a
+ * comparable expansion threshold (intensity ≈ 0.083, matching halo at
+ * distance ≈ σ from the edge of a Gaussian-blurred unit step).
  */
+
+import WebGLPostProcessor, { Uniforms, type GPUTextureHandle } from 'webgl-postprocessor';
 
 import type { TextLayerDescriptor } from '../types/messages';
 import type { PimcoMaskSubstitutionCompiled } from '../types/pimco';
 import type { Canvas2DContext, AnyCanvas } from '../utils/canvas';
-import { createCanvasWithContext, getContext2D } from '../utils/canvas';
-import { whiteToAlpha } from './index';
-import { extractDefaultColorCode } from './no-effect';
+import { createCanvasWithContext } from '../utils/canvas';
+import { parseHexColor } from '../utils/color';
+import {
+  BUILTIN_SHADER_SOURCES,
+  FBO_VERTEX_SRC,
+  PROGRAMS,
+  ensureProgram,
+  gaussianWeights,
+  type ChainInput,
+  type EffectOutput,
+} from './effect-utils';
+import { myWebGLBuddy } from './index';
+import { extractDefaultColorCode, applyNoEffect } from './no-effect';
+
+import placeFragSrc from '@/shaders/place.frag.glsl?raw';
+import shadowComposeFragSrc from '@/shaders/shadow-compose.frag.glsl?raw';
 
 /**
- * Default base resolution for scaling effect parameters.
- * Effect parameters in the data are designed for a 2048px canvas.
+ * Base resolution for scaling effect parameters. Effect params in the data
+ * are designed for a 2048px-wide canvas; scale by `canvasWidth / 2048`.
  */
 const BASE_RESOLUTION = 2048;
 
 /**
- * Parameters for the shadow effect pipeline.
+ * Brightness/contrast for the spread bc pass on white-on-black masks.
+ * Produces y = 12x − 1, threshold (y = 0.5) at x ≈ 0.125 — close to the
+ * halo intensity at distance σ from a Gaussian-blurred unit step (≈ 0.16),
+ * so the expansion radius matches σ_spread to within fractional pixels.
  */
+const SPREAD_BC_BRIGHTNESS = 10;
+const SPREAD_BC_CONTRAST = 1.2;
+
+/** Stable program names. */
+const PLACE_PROGRAM = 'pimco_place';
+const SHADOW_COMPOSE_PROGRAM = 'pimco_shadow_compose';
+
 export interface ShadowEffectParams {
-  /** Canvas width */
+  /** Output canvas width — the master canvas, used for parameter scaling. */
   width: number;
-  /** Canvas height */
+  /** Output canvas height (currently unused, kept for parity with siblings). */
   height: number;
-  /** Shadow color (CSS color string) */
+  /** Shadow color (CSS color string). */
   color: string;
-  /** Shadow opacity/intensity (can be > 1 for multiple passes) */
+  /** Shadow opacity / intensity. May exceed 1 for multi-pass density. */
   alpha: number;
-  /** Spread radius (in base resolution pixels) */
+  /** Spread radius at the 2048px base resolution. */
   spread: number;
-  /** Blur radius (in base resolution pixels) */
+  /** Blur radius at the 2048px base resolution. */
   blur: number;
-  /** Mask image (defines text shape) */
+  /** Mask image — white-on-black-opaque, .r = inside text. */
   mask: ImageBitmap | AnyCanvas;
 }
 
-/**
- * Result of the shadow effect pipeline.
- */
 export interface ShadowEffectResult {
-  /** Result canvas */
   canvas: AnyCanvas;
-  /** Result context */
   ctx: Canvas2DContext;
 }
 
 /**
- * Extract shadow effect parameters from mask data.
- *
- * @param maskData - Compiled mask substitution data
- * @returns Shadow parameters (spread and blur)
+ * Scale a parameter value from the 2048px base resolution to the actual
+ * canvas width. Mirrors legacy's `value * targetWidth / 2048`.
  */
+export function scaleToResolution(value: number, targetWidth: number): number {
+  return (value * targetWidth) / BASE_RESOLUTION;
+}
+
+/** Extract shadow-specific parameters from compiled mask data. */
 export function extractShadowParams(maskData: PimcoMaskSubstitutionCompiled): {
   spread: number;
   blur: number;
@@ -85,234 +126,187 @@ export function extractShadowParams(maskData: PimcoMaskSubstitutionCompiled): {
 }
 
 /**
- * Scale a parameter value based on canvas width.
- * Effect parameters are designed for BASE_RESOLUTION and need to be scaled.
- *
- * @param value - Parameter value at base resolution
- * @param targetWidth - Target canvas width
- * @returns Scaled value
+ * Run a 2-pass separable Gaussian blur. Optional bc applies on the V pass
+ * only (matches the convention used by other effects that reuse the blur
+ * shader's brightness/contrast finalize).
  */
-export function scaleToResolution(value: number, targetWidth: number): number {
-  return (value * targetWidth) / BASE_RESOLUTION;
+function renderBlur2D(
+  buddy: WebGLPostProcessor,
+  source: ChainInput,
+  width: number,
+  height: number,
+  sigma: number,
+  brightness = 1,
+  contrast = 1
+): GPUTextureHandle {
+  const { weights, halfWidth } = gaussianWeights(sigma);
+  const texel: [number, number] = [1 / width, 1 / height];
+
+  buddy.useProgram(PROGRAMS.blur);
+  buddy.setUniforms({
+    uInput: { type: Uniforms.TEXTURE2D, value: source },
+    uTexel: { type: Uniforms.FLOAT2, value: texel },
+    uAxis: { type: Uniforms.FLOAT2, value: [1, 0] },
+    uHalfWidth: { type: Uniforms.INT1, value: halfWidth },
+    uWeights: { type: Uniforms.FLOAT1V, value: weights },
+    uBrightness: { type: Uniforms.FLOAT1, value: 1 },
+    uContrast: { type: Uniforms.FLOAT1, value: 1 },
+  });
+  const blurH = buddy.toFramebuffer(width, height);
+
+  buddy.useProgram(PROGRAMS.blur);
+  buddy.setUniforms({
+    uInput: { type: Uniforms.TEXTURE2D, value: blurH },
+    uTexel: { type: Uniforms.FLOAT2, value: texel },
+    uAxis: { type: Uniforms.FLOAT2, value: [0, 1] },
+    uHalfWidth: { type: Uniforms.INT1, value: halfWidth },
+    uWeights: { type: Uniforms.FLOAT1V, value: weights },
+    uBrightness: { type: Uniforms.FLOAT1, value: brightness },
+    uContrast: { type: Uniforms.FLOAT1, value: contrast },
+  });
+  return buddy.toFramebuffer(width, height);
 }
 
-/**
- * Apply spread effect to a mask.
- * Uses blur + brightness/contrast to expand the shape.
- *
- * @param ctx - Source context with mask content
- * @param spread - Spread radius in pixels
- * @returns New canvas with spread applied, or original if no spread
- */
-export function applySpread(
-  ctx: Canvas2DContext,
-  spread: number
-): { canvas: AnyCanvas; ctx: Canvas2DContext; offsetX: number; offsetY: number } {
-  const width = ctx.canvas.width;
-  const height = ctx.canvas.height;
-
-  if (spread <= 0) {
-    return { canvas: ctx.canvas, ctx, offsetX: 0, offsetY: 0 };
-  }
-
-  // Create a larger canvas to accommodate spread expansion
-  const expandedWidth = width + 2 * spread;
-  const expandedHeight = height + 2 * spread;
-
-  const { canvas: spreadCanvas, ctx: spreadCtx } = createCanvasWithContext(
-    expandedWidth,
-    expandedHeight
-  );
-
-  // Apply spread using blur + brightness/contrast filter
-  // This expands the shape outward
-  spreadCtx.filter = `blur(${String(spread)}px) brightness(58%) contrast(${String(700 * spread)}%)`;
-  spreadCtx.drawImage(ctx.canvas, spread, spread);
-
-  // Reset filter
-  spreadCtx.filter = 'none';
-
-  return { canvas: spreadCanvas, ctx: spreadCtx, offsetX: spread, offsetY: spread };
-}
-
-/**
- * Apply color fill using source-in composite.
- * This fills only the opaque pixels with the specified color.
- *
- * @param ctx - Canvas context with alpha mask
- * @param color - Fill color
- */
-export function applyColorFill(ctx: Canvas2DContext, color: string): void {
-  const width = ctx.canvas.width;
-  const height = ctx.canvas.height;
-
-  // Draw the current content
-  ctx.globalCompositeOperation = 'source-in';
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, width, height);
-
-  // Reset
-  ctx.globalCompositeOperation = 'source-over';
-}
-
-/**
- * Apply blur effect to a canvas.
- *
- * @param source - Source canvas
- * @param blur - Blur radius in pixels
- * @returns New canvas with blur applied
- */
-export function applyBlur(
-  source: AnyCanvas,
-  blur: number
-): { canvas: AnyCanvas; ctx: Canvas2DContext; offsetX: number; offsetY: number } {
-  if (blur <= 0) {
-    const ctx = getContext2D(source);
-    if (!ctx) {
-      throw new Error('Failed to get context from source canvas');
-    }
-    return { canvas: source, ctx, offsetX: 0, offsetY: 0 };
-  }
-
-  // Create a larger canvas to accommodate blur expansion
-  const expandedWidth = source.width + 2 * blur;
-  const expandedHeight = source.height + 2 * blur;
-
-  const { canvas: blurCanvas, ctx: blurCtx } = createCanvasWithContext(
-    expandedWidth,
-    expandedHeight
-  );
-
-  // Apply blur filter
-  blurCtx.filter = `blur(${String(blur)}px)`;
-  blurCtx.drawImage(source, blur, blur);
-
-  // Reset filter
-  blurCtx.filter = 'none';
-
-  return { canvas: blurCanvas, ctx: blurCtx, offsetX: blur, offsetY: blur };
-}
-
-/**
- * Apply multi-pass alpha drawing for shadow intensity.
- * When alpha > 1, the shadow is drawn multiple times to increase intensity.
- *
- * @param targetCtx - Target context to draw on
- * @param source - Source shadow canvas
- * @param alpha - Total alpha (can be > 1 for multiple passes)
- * @param offsetX - X offset for positioning
- * @param offsetY - Y offset for positioning
- */
-export function applyMultiPassAlpha(
-  targetCtx: Canvas2DContext,
-  source: AnyCanvas,
-  alpha: number,
-  offsetX = 0,
-  offsetY = 0
-): void {
-  targetCtx.globalCompositeOperation = 'source-over';
-
-  let remainingAlpha = alpha;
-  while (remainingAlpha > 0) {
-    targetCtx.globalAlpha = Math.min(remainingAlpha, 1.0);
-    targetCtx.drawImage(source, -offsetX, -offsetY);
-    remainingAlpha -= 1.0;
-  }
-
-  // Reset
-  targetCtx.globalAlpha = 1.0;
-}
-
-/**
- * Apply the shadow effect pipeline.
- *
- * Pipeline:
- * 1. Create mask canvas with white background
- * 2. Draw mask content
- * 3. Apply spread (if > 0)
- * 4. Convert white to alpha
- * 5. Apply color fill
- * 6. Apply blur (if > 0)
- * 7. Draw with multi-pass alpha
- *
- * @param params - Shadow effect parameters
- * @returns Result with canvas and context
- */
-export function applyShadowEffect(params: ShadowEffectParams): ShadowEffectResult {
+/** Apply the shadow effect (GPU). Falls back to flat no-effect when WebGL2 is missing. */
+export function applyShadowEffect(params: ShadowEffectParams): ShadowEffectResult;
+export function applyShadowEffect(
+  params: ShadowEffectParams,
+  output: { kind: 'canvas' }
+): ShadowEffectResult;
+export function applyShadowEffect(
+  params: ShadowEffectParams,
+  output: { kind: 'handle' }
+): GPUTextureHandle | null;
+export function applyShadowEffect(
+  params: ShadowEffectParams,
+  output: EffectOutput = { kind: 'canvas' }
+): ShadowEffectResult | GPUTextureHandle | null {
   const { width, height, color, alpha, spread, blur, mask } = params;
 
-  // Scale parameters to canvas resolution
+  const buddy = myWebGLBuddy();
+  if (!buddy) {
+    if (output.kind === 'handle') {
+      // Projection requires GPU output. The dispatcher should have routed
+      // away from this code path when WebGL2 is unavailable, but defend.
+      return null;
+    }
+    return applyNoEffect({
+      width,
+      height,
+      color,
+      alpha,
+      blend: 'normal',
+      mask,
+    });
+  }
+
+  // Scale params from base resolution to actual canvas width.
   const scaledSpread = scaleToResolution(spread, width);
   const scaledBlur = scaleToResolution(blur, width);
 
-  // Step 1: Create initial mask canvas with white background
-  const { ctx: maskCtx } = createCanvasWithContext(width, height);
-  maskCtx.fillStyle = '#fff';
-  maskCtx.fillRect(0, 0, width, height);
-  maskCtx.drawImage(mask, 0, 0);
+  // Final canvas dimensions: pad the mask by spread+blur on each side so the
+  // expanded shape and its soft halo fit without being clipped.
+  const padding = Math.ceil(scaledSpread + scaledBlur);
+  const maskW = mask.width;
+  const maskH = mask.height;
+  const outW = maskW + 2 * padding;
+  const outH = maskH + 2 * padding;
 
-  // Step 2: Apply spread (expands the shape)
-  const spreadResult = applySpread(maskCtx, scaledSpread);
-  let totalOffsetX = spreadResult.offsetX;
-  let totalOffsetY = spreadResult.offsetY;
+  buddy.wake();
+  buddy.setResolution(outW, outH);
 
-  // Step 3: Convert white to alpha
-  whiteToAlpha(spreadResult.ctx, spreadResult.canvas.width, spreadResult.canvas.height);
+  ensureProgram(buddy, PROGRAMS.blur, BUILTIN_SHADER_SOURCES[PROGRAMS.blur], FBO_VERTEX_SRC);
+  ensureProgram(buddy, PLACE_PROGRAM, placeFragSrc, FBO_VERTEX_SRC);
+  ensureProgram(buddy, SHADOW_COMPOSE_PROGRAM, shadowComposeFragSrc);
 
-  // Step 4: Create colored version with source-in
-  const { canvas: coloredCanvas, ctx: coloredCtx } = createCanvasWithContext(
-    spreadResult.canvas.width,
-    spreadResult.canvas.height
-  );
-  coloredCtx.drawImage(spreadResult.canvas, 0, 0);
-  applyColorFill(coloredCtx, color);
+  // 1. Place the mask centered in the expanded canvas with hard borders.
+  buddy.useProgram(PLACE_PROGRAM);
+  buddy.setUniforms({
+    uInput: { type: Uniforms.TEXTURE2D, value: mask },
+    uInputSize: { type: Uniforms.FLOAT2, value: [maskW, maskH] },
+    uOutputSize: { type: Uniforms.FLOAT2, value: [outW, outH] },
+    uOffset: { type: Uniforms.FLOAT2, value: [padding, padding] },
+  });
+  let current: ChainInput = buddy.toFramebuffer(outW, outH);
 
-  // Step 5: Apply blur
-  const blurResult = applyBlur(coloredCanvas, scaledBlur);
-  // Note: totalOffsetX and totalOffsetY track cumulative offsets for future use
-  // when positioning the shadow relative to the original content
-  void (totalOffsetX += blurResult.offsetX);
-  void (totalOffsetY += blurResult.offsetY);
+  // 2. Spread step: blur(σ=spread) + bc on V pass to soft-threshold halo
+  //    into a hard expansion.
+  if (scaledSpread > 0) {
+    current = renderBlur2D(
+      buddy,
+      current,
+      outW,
+      outH,
+      scaledSpread,
+      SPREAD_BC_BRIGHTNESS,
+      SPREAD_BC_CONTRAST
+    );
+  }
 
-  // Step 6: Create final output canvas and draw with multi-pass alpha
-  const { canvas: outputCanvas, ctx: outputCtx } = createCanvasWithContext(
-    blurResult.canvas.width,
-    blurResult.canvas.height
-  );
+  // 3. Soft-falloff blur for the shadow's edge.
+  if (scaledBlur > 0) {
+    current = renderBlur2D(buddy, current, outW, outH, scaledBlur);
+  }
 
-  applyMultiPassAlpha(outputCtx, blurResult.canvas, alpha);
+  // 4. Compose: tint + multi-pass alpha buildup.
+  const layerRgb = parseHexColor(color) ?? [0, 0, 0];
+  const colorVec: [number, number, number] = [
+    layerRgb[0] / 255,
+    layerRgb[1] / 255,
+    layerRgb[2] / 255,
+  ];
 
-  return {
-    canvas: outputCanvas,
-    ctx: outputCtx,
-  };
+  buddy.useProgram(SHADOW_COMPOSE_PROGRAM);
+  buddy.setUniforms({
+    uShadowMask: { type: Uniforms.TEXTURE2D, value: current },
+    uColor: { type: Uniforms.FLOAT3, value: colorVec },
+    uAlpha: { type: Uniforms.FLOAT1, value: alpha },
+  });
+
+  if (output.kind === 'handle') {
+    const handle = buddy.toFramebuffer(outW, outH);
+    buddy.unsetTextureUniforms('uShadowMask');
+    return handle;
+  }
+
+  const { canvas, ctx } = createCanvasWithContext(outW, outH);
+  buddy.to(ctx);
+  buddy.unsetTextureUniforms('uShadowMask');
+  return { canvas, ctx };
 }
 
-/**
- * Process a text layer with shadow effect pipeline.
- *
- * This is a convenience function that extracts parameters from a
- * TextLayerDescriptor and applies the shadow effect pipeline.
- *
- * @param layer - Text layer descriptor
- * @param width - Canvas width
- * @param height - Canvas height
- * @param mask - Rasterized text mask
- * @returns Result canvas or null on failure
- */
+/** Convenience wrapper: applies shadow from a `TextLayerDescriptor`. */
 export function processShadowEffectLayer(
   layer: TextLayerDescriptor,
   width: number,
   height: number,
   mask: ImageBitmap | AnyCanvas
-): AnyCanvas | null {
+): AnyCanvas | null;
+export function processShadowEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  output: { kind: 'canvas' }
+): AnyCanvas | null;
+export function processShadowEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  output: { kind: 'handle' }
+): GPUTextureHandle | null;
+export function processShadowEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  output: EffectOutput = { kind: 'canvas' }
+): AnyCanvas | GPUTextureHandle | null {
   const color = extractDefaultColorCode(layer.color);
-  const maskData = layer.maskData;
+  const { spread, blur } = extractShadowParams(layer.maskData);
 
-  // Extract shadow-specific parameters
-  const { spread, blur } = extractShadowParams(maskData);
-
-  const result = applyShadowEffect({
+  const params: ShadowEffectParams = {
     width,
     height,
     color,
@@ -320,42 +314,10 @@ export function processShadowEffectLayer(
     spread,
     blur,
     mask,
-  });
+  };
 
-  return result.canvas;
-}
-
-/**
- * Create a standalone shadow for a given mask.
- * This can be used to add shadows to other effects.
- *
- * @param mask - Source mask
- * @param color - Shadow color
- * @param spread - Spread radius
- * @param blur - Blur radius
- * @param alpha - Shadow alpha
- * @returns Shadow canvas
- */
-export function createShadow(
-  mask: ImageBitmap | AnyCanvas,
-  color: string,
-  spread: number,
-  blur: number,
-  alpha: number
-): AnyCanvas {
-  // For standalone shadow creation, we use the mask dimensions
-  const width = 'width' in mask ? mask.width : 0;
-  const height = 'height' in mask ? mask.height : 0;
-
-  const result = applyShadowEffect({
-    width,
-    height,
-    color,
-    alpha,
-    spread,
-    blur,
-    mask,
-  });
-
-  return result.canvas;
+  if (output.kind === 'handle') {
+    return applyShadowEffect(params, output);
+  }
+  return applyShadowEffect(params, output).canvas;
 }

@@ -127,52 +127,6 @@ describe('getHotstampFillColor', () => {
 });
 
 // ============================================================================
-// createHotstampEmboss Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('createHotstampEmboss', () => {
-  it.skipIf(!hasOffscreenCanvas())('should create both highlight and shadow canvases', async () => {
-    const { createHotstampEmboss } = await import('./hotstamp');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const result = createHotstampEmboss(mockMask, 100, 100);
-
-    expect(result.highlight.canvas.width).toBe(100);
-    expect(result.highlight.canvas.height).toBe(100);
-    expect(result.shadow.canvas.width).toBe(100);
-    expect(result.shadow.canvas.height).toBe(100);
-    expect(result.highlight.ctx).toBeDefined();
-    expect(result.shadow.ctx).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various canvas sizes', async () => {
-    const { createHotstampEmboss } = await import('./hotstamp');
-
-    const sizes = [
-      [50, 50],
-      [200, 100],
-      [100, 200],
-    ];
-
-    for (const [width, height] of sizes) {
-      const mockMask = new OffscreenCanvas(width, height);
-      const result = createHotstampEmboss(mockMask, width, height);
-
-      expect(result.highlight.canvas.width).toBe(width);
-      expect(result.highlight.canvas.height).toBe(height);
-      expect(result.shadow.canvas.width).toBe(width);
-      expect(result.shadow.canvas.height).toBe(height);
-    }
-  });
-});
-
-// ============================================================================
 // applyHotstampEffect Tests (require OffscreenCanvas)
 // ============================================================================
 
@@ -225,7 +179,6 @@ describe('applyHotstampEffect', () => {
     });
 
     expect(result.canvas).toBeDefined();
-    expect(result.ctx.globalCompositeOperation).toBe('source-over');
   });
 
   it.skipIf(!hasOffscreenCanvas())('should apply dual embossing for large text', async () => {
@@ -249,7 +202,6 @@ describe('applyHotstampEffect', () => {
     });
 
     expect(result.canvas).toBeDefined();
-    expect(result.ctx.globalCompositeOperation).toBe('source-over');
   });
 
   it.skipIf(!hasOffscreenCanvas())('should handle provided eindex', async () => {
@@ -298,7 +250,6 @@ describe('applyHotstampEffect', () => {
       });
 
       expect(result.canvas).toBeDefined();
-      expect(result.ctx.globalAlpha).toBe(1); // Should be reset after effect
     }
   });
 });

@@ -16,36 +16,75 @@ export type RGBAColor = [number, number, number, number];
 export type RGBColor = [number, number, number];
 
 /**
- * Parse a hex color string to RGB values.
- * Supports both 3-digit (#RGB) and 6-digit (#RRGGBB) hex formats.
+ * Parse a CSS color string to RGB values.
  *
- * @param hex - Hex color string (with or without leading #)
- * @returns RGB tuple [R, G, B] with values 0-255, or null if invalid
+ * Accepts:
+ *   - 3-digit hex `#RGB`
+ *   - 6-digit hex `#RRGGBB`
+ *   - `rgb(r, g, b)` / `rgb(r g b)` (CSS Level 4 space-separated also accepted)
+ *   - `rgba(r, g, b, a)` (alpha is parsed and discarded — see parseHexColorWithAlpha for full RGBA)
+ *
+ * The function name is historical (it predates rgb() support); accepting a
+ * generic "color string" matches the legacy renderer, which used the DOM
+ * `getComputedStyle` to parse any CSS color. That path is unavailable in
+ * Web Workers, so this regex-based parser covers the common formats produced
+ * by the configurator.
+ *
+ * @param input - Color string (hex with/without `#`, or `rgb()` / `rgba()`)
+ * @returns RGB tuple [R, G, B] with values 0-255, or null if unrecognized
  */
-export function parseHexColor(hex: string): RGBColor | null {
-  // Remove leading # if present
-  const cleanHex = hex.startsWith('#') ? hex.slice(1) : hex;
+export function parseHexColor(input: string): RGBColor | null {
+  const trimmed = input.trim();
 
-  // Validate hex string
+  // Functional rgb() / rgba() — accept comma- or whitespace-separated args.
+  const rgbMatch = /^rgba?\(\s*([^)]+?)\s*\)$/i.exec(trimmed);
+  if (rgbMatch) {
+    const parts = rgbMatch[1].split(/[,\s/]+/).filter((s) => s.length > 0);
+    if (parts.length >= 3) {
+      const r = parseColorComponent(parts[0]);
+      const g = parseColorComponent(parts[1]);
+      const b = parseColorComponent(parts[2]);
+      if (r !== null && g !== null && b !== null) {
+        return [r, g, b];
+      }
+    }
+    return null;
+  }
+
+  // Hex — with or without leading #.
+  const cleanHex = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
   if (!/^[0-9A-Fa-f]{3}$|^[0-9A-Fa-f]{6}$/.test(cleanHex)) {
     return null;
   }
 
-  let r: number, g: number, b: number;
-
   if (cleanHex.length === 3) {
-    // 3-digit hex: #RGB -> #RRGGBB
-    r = parseInt(cleanHex[0] + cleanHex[0], 16);
-    g = parseInt(cleanHex[1] + cleanHex[1], 16);
-    b = parseInt(cleanHex[2] + cleanHex[2], 16);
-  } else {
-    // 6-digit hex: #RRGGBB
-    r = parseInt(cleanHex.slice(0, 2), 16);
-    g = parseInt(cleanHex.slice(2, 4), 16);
-    b = parseInt(cleanHex.slice(4, 6), 16);
+    return [
+      parseInt(cleanHex[0] + cleanHex[0], 16),
+      parseInt(cleanHex[1] + cleanHex[1], 16),
+      parseInt(cleanHex[2] + cleanHex[2], 16),
+    ];
   }
+  return [
+    parseInt(cleanHex.slice(0, 2), 16),
+    parseInt(cleanHex.slice(2, 4), 16),
+    parseInt(cleanHex.slice(4, 6), 16),
+  ];
+}
 
-  return [r, g, b];
+/**
+ * Parse a single CSS color channel value: integer 0-255, percentage 0-100%, or
+ * a number that gets clamped. Returns null on parse failure.
+ */
+function parseColorComponent(part: string): number | null {
+  const trimmed = part.trim();
+  if (trimmed.endsWith('%')) {
+    const pct = parseFloat(trimmed.slice(0, -1));
+    if (Number.isNaN(pct)) return null;
+    return Math.round(Math.max(0, Math.min(100, pct)) * 2.55);
+  }
+  const num = parseFloat(trimmed);
+  if (Number.isNaN(num)) return null;
+  return Math.round(Math.max(0, Math.min(255, num)));
 }
 
 /**

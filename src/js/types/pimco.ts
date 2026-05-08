@@ -100,7 +100,6 @@ export interface PimcoMaskSubstitutionTransformation {
 
 /**
  * 3D mesh projection parameters for text layers.
- * Note: 3D projection is deferred to a future phase.
  */
 export interface PimcoMaskSubstitutionProjection {
   mesh: string;
@@ -113,6 +112,29 @@ export interface PimcoMaskSubstitutionProjection {
   uvauto?: 'x' | 'y';
   uvmeshratio?: number;
   identifier?: string;
+}
+
+/**
+ * Descriptor for a single font face within a family. Mirrors the optional
+ * descriptors accepted by the FontFace constructor.
+ */
+export interface FontFaceDescriptor {
+  url: string;
+  weight?: string | number;
+  style?: 'normal' | 'italic' | 'oblique';
+  stretch?: string;
+  unicodeRange?: string;
+}
+
+/**
+ * A font family the renderer should load, identified by the family name used
+ * inside pimco `mask.type.fontfamily` strings. Each face is fetched as its own
+ * asset; the browser picks the right face at draw time based on the canvas
+ * font weight/style.
+ */
+export interface FontFamilyDescription {
+  family: string;
+  faces: FontFaceDescriptor[];
 }
 
 /**
@@ -159,7 +181,7 @@ export interface PimcoMaskSubstitutionCompiled {
   effectparams?: Record<string, unknown>;
   /** Typography settings */
   type?: PimcoMaskSubstitutionTypeDefinition;
-  /** 3D mesh projection settings (deferred) */
+  /** 3D mesh projection settings */
   projection?: PimcoMaskSubstitutionProjection;
   /** Post-effect mask URL */
   postmask?: string;

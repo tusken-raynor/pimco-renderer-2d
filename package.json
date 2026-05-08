@@ -32,13 +32,13 @@
     "globals": "^16.0.0",
     "jsdom": "^26.1.0",
     "prettier": "^3.5.3",
-    "typescript-eslint": "^8.30.1",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.30.1",
     "vite": "^7.3.1",
     "vitest": "^3.1.1"
   },
   "dependencies": {
-    "gl-matrix": "^3.4.3",
+    "gl-matrix": "^3.4.4",
     "webgl-postprocessor": "github:choc-sproc/webgl-postprocessor"
   }
 }

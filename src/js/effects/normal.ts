@@ -1,85 +1,100 @@
 /**
- * Normal Effect Pipeline
+ * Normal Effect Pipeline (GPU)
  *
- * Creates a normal-mapped 3D lighting effect for text layers.
- * Uses Sobel operator to generate normals from a height map for directional lighting.
+ * Generates a normal map (RGB-encoded surface normals) from a text mask,
+ * suitable for downstream PBR rendering. Not used in the standard 2D
+ * compositing path — normal-effect layers feed into 3D texture maps.
  *
- * Pipeline:
- * 1. Apply roundness blur (optional, creates smoother height map)
- * 2. Tile texture (if provided)
- * 3. Apply color multiply
- * 4. Apply mask to create colored shape
- * 5. Apply color scale for intensity
- * 6. Generate normal map
- * 7. Apply final mask
+ * Pipeline (single shader chain, one CPU readback at the end):
+ *   1. (GPU) place(mask) into an expanded canvas of size
+ *      `(maskW + 4·scaledRoundness, maskH + 4·scaledRoundness)`. The
+ *      padding is internal — Sobel needs clean sampling at the rounded
+ *      mask's edges.
+ *   2. (GPU, conditional) blur(σ = scaledRoundness) with bc on V pass —
+ *      legacy `blur(rPx) contrast((10r + 100)%)` rounds the height-map
+ *      transitions. bc is a no-op when rPx = 0.
+ *   3. (GPU) normal-height: tile the texture, multiply by color tint,
+ *      gate by rounded mask, and apply the colorScale `(rgb − 0.5)·I + 0.5`.
+ *      Output is the grayscale height map at expanded dims.
+ *   4. (GPU) normal-compose: Sobel gradient + light-direction rotation +
+ *      gate by rounded mask alpha. Output canvas runs at the **mask's
+ *      original dimensions** so downstream `applyTransformAndDraw` can
+ *      position it like any other text-fitted effect canvas.
  *
  * Effect parameters (from mask.effectparams):
- * - NormalRoundness: Blur radius for smoother height map (default: 0)
- * - NormalIntensity: Strength of the normal mapping effect (default: 1.0)
- * - NormalLightDir: Light direction ('N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW') (default: 'N')
+ *   NormalRoundness  - Roundness blur radius (scaled by 6·canvasW/2048).
+ *   NormalIntensity  - Strength of the colorScale finalize (default 1).
+ *   NormalLightDir   - Cardinal/intercardinal light direction (default 'N').
  */
+
+import WebGLPostProcessor, { Uniforms, type GPUTextureHandle } from 'webgl-postprocessor';
 
 import type { TextLayerDescriptor } from '../types/messages';
 import type { PimcoMaskSubstitutionCompiled } from '../types/pimco';
-import type { BlendMode } from '../types/pimco';
 import type { Canvas2DContext, AnyCanvas } from '../utils/canvas';
 import { createCanvasWithContext } from '../utils/canvas';
-import { colorScale, normalMap, tile } from './index';
-import { extractDefaultColorCode, blendModeToCompositeOp } from './no-effect';
+import { parseHexColor } from '../utils/color';
+import {
+  BUILTIN_SHADER_SOURCES,
+  FBO_VERTEX_SRC,
+  NORMAL_DIR_INDEX,
+  PROGRAMS,
+  ensureProgram,
+  gaussianWeights,
+  type ChainInput,
+  type EffectOutput,
+  type NormalDir,
+} from './effect-utils';
+import { myWebGLBuddy } from './index';
+import { extractDefaultColorCode, applyNoEffect } from './no-effect';
 
-/**
- * Default base resolution for scaling effect parameters.
- * Effect parameters in the data are designed for a 2048px canvas.
- */
+import placeFragSrc from '@/shaders/place.frag.glsl?raw';
+import normalHeightFragSrc from '@/shaders/normal-height.frag.glsl?raw';
+import normalComposeFragSrc from '@/shaders/normal-compose.frag.glsl?raw';
+
+/** Base resolution for scaling roundness — matches legacy. */
 const BASE_RESOLUTION = 2048;
 
 /**
- * Valid light directions for normal map generation.
+ * Roundness scale factor applied to the user's NormalRoundness param.
+ * Legacy: `roundnessScale = 6 * canvasWidth / BASE_RESOLUTION`. The user
+ * value is multiplied by this to get the actual blur σ in pixels.
  */
-export type NormalLightDirection = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
+const ROUNDNESS_BASE_SCALE = 6;
 
-/**
- * Parameters for the normal effect pipeline.
- */
+/** Stable program names. */
+const PLACE_PROGRAM = 'pimco_place';
+const NORMAL_HEIGHT_PROGRAM = 'pimco_normal_height';
+const NORMAL_COMPOSE_PROGRAM = 'pimco_normal_compose';
+
+/** Re-export the `NormalDir` type so callers don't need to reach into effect-utils. */
+export type NormalLightDirection = NormalDir;
+
 export interface NormalEffectParams {
-  /** Canvas width */
   width: number;
-  /** Canvas height */
   height: number;
-  /** Color value (CSS color string) */
+  /** Color tint for the height map (CSS color string). */
   color: string;
-  /** Color/blend alpha (0-1) */
+  /** Layer alpha — modulates tint strength, never final transparency. */
   alpha: number;
-  /** Blend mode for color application */
-  blend: BlendMode;
-  /** Optional texture image to tile */
-  texture?: ImageBitmap;
-  /** Mask image (defines text shape) */
+  /** Mask image — white-on-black-opaque, .r = inside text. */
   mask: ImageBitmap | AnyCanvas;
-  /** Roundness blur radius (in base resolution pixels) - creates smoother height map */
+  /** Optional texture, tiled across the expanded canvas. */
+  texture?: ImageBitmap;
+  /** User NormalRoundness param (scaled internally). */
   roundness: number;
-  /** Normal intensity - strength of the normal mapping effect */
+  /** Sobel intensity (height-map contrast multiplier). */
   intensity: number;
-  /** Light direction for normal map */
+  /** Cardinal/intercardinal light direction. */
   lightDirection: NormalLightDirection;
 }
 
-/**
- * Result of the normal effect pipeline.
- */
 export interface NormalEffectResult {
-  /** Result canvas */
   canvas: AnyCanvas;
-  /** Result context */
   ctx: Canvas2DContext;
 }
 
-/**
- * Extract normal effect parameters from mask data.
- *
- * @param maskData - Compiled mask substitution data
- * @returns Normal effect parameters
- */
+/** Extract normal-specific parameters from compiled mask data. */
 export function extractNormalParams(maskData: PimcoMaskSubstitutionCompiled): {
   roundness: number;
   intensity: number;
@@ -110,315 +125,242 @@ export function extractNormalParams(maskData: PimcoMaskSubstitutionCompiled): {
   return { roundness, intensity, lightDirection };
 }
 
-/**
- * Scale a parameter value based on canvas width.
- * Effect parameters are designed for BASE_RESOLUTION and need to be scaled.
- *
- * @param value - Parameter value at base resolution
- * @param targetWidth - Target canvas width
- * @returns Scaled value
- */
+/** Scale a base-resolution param to the actual canvas width. */
 export function scaleToResolution(value: number, targetWidth: number): number {
   return (value * targetWidth) / BASE_RESOLUTION;
 }
 
 /**
- * Apply roundness blur to a mask to create smoother height transitions.
- * Uses blur + contrast to create rounded edges on the shape.
- *
- * @param source - Source mask canvas/bitmap
- * @param roundness - Scaled roundness blur radius
- * @returns New canvas with roundness applied, including offset information
+ * Run a 2-pass separable Gaussian blur. Optional bc applies on the V pass
+ * only (matches the convention used by other effects).
  */
-export function applyRoundnessBlur(
-  source: ImageBitmap | AnyCanvas,
-  roundness: number
-): { canvas: AnyCanvas; ctx: Canvas2DContext; offsetX: number; offsetY: number } {
-  const sourceWidth = source.width;
-  const sourceHeight = source.height;
-
-  if (roundness <= 0) {
-    // No roundness, just copy the source
-    const { canvas, ctx } = createCanvasWithContext(sourceWidth, sourceHeight);
-    ctx.drawImage(source, 0, 0);
-    return { canvas, ctx, offsetX: 0, offsetY: 0 };
-  }
-
-  // Create a larger canvas to accommodate blur expansion
-  // Use 4x roundness margin to prevent edge cutoff
-  const margin = roundness * 2;
-  const expandedWidth = sourceWidth + margin * 2;
-  const expandedHeight = sourceHeight + margin * 2;
-
-  const { canvas: roundnessCanvas, ctx: roundnessCtx } = createCanvasWithContext(
-    expandedWidth,
-    expandedHeight
-  );
-
-  // Apply blur + contrast filter for rounded edges
-  // Higher roundness needs proportionally higher contrast
-  const contrastPercent = (10 * roundness + 100) / 100;
-  roundnessCtx.filter = `blur(${String(roundness)}px) contrast(${String(contrastPercent)})`;
-  roundnessCtx.drawImage(source, margin, margin);
-
-  // Reset filter
-  roundnessCtx.filter = 'none';
-
-  return {
-    canvas: roundnessCanvas,
-    ctx: roundnessCtx,
-    offsetX: margin,
-    offsetY: margin,
-  };
-}
-
-/**
- * Create the text content canvas with texture and color.
- * This creates the height map that will be converted to a normal map.
- *
- * @param mask - Source mask
- * @param width - Canvas width
- * @param height - Canvas height
- * @param color - Fill color
- * @param alpha - Color alpha
- * @param blend - Blend mode
- * @param texture - Optional texture
- * @returns Canvas with colored text content
- */
-export function createColoredTextContent(
-  mask: ImageBitmap | AnyCanvas,
+function renderBlur2D(
+  buddy: WebGLPostProcessor,
+  source: ChainInput,
   width: number,
   height: number,
-  color: string,
-  alpha: number,
-  blend: BlendMode,
-  texture?: ImageBitmap
-): { canvas: AnyCanvas; ctx: Canvas2DContext } {
-  const { canvas, ctx } = createCanvasWithContext(width, height);
+  sigma: number,
+  brightness = 1,
+  contrast = 1
+): GPUTextureHandle {
+  const { weights, halfWidth } = gaussianWeights(sigma);
+  const texel: [number, number] = [1 / width, 1 / height];
 
-  // Step 1: Tile texture (if provided)
-  if (texture) {
-    const tiled = tile(texture, width, height);
-    if (tiled) {
-      ctx.drawImage(tiled, 0, 0);
-      ctx.globalCompositeOperation =
-        blend === 'normal' ? 'multiply' : blendModeToCompositeOp(blend);
-    }
-  } else {
-    // If no texture, just use source-over
-    ctx.globalCompositeOperation = 'source-over';
-  }
+  buddy.useProgram(PROGRAMS.blur);
+  buddy.setUniforms({
+    uInput: { type: Uniforms.TEXTURE2D, value: source },
+    uTexel: { type: Uniforms.FLOAT2, value: texel },
+    uAxis: { type: Uniforms.FLOAT2, value: [1, 0] },
+    uHalfWidth: { type: Uniforms.INT1, value: halfWidth },
+    uWeights: { type: Uniforms.FLOAT1V, value: weights },
+    uBrightness: { type: Uniforms.FLOAT1, value: 1 },
+    uContrast: { type: Uniforms.FLOAT1, value: 1 },
+  });
+  const blurH = buddy.toFramebuffer(width, height);
 
-  // Step 2: Apply color
-  ctx.fillStyle = color;
-  ctx.globalAlpha = alpha;
-  ctx.fillRect(0, 0, width, height);
-
-  // Step 3: Apply mask (destination-in composite)
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'destination-in';
-  ctx.drawImage(mask, 0, 0);
-
-  // Reset context state
-  ctx.globalCompositeOperation = 'source-over';
-
-  return { canvas, ctx };
+  buddy.useProgram(PROGRAMS.blur);
+  buddy.setUniforms({
+    uInput: { type: Uniforms.TEXTURE2D, value: blurH },
+    uTexel: { type: Uniforms.FLOAT2, value: texel },
+    uAxis: { type: Uniforms.FLOAT2, value: [0, 1] },
+    uHalfWidth: { type: Uniforms.INT1, value: halfWidth },
+    uWeights: { type: Uniforms.FLOAT1V, value: weights },
+    uBrightness: { type: Uniforms.FLOAT1, value: brightness },
+    uContrast: { type: Uniforms.FLOAT1, value: contrast },
+  });
+  return buddy.toFramebuffer(width, height);
 }
 
-/**
- * Create the normal map content on a black background.
- * The black background is important for proper normal map generation.
- *
- * @param textContent - Colored text content canvas
- * @param width - Canvas width
- * @param height - Canvas height
- * @returns Canvas ready for normal map generation
- */
-export function createNormalMapInput(
-  textContent: AnyCanvas,
-  width: number,
-  height: number
-): { canvas: AnyCanvas; ctx: Canvas2DContext } {
-  const { canvas, ctx } = createCanvasWithContext(width, height);
-
-  // Fill with black background (important for normal map edge handling)
-  ctx.fillStyle = '#000';
-  ctx.globalAlpha = 1.0;
-  ctx.fillRect(0, 0, width, height);
-
-  // Draw the colored text content
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.drawImage(textContent, 0, 0);
-
-  return { canvas, ctx };
-}
-
-/**
- * Apply the normal effect pipeline.
- *
- * Pipeline:
- * 1. Apply roundness blur to mask (creates smoother height map edges)
- * 2. Create colored text content with texture and color
- * 3. Create normal map input on black background
- * 4. Apply color scale for intensity adjustment
- * 5. Generate normal map
- * 6. Apply final mask
- *
- * @param params - Effect parameters
- * @returns Result with canvas and context
- */
-export function applyNormalEffect(params: NormalEffectParams): NormalEffectResult {
+/** Apply the normal effect (GPU). Falls back to flat no-effect when WebGL2 is missing. */
+export function applyNormalEffect(params: NormalEffectParams): NormalEffectResult;
+export function applyNormalEffect(
+  params: NormalEffectParams,
+  output: { kind: 'canvas' }
+): NormalEffectResult;
+export function applyNormalEffect(
+  params: NormalEffectParams,
+  output: { kind: 'handle' }
+): GPUTextureHandle | null;
+export function applyNormalEffect(
+  params: NormalEffectParams,
+  output: EffectOutput = { kind: 'canvas' }
+): NormalEffectResult | GPUTextureHandle | null {
   const {
     width,
     height,
     color,
     alpha,
-    blend,
-    texture,
     mask,
+    texture,
     roundness,
     intensity,
     lightDirection,
   } = params;
 
-  // Scale roundness to canvas resolution
-  // The legacy code uses: 6 * targetWidth / 2048 as the scale factor for roundness
-  const roundnessScale = (6 * width) / BASE_RESOLUTION;
-  const scaledRoundness = roundness * roundnessScale;
+  const buddy = myWebGLBuddy();
+  if (!buddy) {
+    if (output.kind === 'handle') return null;
+    return applyNoEffect({
+      width,
+      height,
+      color,
+      alpha,
+      blend: 'normal',
+      mask,
+      ...(texture ? { texture } : {}),
+    });
+  }
 
-  // Step 1: Apply roundness blur to mask
-  const roundnessResult = applyRoundnessBlur(mask, scaledRoundness);
+  // Roundness scaled by canvas resolution; the data param is in 2048-base
+  // pixels and the effective blur σ is `param × 6 × canvasW / 2048`.
+  const scaledRoundness = roundness * scaleToResolution(ROUNDNESS_BASE_SCALE, width);
 
-  // Step 2: Create colored text content (this will be the height map)
-  const textContent = createColoredTextContent(
-    roundnessResult.canvas,
-    roundnessResult.canvas.width,
-    roundnessResult.canvas.height,
-    color,
-    alpha,
-    blend,
-    texture
-  );
+  // Mask dims (final output) and expanded dims (internal padding for clean
+  // Sobel sampling at the rounded edges). Padding = 2·σ on each side, total
+  // expansion = 4·σ across the dim. Matches legacy.
+  const padding = Math.ceil(scaledRoundness * 2);
+  const maskW = mask.width;
+  const maskH = mask.height;
+  const expW = maskW + 2 * padding;
+  const expH = maskH + 2 * padding;
 
-  // Step 3: Create normal map input on black background
-  const normalInput = createNormalMapInput(
-    textContent.canvas,
-    roundnessResult.canvas.width,
-    roundnessResult.canvas.height
-  );
+  buddy.wake();
+  buddy.setResolution(expW, expH);
 
-  // Step 4: Apply color scale for intensity
-  // Create a canvas to receive the color-scaled output
-  const { canvas: scaledCanvas, ctx: scaledCtx } = createCanvasWithContext(
-    normalInput.canvas.width,
-    normalInput.canvas.height
-  );
-  colorScale(normalInput.canvas, scaledCtx, intensity);
+  ensureProgram(buddy, PROGRAMS.blur, BUILTIN_SHADER_SOURCES[PROGRAMS.blur], FBO_VERTEX_SRC);
+  ensureProgram(buddy, PLACE_PROGRAM, placeFragSrc, FBO_VERTEX_SRC);
+  ensureProgram(buddy, NORMAL_HEIGHT_PROGRAM, normalHeightFragSrc, FBO_VERTEX_SRC);
+  ensureProgram(buddy, NORMAL_COMPOSE_PROGRAM, normalComposeFragSrc);
 
-  // Step 5: Generate normal map
-  const { canvas: normalCanvas, ctx: normalCtx } = createCanvasWithContext(
-    scaledCanvas.width,
-    scaledCanvas.height
-  );
-  normalMap(scaledCanvas, normalCtx, lightDirection, 1.0);
+  // 1. Place mask centered in expanded canvas with hard transparent borders.
+  buddy.useProgram(PLACE_PROGRAM);
+  buddy.setUniforms({
+    uInput: { type: Uniforms.TEXTURE2D, value: mask },
+    uInputSize: { type: Uniforms.FLOAT2, value: [maskW, maskH] },
+    uOutputSize: { type: Uniforms.FLOAT2, value: [expW, expH] },
+    uOffset: { type: Uniforms.FLOAT2, value: [padding, padding] },
+  });
+  // No persistence needed: roundedMask is bound to uMask in step 3 and
+  // re-bound (same handle, uniformValueCompare skip) in step 4, so its
+  // useCount stays at 1 across passes and auto-frees on unset at the end.
+  // Within the optional blur step, the placed-mask handle is consumed by
+  // the H pass and auto-freed when the V pass replaces uInput.
+  let roundedMask: ChainInput = buddy.toFramebuffer(expW, expH);
 
-  // Step 6: Create output canvas at original dimensions
-  const { canvas: outputCanvas, ctx: outputCtx } = createCanvasWithContext(width, height);
+  // 2. Roundness blur with bc on V pass — legacy `blur(r) contrast((10r+100)%)`
+  //    where contrast is in fractional form (1.0 = no change, > 1 = boost).
+  //    Skipped when roundness is 0; the mask passes through unchanged.
+  if (scaledRoundness > 0) {
+    const contrast = (10 * scaledRoundness + 100) / 100;
+    roundedMask = renderBlur2D(buddy, roundedMask, expW, expH, scaledRoundness, 1, contrast);
+  }
 
-  // Draw the normal map, accounting for roundness offset
-  outputCtx.globalCompositeOperation = 'source-over';
-  outputCtx.drawImage(normalCanvas, -roundnessResult.offsetX, -roundnessResult.offsetY);
+  // 3. Build the height map at expanded dims: texture × tint × maskA + colorScale.
+  const layerRgb = parseHexColor(color) ?? [0, 0, 0];
+  const colorVec: [number, number, number] = [
+    layerRgb[0] / 255,
+    layerRgb[1] / 255,
+    layerRgb[2] / 255,
+  ];
+  const tileScale: [number, number] = texture
+    ? [expW / texture.width, expH / texture.height]
+    : [1, 1];
 
-  // Apply original mask to clean up edges
-  outputCtx.globalCompositeOperation = 'destination-in';
-  outputCtx.drawImage(roundnessResult.canvas, -roundnessResult.offsetX, -roundnessResult.offsetY);
+  buddy.useProgram(NORMAL_HEIGHT_PROGRAM);
+  buddy.setUniforms({
+    uMask: { type: Uniforms.TEXTURE2D, value: roundedMask },
+    uTexture: { type: Uniforms.TEXTURE2D, value: texture ?? 0xffffffff },
+    uTileScale: { type: Uniforms.FLOAT2, value: tileScale },
+    uColor: { type: Uniforms.FLOAT3, value: colorVec },
+    uOpacity: { type: Uniforms.FLOAT1, value: alpha },
+    uIntensity: { type: Uniforms.FLOAT1, value: intensity },
+  });
+  const heightMap = buddy.toFramebuffer(expW, expH);
 
-  // Reset context state
-  outputCtx.globalCompositeOperation = 'source-over';
+  // 4. Compose at MASK dims, sampling expanded heightMap and roundedMask
+  //    with offset. Sobel + light-direction rotation + mask gate.
+  buddy.setResolution(maskW, maskH);
 
-  return { canvas: outputCanvas, ctx: outputCtx };
+  buddy.useProgram(NORMAL_COMPOSE_PROGRAM);
+  buddy.setUniforms({
+    uHeightMap: { type: Uniforms.TEXTURE2D, value: heightMap },
+    uMask: { type: Uniforms.TEXTURE2D, value: roundedMask },
+    uTexelSize: { type: Uniforms.FLOAT2, value: [1 / expW, 1 / expH] },
+    uMaskSize: { type: Uniforms.FLOAT2, value: [maskW, maskH] },
+    uExpandedSize: { type: Uniforms.FLOAT2, value: [expW, expH] },
+    uOffset: { type: Uniforms.FLOAT2, value: [padding, padding] },
+    uIntensity: { type: Uniforms.FLOAT1, value: 1 },
+    uDirection: { type: Uniforms.INT1, value: NORMAL_DIR_INDEX[lightDirection] },
+  });
+
+  if (output.kind === 'handle') {
+    const handle = buddy.toFramebuffer(maskW, maskH);
+    buddy.unsetTextureUniforms('uHeightMap', 'uMask', 'uTexture', 'uInput');
+    return handle;
+  }
+
+  const { canvas, ctx } = createCanvasWithContext(maskW, maskH);
+  buddy.to(ctx);
+  buddy.unsetTextureUniforms('uHeightMap', 'uMask', 'uTexture', 'uInput');
+  return { canvas, ctx };
 }
 
-/**
- * Process a text layer with normal effect pipeline.
- *
- * This is a convenience function that extracts parameters from a
- * TextLayerDescriptor and applies the normal effect pipeline.
- *
- * @param layer - Text layer descriptor
- * @param width - Canvas width
- * @param height - Canvas height
- * @param mask - Rasterized text mask
- * @param texture - Optional texture bitmap
- * @returns Result canvas or null on failure
- */
+/** Convenience wrapper: applies normal from a `TextLayerDescriptor`. */
 export function processNormalEffectLayer(
   layer: TextLayerDescriptor,
   width: number,
   height: number,
   mask: ImageBitmap | AnyCanvas,
   texture?: ImageBitmap
-): AnyCanvas | null {
+): AnyCanvas | null;
+export function processNormalEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  texture: ImageBitmap | undefined,
+  output: { kind: 'canvas' }
+): AnyCanvas | null;
+export function processNormalEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  texture: ImageBitmap | undefined,
+  output: { kind: 'handle' }
+): GPUTextureHandle | null;
+export function processNormalEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  texture?: ImageBitmap,
+  output: EffectOutput = { kind: 'canvas' }
+): AnyCanvas | GPUTextureHandle | null {
   const color = extractDefaultColorCode(layer.color);
   const { roundness, intensity, lightDirection } = extractNormalParams(layer.maskData);
 
-  // Build params, only including texture if defined
   const params: NormalEffectParams = {
     width,
     height,
     color,
     alpha: layer.alpha,
-    blend: layer.blend,
     mask,
     roundness,
     intensity,
     lightDirection,
   };
-
   if (texture !== undefined) {
     params.texture = texture;
   }
 
-  const result = applyNormalEffect(params);
-
-  return result.canvas;
+  if (output.kind === 'handle') {
+    return applyNormalEffect(params, output);
+  }
+  return applyNormalEffect(params, output).canvas;
 }
 
-/**
- * Get normal effect info for debugging/preview purposes.
- *
- * @param roundness - Roundness parameter
- * @param intensity - Intensity parameter
- * @param lightDirection - Light direction
- * @returns Object with effect parameters
- */
-export function getNormalEffectInfo(
-  roundness: number,
-  intensity: number,
-  lightDirection: NormalLightDirection
-): {
-  roundness: number;
-  intensity: number;
-  lightDirection: NormalLightDirection;
-  defaultRoundness: number;
-  defaultIntensity: number;
-  defaultLightDirection: NormalLightDirection;
-} {
-  return {
-    roundness,
-    intensity,
-    lightDirection,
-    defaultRoundness: 0,
-    defaultIntensity: 1.0,
-    defaultLightDirection: 'N',
-  };
-}
-
-/**
- * Get valid light directions for the normal effect.
- *
- * @returns Array of valid light direction strings
- */
+/** Get the valid light directions. */
 export function getValidLightDirections(): readonly NormalLightDirection[] {
   return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
 }

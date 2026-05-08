@@ -13,10 +13,20 @@
  * This module is designed to run in a Web Worker context using OffscreenCanvas.
  */
 
-import type { RenderSegment, TextLayerDescriptor } from '../types/messages';
+import type {
+  FontFaceDeliveryDescriptors,
+  RenderSegment,
+  TextLayerDescriptor,
+} from '../types/messages';
 import type { CanvasCompositeOperation, PimcoMaskSubstitutionCompiled } from '../types/pimco';
 import { canvasToImageBitmap, createCanvas, getContext2D } from '../utils/canvas';
-import { TextRasterizer, createTextRasterizer, type RasterizedText } from './text-rasterizer';
+import { parseObj } from './mesh';
+import {
+  TextRasterizer,
+  createTextRasterizer,
+  type RasterizedText,
+  type TextRasterizerOptions,
+} from './text-rasterizer';
 import { applyTransformAndDraw, hasActiveTransform, type TextAlignment } from './transforms';
 
 /**
@@ -70,6 +80,13 @@ export class TextRenderSlave {
   /** Cached fonts */
   private fonts: FontCache = new Map();
 
+  /**
+   * Cached parsed meshes, keyed by mesh asset ID. Each entry is the
+   * interleaved 8-float-per-vertex buffer produced by parseObj — directly
+   * uploadable as a VBO by the projection module.
+   */
+  private meshes: Map<number, Float32Array> = new Map();
+
   /** Text rasterizer instance */
   private rasterizer: TextRasterizer;
 
@@ -91,41 +108,67 @@ export class TextRenderSlave {
   }
 
   /**
-   * Register a font asset received from the Asset Manager.
+   * Register a font asset received from the Asset Manager. Internally
+   * constructs a `FontFace`, awaits `.load()`, and adds it to `self.fonts`
+   * so the canvas-2d engine can pick the face up by its real family name.
+   *
+   * The returned promise always resolves: failures are logged and the
+   * cache entry is left with `loaded === false` so the batch gate falls
+   * back to system fonts. Callers that need to await load completion can
+   * await this promise; callers that just need fire-and-forget can ignore
+   * it and rely on `isFontLoaded(id)`.
    *
    * @param id - Asset ID
-   * @param family - Font family name
+   * @param family - Font family name (must match `mask.type.fontfamily`)
    * @param data - Font data as ArrayBuffer
+   * @param descriptors - Optional FontFace descriptors (weight, style, ...)
    */
-  registerFont(id: number, family: string, data: ArrayBuffer): void {
-    this.fonts.set(id, { family, data, loaded: false });
-  }
+  registerFont(
+    id: number,
+    family: string,
+    data: ArrayBuffer,
+    descriptors?: FontFaceDeliveryDescriptors
+  ): Promise<void> {
+    const entry: FontCacheEntry = { family, data, loaded: false };
+    this.fonts.set(id, entry);
 
-  /**
-   * Load a font into the document/worker via FontFace API.
-   *
-   * @param id - Font asset ID
-   * @returns Promise that resolves when font is loaded
-   */
-  async loadFont(id: number): Promise<void> {
-    const entry = this.fonts.get(id);
-    if (!entry || entry.loaded) {
-      return;
+    if (typeof FontFace === 'undefined') {
+      return Promise.resolve();
     }
 
+    const ffDescriptors: FontFaceDescriptors = {};
+    if (descriptors?.weight !== undefined) {
+      ffDescriptors.weight = String(descriptors.weight);
+    }
+    if (descriptors?.style !== undefined) {
+      ffDescriptors.style = descriptors.style;
+    }
+    if (descriptors?.stretch !== undefined) {
+      ffDescriptors.stretch = descriptors.stretch;
+    }
+    if (descriptors?.unicodeRange !== undefined) {
+      ffDescriptors.unicodeRange = descriptors.unicodeRange;
+    }
+
+    let fontFace: FontFace;
     try {
-      const fontFace = new FontFace(entry.family, entry.data);
-      await fontFace.load();
-
-      // Add to document fonts (works in both main thread and workers with FontFace support)
-      if (typeof self !== 'undefined' && 'fonts' in self) {
-        self.fonts.add(fontFace);
-      }
-
-      entry.loaded = true;
+      fontFace = new FontFace(family, data, ffDescriptors);
     } catch (error) {
-      console.warn(`Failed to load font ${entry.family}:`, error);
+      console.warn(`Failed to construct FontFace for ${family}:`, error);
+      return Promise.resolve();
     }
+
+    return fontFace
+      .load()
+      .then((loaded) => {
+        if (typeof self !== 'undefined' && 'fonts' in self) {
+          (self as unknown as { fonts: FontFaceSet }).fonts.add(loaded);
+        }
+        entry.loaded = true;
+      })
+      .catch((error: unknown) => {
+        console.warn(`Failed to load font ${family}:`, error);
+      });
   }
 
   /**
@@ -149,13 +192,26 @@ export class TextRenderSlave {
   }
 
   /**
-   * Check if a font is registered.
+   * Check if a font is registered (regardless of load state).
    *
    * @param id - Font ID
-   * @returns true if font is registered
+   * @returns true if a cache entry exists for this id
    */
   hasFont(id: number): boolean {
     return this.fonts.has(id);
+  }
+
+  /**
+   * Check if a font is fully loaded (FontFace.load resolved AND added to
+   * `self.fonts`). This is the gate the batch coordinator must wait on
+   * before rasterizing text — using `hasFont` would let rendering start
+   * with a still-loading face and cause incorrect layout metrics.
+   *
+   * @param id - Font ID
+   * @returns true if the FontFace is loaded
+   */
+  isFontLoaded(id: number): boolean {
+    return this.fonts.get(id)?.loaded === true;
   }
 
   /**
@@ -166,6 +222,41 @@ export class TextRenderSlave {
    */
   getFont(id: number): FontCacheEntry | undefined {
     return this.fonts.get(id);
+  }
+
+  /**
+   * Register a mesh asset received from the Asset Manager. Parses the OBJ
+   * source on receipt and caches the interleaved vertex buffer for the slave's
+   * lifetime. Failed parses leave the entry absent so the batch-coordinator
+   * gate (`hasMesh`) keeps waiting until a valid buffer arrives — or the
+   * project drops the layer at the master if its mesh URL hits `-1`.
+   *
+   * @param id - Mesh asset ID
+   * @param data - Raw OBJ file contents as ArrayBuffer
+   */
+  registerMesh(id: number, data: ArrayBuffer): void {
+    const buffer = parseObj(data);
+    if (buffer === null) {
+      console.warn(`Failed to parse mesh asset ${String(id)}`);
+      return;
+    }
+    this.meshes.set(id, buffer);
+  }
+
+  /**
+   * Check if a mesh has been registered (and successfully parsed).
+   */
+  hasMesh(id: number): boolean {
+    return this.meshes.has(id);
+  }
+
+  /**
+   * Get the parsed vertex buffer for a mesh asset.
+   *
+   * @returns the interleaved 8-float-stride buffer, or undefined if absent
+   */
+  getMesh(id: number): Float32Array | undefined {
+    return this.meshes.get(id);
   }
 
   /**
@@ -186,6 +277,7 @@ export class TextRenderSlave {
     }
     this.assets.clear();
     this.fonts.clear();
+    this.meshes.clear();
   }
 
   /**
@@ -220,17 +312,22 @@ export class TextRenderSlave {
   rasterizeText(
     maskData: PimcoMaskSubstitutionCompiled,
     workWidth: number,
-    workHeight: number
+    workHeight: number,
+    opts: { transparentBackground?: boolean } = {}
   ): RasterizedText {
-    // Build options, only including type if defined (exactOptionalPropertyTypes compliance)
-    const options = {
+    // Build options, only including optional fields if defined
+    // (exactOptionalPropertyTypes compliance).
+    const options: TextRasterizerOptions = {
       workWidth,
       workHeight,
       content: maskData.content ?? '',
     };
 
     if (maskData.type !== undefined) {
-      return this.rasterizer.rasterize({ ...options, type: maskData.type });
+      options.type = maskData.type;
+    }
+    if (opts.transparentBackground === true) {
+      options.transparentBackground = true;
     }
 
     return this.rasterizer.rasterize(options);

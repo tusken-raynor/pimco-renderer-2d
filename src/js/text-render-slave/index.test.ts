@@ -24,6 +24,7 @@ interface MockContext {
   measureText: ReturnType<typeof vi.fn>;
   fillText: ReturnType<typeof vi.fn>;
   clearRect: ReturnType<typeof vi.fn>;
+  fillRect: ReturnType<typeof vi.fn>;
   drawImage: ReturnType<typeof vi.fn>;
 }
 
@@ -40,6 +41,7 @@ function createMockContext(width: number, height: number): MockContext {
     measureText: vi.fn().mockReturnValue({ width: 100 }),
     fillText: vi.fn(),
     clearRect: vi.fn(),
+    fillRect: vi.fn(),
     drawImage: vi.fn(),
   };
 }
@@ -230,6 +232,20 @@ describe('TextRenderSlave', () => {
       slave.clearAssets();
 
       expect(slave.hasFont(1)).toBe(false);
+    });
+
+    it('isFontLoaded should be false until the FontFace.load resolves', () => {
+      // In jsdom FontFace either is undefined or `.load()` rejects on a
+      // random ArrayBuffer; either path leaves loaded=false. Either way,
+      // hasFont (registered) is true and isFontLoaded (load resolved) is
+      // false. This is the gate the batch coordinator relies on.
+      slave.registerFont(1, 'TestFont', new ArrayBuffer(100));
+      expect(slave.hasFont(1)).toBe(true);
+      expect(slave.isFontLoaded(1)).toBe(false);
+    });
+
+    it('isFontLoaded returns false for unregistered ids', () => {
+      expect(slave.isFontLoaded(999)).toBe(false);
     });
   });
 

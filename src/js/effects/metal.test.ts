@@ -19,96 +19,30 @@ const hasOffscreenCanvas = (): boolean => {
 // ============================================================================
 
 describe('getMetalEmbossMatrix', () => {
-  it('should return a 3x3 matrix', () => {
+  it('should return a 9-element flat Mat3Tuple', () => {
     const matrix = getMetalEmbossMatrix();
-
-    expect(matrix).toHaveLength(3);
-    expect(matrix[0]).toHaveLength(3);
-    expect(matrix[1]).toHaveLength(3);
-    expect(matrix[2]).toHaveLength(3);
+    expect(matrix).toHaveLength(9);
   });
 
-  it('should return the expected metal emboss matrix', () => {
+  it('should return the white-on-black form of the legacy metal kernel', () => {
     const matrix = getMetalEmbossMatrix();
 
-    // Expected: [[-1, -1, -1], [-1, -1, 1], [1, 1, 1]]
-    expect(matrix).toEqual([
-      [-1, -1, -1],
-      [-1, -1, 1],
-      [1, 1, 1],
-    ]);
+    // Legacy black-on-white kernel was [[-1,-1,-1],[-1,-1,1],[1,1,1]];
+    // negation for use on white-on-black masks gives this row-major flat
+    // tuple. (Sum of the legacy form is -1, compensated CPU-side by an
+    // explicit uOffset uniform.)
+    expect(matrix).toEqual([1, 1, 1, 1, 1, -1, -1, -1, -1]);
   });
 
   it('should return a copy (not the original)', () => {
     const matrix1 = getMetalEmbossMatrix();
     const matrix2 = getMetalEmbossMatrix();
 
-    // Should be equal but not the same reference
     expect(matrix1).toEqual(matrix2);
     expect(matrix1).not.toBe(matrix2);
 
-    // Modifying one should not affect the other
-    matrix1[0][0] = 999;
-    expect(matrix2[0][0]).toBe(-1);
-  });
-
-  it('should differ from standard emboss matrix', () => {
-    const metalMatrix = getMetalEmbossMatrix();
-
-    // Standard emboss matrix: [[0, -1, -1], [0, -1, 1], [1, 1, 0]]
-    const standardMatrix = [
-      [0, -1, -1],
-      [0, -1, 1],
-      [1, 1, 0],
-    ];
-
-    expect(metalMatrix).not.toEqual(standardMatrix);
-  });
-});
-
-// ============================================================================
-// createMetalEmboss Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('createMetalEmboss', () => {
-  it.skipIf(!hasOffscreenCanvas())('should create both highlight and shadow canvases', async () => {
-    const { createMetalEmboss } = await import('./metal');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const result = createMetalEmboss(mockMask, 100, 100);
-
-    expect(result.highlight.canvas.width).toBe(100);
-    expect(result.highlight.canvas.height).toBe(100);
-    expect(result.shadow.canvas.width).toBe(100);
-    expect(result.shadow.canvas.height).toBe(100);
-    expect(result.highlight.ctx).toBeDefined();
-    expect(result.shadow.ctx).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various canvas sizes', async () => {
-    const { createMetalEmboss } = await import('./metal');
-
-    const sizes = [
-      [50, 50],
-      [200, 100],
-      [100, 200],
-    ];
-
-    for (const [width, height] of sizes) {
-      const mockMask = new OffscreenCanvas(width, height);
-      const result = createMetalEmboss(mockMask, width, height);
-
-      expect(result.highlight.canvas.width).toBe(width);
-      expect(result.highlight.canvas.height).toBe(height);
-      expect(result.shadow.canvas.width).toBe(width);
-      expect(result.shadow.canvas.height).toBe(height);
-    }
+    matrix1[0] = 999;
+    expect(matrix2[0]).toBe(1);
   });
 });
 
@@ -118,7 +52,7 @@ describe('createMetalEmboss', () => {
 
 describe('applyMetalEffect', () => {
   it.skipIf(!hasOffscreenCanvas())(
-    'should create result canvas matching input dimensions',
+    'should create a result canvas at the mask dimensions',
     async () => {
       const { applyMetalEffect } = await import('./metal');
 
@@ -154,7 +88,6 @@ describe('applyMetalEffect', () => {
       ctx.fillRect(25, 25, 50, 50);
     }
 
-    // textHeight <= 43.5 should skip embossing
     const result = applyMetalEffect({
       width: 100,
       height: 100,
@@ -165,7 +98,6 @@ describe('applyMetalEffect', () => {
     });
 
     expect(result.canvas).toBeDefined();
-    expect(result.ctx.globalCompositeOperation).toBe('source-over');
   });
 
   it.skipIf(!hasOffscreenCanvas())('should apply embossing for large text', async () => {
@@ -178,7 +110,6 @@ describe('applyMetalEffect', () => {
       ctx.fillRect(25, 25, 50, 50);
     }
 
-    // textHeight > 43.5 should apply embossing
     const result = applyMetalEffect({
       width: 100,
       height: 100,
@@ -189,7 +120,6 @@ describe('applyMetalEffect', () => {
     });
 
     expect(result.canvas).toBeDefined();
-    expect(result.ctx.globalCompositeOperation).toBe('source-over');
   });
 
   it.skipIf(!hasOffscreenCanvas())('should handle texture when provided', async () => {
@@ -202,11 +132,9 @@ describe('applyMetalEffect', () => {
       ctx.fillRect(25, 25, 50, 50);
     }
 
-    // Create a mock brushed metal texture
     const textureCanvas = new OffscreenCanvas(50, 50);
     const textureCtx = textureCanvas.getContext('2d');
     if (textureCtx) {
-      // Simple striped pattern for brushed metal
       for (let y = 0; y < 50; y++) {
         textureCtx.fillStyle = y % 2 === 0 ? '#dddddd' : '#bbbbbb';
         textureCtx.fillRect(0, y, 50, 1);
@@ -250,7 +178,6 @@ describe('applyMetalEffect', () => {
       });
 
       expect(result.canvas).toBeDefined();
-      expect(result.ctx.globalAlpha).toBe(1); // Should be reset after effect
     }
   });
 
@@ -327,7 +254,6 @@ describe('processMetalEffectLayer', () => {
       ctx.fillRect(25, 25, 50, 50);
     }
 
-    // Create a mock texture
     const textureCanvas = new OffscreenCanvas(50, 50);
     const textureCtx = textureCanvas.getContext('2d');
     if (textureCtx) {
@@ -405,7 +331,6 @@ describe('processMetalEffectLayer', () => {
       maskData: {},
     };
 
-    // Should use default color '#000000'
     const result = processMetalEffectLayer(layer, 100, 100, mockMask, 50);
 
     expect(result).not.toBeNull();

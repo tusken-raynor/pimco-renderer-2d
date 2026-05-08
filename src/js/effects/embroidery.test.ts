@@ -147,52 +147,6 @@ describe('getEmbroideryColorBrightness', () => {
 });
 
 // ============================================================================
-// createEmbroideryEmboss Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('createEmbroideryEmboss', () => {
-  it.skipIf(!hasOffscreenCanvas())('should create both highlight and shadow canvases', async () => {
-    const { createEmbroideryEmboss } = await import('./embroidery');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const result = createEmbroideryEmboss(mockMask, 100, 100);
-
-    expect(result.highlight.canvas.width).toBe(100);
-    expect(result.highlight.canvas.height).toBe(100);
-    expect(result.shadow.canvas.width).toBe(100);
-    expect(result.shadow.canvas.height).toBe(100);
-    expect(result.highlight.ctx).toBeDefined();
-    expect(result.shadow.ctx).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various canvas sizes', async () => {
-    const { createEmbroideryEmboss } = await import('./embroidery');
-
-    const sizes = [
-      [50, 50],
-      [200, 100],
-      [100, 200],
-    ];
-
-    for (const [width, height] of sizes) {
-      const mockMask = new OffscreenCanvas(width, height);
-      const result = createEmbroideryEmboss(mockMask, width, height);
-
-      expect(result.highlight.canvas.width).toBe(width);
-      expect(result.highlight.canvas.height).toBe(height);
-      expect(result.shadow.canvas.width).toBe(width);
-      expect(result.shadow.canvas.height).toBe(height);
-    }
-  });
-});
-
-// ============================================================================
 // applyEmbroideryEffect Tests (require OffscreenCanvas)
 // ============================================================================
 
@@ -209,7 +163,7 @@ describe('applyEmbroideryEffect', () => {
         ctx.fillRect(25, 25, 50, 50);
       }
 
-      const result = applyEmbroideryEffect({
+      const result = await applyEmbroideryEffect({
         width: 100,
         height: 100,
         color: '#ff0000',
@@ -218,8 +172,7 @@ describe('applyEmbroideryEffect', () => {
         fuzziness: 1.0,
         mask: mockMask,
         textHeight: 50,
-        enableFuzz: false, // Disable fuzz for unit test (WebGL required)
-      });
+        });
 
       expect(result.canvas.width).toBe(100);
       expect(result.canvas.height).toBe(100);
@@ -238,7 +191,7 @@ describe('applyEmbroideryEffect', () => {
     }
 
     // textHeight <= 43.5 should skip embossing and shadow
-    const result = applyEmbroideryEffect({
+    const result = await applyEmbroideryEffect({
       width: 100,
       height: 100,
       color: '#ff0000',
@@ -247,7 +200,6 @@ describe('applyEmbroideryEffect', () => {
       fuzziness: 1.0,
       mask: mockMask,
       textHeight: 40, // Below threshold
-      enableFuzz: false,
     });
 
     expect(result.canvas).toBeDefined();
@@ -266,7 +218,7 @@ describe('applyEmbroideryEffect', () => {
     }
 
     // textHeight > 43.5 should apply embossing and shadow
-    const result = applyEmbroideryEffect({
+    const result = await applyEmbroideryEffect({
       width: 100,
       height: 100,
       color: '#ff0000',
@@ -275,7 +227,6 @@ describe('applyEmbroideryEffect', () => {
       fuzziness: 1.0,
       mask: mockMask,
       textHeight: 50, // Above threshold
-      enableFuzz: false,
     });
 
     expect(result.canvas).toBeDefined();
@@ -302,7 +253,7 @@ describe('applyEmbroideryEffect', () => {
     }
     const textureBitmap = await createImageBitmap(textureCanvas);
 
-    const result = applyEmbroideryEffect({
+    const result = await applyEmbroideryEffect({
       width: 100,
       height: 100,
       color: '#ff0000',
@@ -312,7 +263,6 @@ describe('applyEmbroideryEffect', () => {
       mask: mockMask,
       texture: textureBitmap,
       textHeight: 50,
-      enableFuzz: false,
     });
 
     expect(result.canvas).toBeDefined();
@@ -331,7 +281,7 @@ describe('applyEmbroideryEffect', () => {
     const alphaValues = [0.1, 0.5, 1.0];
 
     for (const alpha of alphaValues) {
-      const result = applyEmbroideryEffect({
+      const result = await applyEmbroideryEffect({
         width: 100,
         height: 100,
         color: '#ff0000',
@@ -340,8 +290,7 @@ describe('applyEmbroideryEffect', () => {
         fuzziness: 1.0,
         mask: mockMask,
         textHeight: 50,
-        enableFuzz: false,
-      });
+        });
 
       expect(result.canvas).toBeDefined();
     }
@@ -358,7 +307,7 @@ describe('applyEmbroideryEffect', () => {
     }
 
     // Note: alphaErode requires WebGL2, so this tests the parameter path
-    const result = applyEmbroideryEffect({
+    const result = await applyEmbroideryEffect({
       width: 100,
       height: 100,
       color: '#ff0000',
@@ -367,7 +316,6 @@ describe('applyEmbroideryEffect', () => {
       fuzziness: 1.0,
       mask: mockMask,
       textHeight: 50,
-      enableFuzz: false,
     });
 
     expect(result.canvas).toBeDefined();
@@ -401,7 +349,7 @@ describe('processEmbroideryEffectLayer', () => {
       maskData: {},
     };
 
-    const result = processEmbroideryEffectLayer(layer, 100, 100, mockMask, 50, undefined, false);
+    const result = await processEmbroideryEffectLayer(layer, 100, 100, mockMask, 50);
 
     expect(result).not.toBeNull();
     if (result) {
@@ -439,7 +387,7 @@ describe('processEmbroideryEffectLayer', () => {
         },
       };
 
-      const result = processEmbroideryEffectLayer(layer, 100, 100, mockMask, 50, undefined, false);
+      const result = await processEmbroideryEffectLayer(layer, 100, 100, mockMask, 50);
 
       expect(result).not.toBeNull();
     }
@@ -476,14 +424,13 @@ describe('processEmbroideryEffectLayer', () => {
       maskData: {},
     };
 
-    const result = processEmbroideryEffectLayer(
+    const result = await processEmbroideryEffectLayer(
       layer,
       100,
       100,
       mockMask,
       50,
-      textureBitmap,
-      false
+      textureBitmap
     );
 
     expect(result).not.toBeNull();

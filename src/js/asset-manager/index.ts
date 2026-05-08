@@ -15,6 +15,7 @@ import type {
   DistributeCompleteMessage,
   MasterToAssetManagerMessage,
   AssetDataMessage,
+  FontFaceDeliveryDescriptors,
 } from '../types';
 import {
   isFetchMessage,
@@ -52,6 +53,10 @@ interface CachedAsset {
   url: string;
   /** Timestamp when cached */
   cachedAt: number;
+  /** Font family name (only for assetType === 'font') */
+  fontFamily?: string;
+  /** FontFace constructor descriptors (only for assetType === 'font') */
+  fontDescriptors?: FontFaceDeliveryDescriptors;
 }
 
 /**
@@ -184,8 +189,15 @@ export class AssetManager {
         // Load based on asset type
         const data = await this.loadAsset(asset, signal);
 
-        // Cache the asset
-        this.cacheAsset(asset.id, asset.url, asset.assetType, data);
+        // Cache the asset (font metadata threaded through for delivery)
+        const fontMeta: { fontFamily?: string; fontDescriptors?: FontFaceDeliveryDescriptors } = {};
+        if (asset.fontFamily !== undefined) {
+          fontMeta.fontFamily = asset.fontFamily;
+        }
+        if (asset.fontDescriptors !== undefined) {
+          fontMeta.fontDescriptors = asset.fontDescriptors;
+        }
+        this.cacheAsset(asset.id, asset.url, asset.assetType, data, fontMeta);
       } catch (error) {
         if (signal.aborted) {
           return; // Don't report aborted loads as failures
@@ -200,7 +212,7 @@ export class AssetManager {
     // Enforce cache size limit
     this.enforceCache();
 
-    return { type: 'fetch-complete', failed };
+    return { type: 'fetch-complete', requestId: message.requestId, failed };
   }
 
   /**
@@ -261,14 +273,27 @@ export class AssetManager {
     id: number,
     url: string,
     assetType: AssetType,
-    data: ImageBitmap | ArrayBuffer
+    data: ImageBitmap | ArrayBuffer,
+    fontMeta?: {
+      fontFamily?: string;
+      fontDescriptors?: FontFaceDeliveryDescriptors;
+    }
   ): void {
-    this.cache.set(id, {
+    const entry: CachedAsset = {
       data,
       assetType,
       url,
       cachedAt: Date.now(),
-    });
+    };
+    if (assetType === 'font') {
+      if (fontMeta?.fontFamily !== undefined) {
+        entry.fontFamily = fontMeta.fontFamily;
+      }
+      if (fontMeta?.fontDescriptors !== undefined) {
+        entry.fontDescriptors = fontMeta.fontDescriptors;
+      }
+    }
+    this.cache.set(id, entry);
     this.urlToId.set(url, id);
   }
 
@@ -311,7 +336,7 @@ export class AssetManager {
       await this.deliverToSlave(delivery);
     }
 
-    return { type: 'distribute-complete' };
+    return { type: 'distribute-complete', requestId: message.requestId };
   }
 
   /**
@@ -361,6 +386,14 @@ export class AssetManager {
           assetType: cachedAsset.assetType,
           data: transferableData,
         };
+        if (cachedAsset.assetType === 'font') {
+          if (cachedAsset.fontFamily !== undefined) {
+            assetDataMsg.fontFamily = cachedAsset.fontFamily;
+          }
+          if (cachedAsset.fontDescriptors !== undefined) {
+            assetDataMsg.fontDescriptors = cachedAsset.fontDescriptors;
+          }
+        }
 
         slave.port.postMessage(assetDataMsg, transferables);
 
@@ -394,7 +427,10 @@ export class AssetManager {
    * @param assets - Assets to preload
    */
   async preload(assets: AssetRequest[]): Promise<void> {
-    await this.handleFetch({ type: 'fetch', assets });
+    // Internal call — no master-side correlation needed; use 0 as the
+    // sentinel requestId. The returned fetch-complete is discarded by the
+    // caller (preload doesn't surface failures).
+    await this.handleFetch({ type: 'fetch', requestId: 0, assets });
   }
 
   /**

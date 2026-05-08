@@ -1,89 +1,217 @@
 /**
- * Painted Effect Pipeline
+ * Painted Effect Pipeline (GPU)
  *
- * Creates a painted/printed appearance for text layers with a slight inset.
- * Pipeline:
- * 1. Create expanded edge mask (for emboss effect around edges)
- * 2. Apply dual emboss on expanded mask (if text is large enough)
- * 3. Create inset/shrunk mask using blur + brightness/contrast
- * 4. Convert mask to alpha
- * 5. Tile texture pattern
- * 6. Apply color blend
- * 7. Apply inset mask (destination-in composite)
- * 8. Composite emboss highlights with main content
+ * Paint-stamp appearance: a tiled paint texture × color tint inside an
+ * alpha-eroded text shape, sitting over a backdrop of soft bevel hints
+ * (emboss INVERTED darken + emboss STANDARD brighten, both crisp).
  *
- * Effect parameters (from mask.effectparams):
- * - PaintedInsetShrink: Amount to shrink the inset mask (default: 1.0)
+ * Pipeline (single shader chain, one CPU readback at the end):
+ *   1. (GPU) erode(mask, PaintedInsetShrink) — shrinks the mask so the paint
+ *      sits ~1px inside the glyph, leaving a thin bevel ring around it.
+ *   2. (GPU, conditional) For text taller than EMBOSS_HEIGHT_THRESHOLD:
+ *        - emboss(INVERTED) + bottom-2 clear → highlight (darken)
+ *        - emboss(STANDARD) + top-2 clear → shadowEdge (brighten)
+ *      No blur on the emboss output — legacy painted explicitly commented
+ *      out the `filter: blur(1px)` for these layers.
+ *   3. (GPU) painted-compose: layers texture × tint × shrunkMask on top of
+ *      the bevel backdrop in straight-alpha space.
+ *
+ * Note: legacy painted built its bevel emboss on a heavily-thresholded
+ * "expanded" mask (Canvas2D `blur(1px) brightness(50%) contrast(500%)
+ * brightness(200%) contrast(200%)`) so the bevel rim sat slightly outside
+ * the original glyph. That filter chain doesn't translate cleanly to a
+ * single blur+bc shader pass on our white-on-black mask format (the bc
+ * threshold direction reverses), so this implementation embosses the raw
+ * mask. Visually the bevel rim hugs the glyph edge tightly — verify
+ * against legacy and add a dilate prep pass if needed.
  */
+
+import WebGLPostProcessor, { Uniforms, type GPUTextureHandle } from 'webgl-postprocessor';
 
 import type { TextLayerDescriptor } from '../types/messages';
-import type { PimcoMaskSubstitutionCompiled, BlendMode } from '../types/pimco';
+import type { PimcoMaskSubstitutionCompiled } from '../types/pimco';
 import type { Canvas2DContext, AnyCanvas } from '../utils/canvas';
 import { createCanvasWithContext } from '../utils/canvas';
-import { emboss2D, invert, whiteToAlpha, blackToAlpha, tile } from './index';
-import { extractDefaultColorCode, blendModeToCompositeOp } from './no-effect';
+import { parseHexColor } from '../utils/color';
+import {
+  BUILTIN_SHADER_SOURCES,
+  EMBOSS_MATRIX_INVERTED,
+  EMBOSS_MATRIX_STANDARD,
+  FBO_VERTEX_SRC,
+  PROGRAMS,
+  ensureProgram,
+  type ChainInput,
+  type EffectOutput,
+  type Mat3Tuple,
+} from './effect-utils';
+import { myWebGLBuddy } from './index';
+import { extractDefaultColorCode, applyNoEffect } from './no-effect';
 
-/**
- * Minimum text height threshold for applying embossing effects.
- * Text smaller than this is rendered without emboss highlights.
- */
+import paintedComposeFragSrc from '@/shaders/painted-compose.frag.glsl?raw';
+
+/** Text-height threshold below which the bevel step is skipped. */
 const EMBOSS_HEIGHT_THRESHOLD = 43.5;
 
-/**
- * Default painted inset shrink amount in pixels.
- */
+/** Default mask erosion radius — matches legacy's PaintedInsetShrink default. */
 const DEFAULT_INSET_SHRINK = 1.0;
 
-/**
- * Parameters for the painted effect pipeline.
- */
+/** Legacy weights for each bevel overlay. */
+const HIGHLIGHT_OVERLAY_ALPHA = 0.1;
+const SHADOW_EDGE_OVERLAY_ALPHA = 0.05;
+
+/** Stable program name for the painted compose shader. */
+const PAINTED_COMPOSE_PROGRAM = 'pimco_painted_compose';
+
 export interface PaintedEffectParams {
-  /** Canvas width */
   width: number;
-  /** Canvas height */
   height: number;
-  /** Paint color (CSS color string) */
+  /** Paint tint color (CSS color string). */
   color: string;
-  /** Layer alpha (0-1) */
+  /** Layer alpha (0-1) — modulates tint strength, never final transparency. */
   alpha: number;
-  /** Blend mode for color application */
-  blend: BlendMode;
-  /** Inset shrink amount in pixels (default: 1.0) */
+  /** Pixel radius of mask erosion (default 1.0; 0 = skip). */
   paintedInsetShrink: number;
-  /** Mask image (defines text shape) */
+  /** Mask image — white-on-black-opaque, .r = inside text. */
   mask: ImageBitmap | AnyCanvas;
-  /** Texture image for paint pattern */
+  /** Optional paint texture, tiled across the canvas. */
   texture?: ImageBitmap;
-  /** Text height in pixels (for emboss threshold) */
+  /** Text height in pixels — controls bevel gate. */
   textHeight: number;
 }
 
-/**
- * Result of the painted effect pipeline.
- */
 export interface PaintedEffectResult {
-  /** Result canvas */
   canvas: AnyCanvas;
-  /** Result context */
   ctx: Canvas2DContext;
 }
 
-/**
- * Dual emboss result containing both highlight and shadow canvases.
- */
-export interface DualEmbossResult {
-  /** Highlight emboss (inverted matrix, creates shadow on edges) */
-  highlight: { canvas: AnyCanvas; ctx: Canvas2DContext };
-  /** Shadow emboss (standard matrix, creates raised edge) */
-  shadow: { canvas: AnyCanvas; ctx: Canvas2DContext };
+/** Run a single emboss pass and return the FBO. Crisp output, sum-zero kernel offset = 0. */
+function renderEmboss(
+  buddy: WebGLPostProcessor,
+  source: ChainInput,
+  width: number,
+  height: number,
+  matrix: Mat3Tuple,
+  margins: [number, number, number, number]
+): GPUTextureHandle {
+  buddy.useProgram(PROGRAMS.emboss);
+  buddy.setUniforms({
+    uTexelSizeX: { type: Uniforms.FLOAT1, value: 1 / width },
+    uTexelSizeY: { type: Uniforms.FLOAT1, value: 1 / height },
+    uMatrix: { type: Uniforms.FLOAT1V, value: matrix },
+    uOffset: { type: Uniforms.FLOAT1, value: 0 },
+    uMargins: { type: Uniforms.FLOAT4, value: margins },
+    uSize: { type: Uniforms.FLOAT2, value: [width, height] },
+    uInput: { type: Uniforms.TEXTURE2D, value: source },
+  });
+  return buddy.toFramebuffer(width, height);
 }
 
-/**
- * Extract painted effect parameters from mask data.
- *
- * @param maskData - Compiled mask substitution data
- * @returns Painted parameters (inset shrink amount)
- */
+/** Apply the painted effect (GPU). Falls back to flat no-effect when WebGL2 is missing. */
+export function applyPaintedEffect(params: PaintedEffectParams): PaintedEffectResult;
+export function applyPaintedEffect(
+  params: PaintedEffectParams,
+  output: { kind: 'canvas' }
+): PaintedEffectResult;
+export function applyPaintedEffect(
+  params: PaintedEffectParams,
+  output: { kind: 'handle' }
+): GPUTextureHandle | null;
+export function applyPaintedEffect(
+  params: PaintedEffectParams,
+  output: EffectOutput = { kind: 'canvas' }
+): PaintedEffectResult | GPUTextureHandle | null {
+  const { width, height, color, alpha, paintedInsetShrink, mask, texture, textHeight } = params;
+
+  const buddy = myWebGLBuddy();
+  if (!buddy) {
+    if (output.kind === 'handle') return null;
+    return applyNoEffect({
+      width,
+      height,
+      color,
+      alpha,
+      blend: 'normal',
+      mask,
+      ...(texture ? { texture } : {}),
+    });
+  }
+
+  const w = mask.width;
+  const h = mask.height;
+
+  buddy.wake();
+  buddy.setResolution(w, h);
+
+  ensureProgram(buddy, PROGRAMS.erode, BUILTIN_SHADER_SOURCES[PROGRAMS.erode], FBO_VERTEX_SRC);
+  ensureProgram(buddy, PROGRAMS.emboss, BUILTIN_SHADER_SOURCES[PROGRAMS.emboss], FBO_VERTEX_SRC);
+  ensureProgram(buddy, PAINTED_COMPOSE_PROGRAM, paintedComposeFragSrc);
+
+  // 1. Shrunken mask (paint sits inside this).
+  let shrunkMask: ChainInput = mask;
+  if (paintedInsetShrink > 0) {
+    buddy.useProgram(PROGRAMS.erode);
+    const start = Math.ceil(-paintedInsetShrink);
+    const end = Math.ceil(paintedInsetShrink);
+    buddy.setUniforms({
+      uStart: { type: Uniforms.INT1, value: start },
+      uEnd: { type: Uniforms.INT1, value: end },
+      uTexelSizeX: { type: Uniforms.FLOAT1, value: 1 / w },
+      uTexelSizeY: { type: Uniforms.FLOAT1, value: 1 / h },
+      uInput: { type: Uniforms.TEXTURE2D, value: mask },
+    });
+    shrunkMask = buddy.toFramebuffer(w, h);
+  }
+
+  // 2. Crisp bevel handles for tall enough text.
+  let highlight: GPUTextureHandle | null = null;
+  let shadowEdge: GPUTextureHandle | null = null;
+  const hasEdges = textHeight > EMBOSS_HEIGHT_THRESHOLD;
+  if (hasEdges) {
+    // Highlight (darken): INVERTED kernel + bottom-2 clear.
+    highlight = renderEmboss(buddy, mask, w, h, EMBOSS_MATRIX_INVERTED, [0, 0, 2, 0]);
+    // Shadow edge (brighten): STANDARD kernel + top-2 clear.
+    shadowEdge = renderEmboss(buddy, mask, w, h, EMBOSS_MATRIX_STANDARD, [2, 0, 0, 0]);
+  }
+
+  // CPU-side: tint color → vec3 in 0..1.
+  const layerRgb = parseHexColor(color) ?? [0, 0, 0];
+  const colorVec: [number, number, number] = [
+    layerRgb[0] / 255,
+    layerRgb[1] / 255,
+    layerRgb[2] / 255,
+  ];
+
+  const tileScale: [number, number] = texture
+    ? [w / texture.width, h / texture.height]
+    : [1, 1];
+
+  buddy.useProgram(PAINTED_COMPOSE_PROGRAM);
+  buddy.setUniforms({
+    uShrunkMask: { type: Uniforms.TEXTURE2D, value: shrunkMask },
+    uTexture: { type: Uniforms.TEXTURE2D, value: texture ?? 0xffffffff },
+    uHighlight: { type: Uniforms.TEXTURE2D, value: highlight ?? shrunkMask },
+    uShadowEdge: { type: Uniforms.TEXTURE2D, value: shadowEdge ?? shrunkMask },
+    uTileScale: { type: Uniforms.FLOAT2, value: tileScale },
+    uColor: { type: Uniforms.FLOAT3, value: colorVec },
+    uOpacity: { type: Uniforms.FLOAT1, value: alpha },
+    uHighlightAlpha: { type: Uniforms.FLOAT1, value: HIGHLIGHT_OVERLAY_ALPHA },
+    uShadowEdgeAlpha: { type: Uniforms.FLOAT1, value: SHADOW_EDGE_OVERLAY_ALPHA },
+    uHasEdges: { type: Uniforms.INT1, value: hasEdges ? 1 : 0 },
+  });
+
+  if (output.kind === 'handle') {
+    const handle = buddy.toFramebuffer(w, h);
+    buddy.unsetTextureUniforms('uShrunkMask', 'uTexture', 'uHighlight', 'uShadowEdge');
+    return handle;
+  }
+
+  const { canvas, ctx } = createCanvasWithContext(w, h);
+  buddy.to(ctx);
+  buddy.unsetTextureUniforms('uShrunkMask', 'uTexture', 'uHighlight', 'uShadowEdge');
+  return { canvas, ctx };
+}
+
+/** Extract painted-specific parameters from compiled mask data. */
 export function extractPaintedParams(maskData: PimcoMaskSubstitutionCompiled): {
   paintedInsetShrink: number;
 } {
@@ -98,208 +226,7 @@ export function extractPaintedParams(maskData: PimcoMaskSubstitutionCompiled): {
   return { paintedInsetShrink };
 }
 
-/**
- * Create an expanded edge mask for the painted emboss effect.
- * Uses blur + brightness/contrast to expand the mask edges.
- *
- * @param mask - Source mask canvas
- * @param width - Canvas width
- * @param height - Canvas height
- * @returns Expanded mask canvas
- */
-export function createExpandedEdgeMask(
-  mask: ImageBitmap | AnyCanvas,
-  width: number,
-  height: number
-): { canvas: AnyCanvas; ctx: Canvas2DContext } {
-  const { canvas, ctx } = createCanvasWithContext(width, height);
-
-  // Fill with white background
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, width, height);
-  ctx.drawImage(mask, 0, 0);
-
-  // Expand using blur + brightness/contrast filter
-  // This creates a slight expansion of the edges
-  ctx.filter = 'blur(1px) brightness(50%) contrast(500%) brightness(200%) contrast(200%)';
-  ctx.drawImage(canvas, 0, 0);
-  ctx.filter = 'none';
-
-  return { canvas, ctx };
-}
-
-/**
- * Create dual emboss canvases for painted effect.
- * Uses inverted and standard emboss matrices for edge beveling.
- *
- * @param expandedMask - Expanded edge mask canvas
- * @param width - Canvas width
- * @param height - Canvas height
- * @returns Dual emboss result with highlight and shadow canvases
- */
-export function createPaintedEmboss(
-  expandedMask: AnyCanvas,
-  width: number,
-  height: number
-): DualEmbossResult {
-  // Create highlight emboss canvas (inverted for shadow on edges)
-  const { canvas: highlightCanvas, ctx: highlightCtx } = createCanvasWithContext(width, height);
-  highlightCtx.drawImage(expandedMask, 0, 0);
-
-  // Create shadow emboss canvas (standard for raised edge)
-  const { canvas: shadowCanvas, ctx: shadowCtx } = createCanvasWithContext(width, height);
-  shadowCtx.drawImage(expandedMask, 0, 0);
-
-  // Process highlight: inverted emboss matrix
-  emboss2D(highlightCtx, width, height, true);
-  // Process shadow: standard emboss matrix
-  emboss2D(shadowCtx, width, height, false);
-
-  // Clean up edge artifacts
-  highlightCtx.fillStyle = '#000';
-  shadowCtx.fillStyle = '#000';
-  highlightCtx.fillRect(0, height - 2, width, 2); // Bottom edge
-  shadowCtx.fillRect(0, 0, width, 2); // Top edge
-
-  // Convert to alpha masks
-  invert(highlightCtx, width, height);
-  whiteToAlpha(highlightCtx, width, height);
-  blackToAlpha(shadowCtx, width, height);
-
-  return {
-    highlight: { canvas: highlightCanvas, ctx: highlightCtx },
-    shadow: { canvas: shadowCanvas, ctx: shadowCtx },
-  };
-}
-
-/**
- * Create an inset/shrunk mask for the painted effect.
- * Uses blur + brightness/contrast to shrink the mask inward.
- *
- * @param mask - Source mask canvas
- * @param width - Canvas width
- * @param height - Canvas height
- * @param shrinkAmount - Amount to shrink in pixels
- * @returns Inset mask canvas with alpha channel
- */
-export function createInsetMask(
-  mask: ImageBitmap | AnyCanvas,
-  width: number,
-  height: number,
-  shrinkAmount: number
-): { canvas: AnyCanvas; ctx: Canvas2DContext } {
-  // Create a canvas with white background + mask
-  const { canvas: shrinkSource, ctx: shrinkSourceCtx } = createCanvasWithContext(width, height);
-  shrinkSourceCtx.fillStyle = '#fff';
-  shrinkSourceCtx.fillRect(0, 0, width, height);
-  shrinkSourceCtx.drawImage(mask, 0, 0);
-
-  // Create the inset mask canvas
-  const { canvas, ctx } = createCanvasWithContext(width, height);
-
-  // Apply shrink using blur + brightness/contrast
-  ctx.filter = `blur(${String(shrinkAmount)}px) brightness(200%) contrast(200%)`;
-  ctx.drawImage(shrinkSource, 0, 0);
-  ctx.filter = 'none';
-
-  // Convert white to alpha
-  whiteToAlpha(ctx, width, height);
-
-  return { canvas, ctx };
-}
-
-/**
- * Apply the painted effect pipeline.
- *
- * Pipeline:
- * 1. Create expanded edge mask (for emboss effect)
- * 2. Apply dual emboss on expanded mask (if text is large enough)
- * 3. Create inset/shrunk mask
- * 4. Tile texture pattern
- * 5. Apply color with blend mode
- * 6. Apply inset mask using destination-in
- * 7. Composite emboss highlights (if text is large enough)
- *
- * @param params - Effect parameters
- * @returns Result with canvas and context
- */
-export function applyPaintedEffect(params: PaintedEffectParams): PaintedEffectResult {
-  const { width, height, color, alpha, blend, paintedInsetShrink, mask, texture, textHeight } =
-    params;
-
-  // Create working mask canvas
-  const { canvas: maskCanvas, ctx: maskCtx } = createCanvasWithContext(width, height);
-  maskCtx.drawImage(mask, 0, 0);
-
-  // Create the draw canvas for the main output
-  const { canvas, ctx } = createCanvasWithContext(width, height);
-
-  // Step 1-2: Create expanded edge mask and emboss (if text is large enough)
-  if (textHeight > EMBOSS_HEIGHT_THRESHOLD) {
-    const expandedMask = createExpandedEdgeMask(maskCanvas, width, height);
-    const { highlight, shadow } = createPaintedEmboss(expandedMask.canvas, width, height);
-
-    // Apply emboss highlights to draw canvas
-    ctx.globalAlpha = alpha;
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.globalAlpha = 0.1;
-    ctx.drawImage(highlight.canvas, 0, 0);
-
-    ctx.globalAlpha = 0.05;
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.drawImage(shadow.canvas, 0, 0);
-  }
-
-  // Step 3: Create inset mask
-  const insetMask = createInsetMask(maskCanvas, width, height, paintedInsetShrink);
-
-  // Create a separate canvas for the paint content
-  const { canvas: paintCanvas, ctx: paintCtx } = createCanvasWithContext(width, height);
-
-  // Step 4: Tile texture (if provided)
-  if (texture) {
-    const tiled = tile(texture, width, height);
-    if (tiled) {
-      paintCtx.drawImage(tiled, 0, 0);
-    }
-  }
-
-  // Step 5: Apply color with blend mode
-  paintCtx.globalCompositeOperation = blendModeToCompositeOp(blend);
-  paintCtx.globalAlpha = alpha;
-  paintCtx.fillStyle = color;
-  paintCtx.fillRect(0, 0, width, height);
-
-  // Step 6: Apply inset mask
-  paintCtx.globalCompositeOperation = 'destination-in';
-  paintCtx.globalAlpha = 1;
-  paintCtx.drawImage(insetMask.canvas, 0, 0);
-
-  // Step 7: Composite paint content onto main canvas
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 1;
-  ctx.drawImage(paintCanvas, 0, 0);
-
-  // Reset context state
-  ctx.globalCompositeOperation = 'source-over';
-
-  return { canvas, ctx };
-}
-
-/**
- * Process a text layer with painted effect pipeline.
- *
- * This is a convenience function that extracts parameters from a
- * TextLayerDescriptor and applies the painted effect pipeline.
- *
- * @param layer - Text layer descriptor
- * @param width - Canvas width
- * @param height - Canvas height
- * @param mask - Rasterized text mask
- * @param textHeight - Height of the text (for emboss threshold)
- * @param texture - Optional texture bitmap for paint pattern
- * @returns Result canvas or null on failure
- */
+/** Convenience wrapper: applies painted from a `TextLayerDescriptor`. */
 export function processPaintedEffectLayer(
   layer: TextLayerDescriptor,
   width: number,
@@ -307,37 +234,57 @@ export function processPaintedEffectLayer(
   mask: ImageBitmap | AnyCanvas,
   textHeight: number,
   texture?: ImageBitmap
-): AnyCanvas | null {
+): AnyCanvas | null;
+export function processPaintedEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  textHeight: number,
+  texture: ImageBitmap | undefined,
+  output: { kind: 'canvas' }
+): AnyCanvas | null;
+export function processPaintedEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  textHeight: number,
+  texture: ImageBitmap | undefined,
+  output: { kind: 'handle' }
+): GPUTextureHandle | null;
+export function processPaintedEffectLayer(
+  layer: TextLayerDescriptor,
+  width: number,
+  height: number,
+  mask: ImageBitmap | AnyCanvas,
+  textHeight: number,
+  texture?: ImageBitmap,
+  output: EffectOutput = { kind: 'canvas' }
+): AnyCanvas | GPUTextureHandle | null {
   const color = extractDefaultColorCode(layer.color);
   const { paintedInsetShrink } = extractPaintedParams(layer.maskData);
 
-  // Build params, only including optional fields if defined
   const params: PaintedEffectParams = {
     width,
     height,
     color,
     alpha: layer.alpha,
-    blend: layer.blend,
     paintedInsetShrink,
     mask,
     textHeight,
   };
-
   if (texture !== undefined) {
     params.texture = texture;
   }
 
-  const result = applyPaintedEffect(params);
-
-  return result.canvas;
+  if (output.kind === 'handle') {
+    return applyPaintedEffect(params, output);
+  }
+  return applyPaintedEffect(params, output).canvas;
 }
 
-/**
- * Get the painted effect parameters for debugging/preview.
- *
- * @param paintedInsetShrink - Inset shrink amount
- * @returns Object with effect parameters
- */
+/** Get the painted effect parameters for debugging/preview. */
 export function getPaintedEffectInfo(paintedInsetShrink: number): {
   insetShrink: number;
   embossThreshold: number;

@@ -17,14 +17,18 @@ import { createCanvas, getContext2D, type AnyCanvas } from '../utils/canvas';
 import type { Canvas2DContext } from '../utils/canvas';
 
 /**
- * Default typography values (from legacy renderer).
- * LH = line height ratio, MW = max width ratio, OVSC = overscale factor
+ * Default typography values, matched to the legacy renderer constants
+ * (LH/MW/OVSC/dfltWeight in old-src-ref/src/renderer/index.ts).
+ *
+ * MAX_WIDTH defaults to a very large value rather than something like 0.85 so
+ * that, when the layer doesn't set a maxwidth, text is effectively unconstrained
+ * (legacy behavior). Layers that DO want a constraint set it explicitly.
  */
-const DEFAULT_LINE_HEIGHT = 0.08;
-const DEFAULT_MAX_WIDTH = 0.85;
-const DEFAULT_FONT_WEIGHT = '400';
+const DEFAULT_LINE_HEIGHT = 0.07;
+const DEFAULT_MAX_WIDTH = 35_000;
+const DEFAULT_FONT_WEIGHT = '700';
 const DEFAULT_FONT_FAMILY = 'sans-serif';
-const OVERSCALE_FACTOR = 1.5;
+const OVERSCALE_FACTOR = 1.2;
 
 /**
  * Typography configuration for text rendering.
@@ -90,6 +94,13 @@ export interface TextRasterizerOptions {
   type?: PimcoMaskSubstitutionTypeDefinition;
   /** Text content to render */
   content: string;
+  /**
+   * Skip the opaque-black background fill so the result is alpha-encoded
+   * (anti-aliasing in `.a`, RGB = white from `fillText`'s default fill,
+   * fully transparent outside the text). Default behavior keeps the
+   * white-on-black-OPAQUE format used by GPU-effect shaders.
+   */
+  transparentBackground?: boolean;
 }
 
 /**
@@ -251,7 +262,7 @@ export function measureText(
  * @returns Rasterized text result
  */
 export function rasterizeText(options: TextRasterizerOptions): RasterizedText {
-  const { workWidth, type, content } = options;
+  const { workWidth, type, content, transparentBackground = false } = options;
 
   // Measure text
   const measurement = measureText(content, type, workWidth);
@@ -275,19 +286,42 @@ export function rasterizeText(options: TextRasterizerOptions): RasterizedText {
     throw new Error('Failed to create context for text rasterization');
   }
 
-  // Clear canvas
-  ctx.clearRect(0, 0, measurement.width, measurement.height);
+  // Two output formats, controlled by transparentBackground:
+  //
+  //   default (false): white-on-black-OPAQUE.
+  //     Fill canvas opaque black, then `fillText` white on top. The mask is
+  //     fully opaque (alpha = 1) and downstream GPU-effect shaders read
+  //     intensity from the `.r` channel: inside text = 1, outside = 0.
+  //     Anti-aliased edges land in `.r` because Canvas2D source-over of
+  //     white onto black blends RGB while keeping alpha = 1.
+  //
+  //   true: alpha-encoded.
+  //     Skip the black fill entirely — `fillText` on the fresh transparent
+  //     canvas produces text whose anti-aliasing lives in the alpha
+  //     channel naturally. Used by the no-effect Canvas2D path so its
+  //     `destination-in(mask)` actually gates the output (which keys off
+  //     source alpha and would be a no-op against the opaque format).
+  if (!transparentBackground) {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, measurement.width, measurement.height);
+  }
 
-  // Set typography
+  // Set typography. The canvas is OVSC× taller than the font for descender
+  // headroom, but the font itself is drawn at its full computed size — same
+  // as the legacy renderer (`maskWorker.ctx.font = ...${height / OVSC}px...`,
+  // where `height` had already been multiplied by OVSC before that line, so
+  // `height / OVSC` yields the original font size × heightScale).
   const { typography } = measurement;
   ctx.font = buildFontString({
     ...typography,
-    fontSize: typography.fontSize / OVERSCALE_FACTOR, // Divide by overscale as we're drawing to overscaled canvas
+    fontSize: typography.fontSize * typography.heightScale,
   });
   applyLetterSpacing(ctx, typography.letterSpacing);
 
-  // Set fill style
-  ctx.fillStyle = '#000000';
+  // Fill is white in both modes:
+  //   default mode:    .r channel encodes "is this inside text"
+  //   transparent mode: alpha channel encodes coverage; .r is binary white.
+  ctx.fillStyle = '#FFFFFF';
 
   // Set text baseline for vertical centering
   ctx.textBaseline = 'middle';

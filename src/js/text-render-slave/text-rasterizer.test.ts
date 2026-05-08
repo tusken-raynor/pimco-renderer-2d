@@ -23,6 +23,7 @@ interface MockContext {
   measureText: ReturnType<typeof vi.fn>;
   fillText: ReturnType<typeof vi.fn>;
   clearRect: ReturnType<typeof vi.fn>;
+  fillRect: ReturnType<typeof vi.fn>;
 }
 
 function createMockContext(width: number, height: number): MockContext {
@@ -38,6 +39,7 @@ function createMockContext(width: number, height: number): MockContext {
     measureText: vi.fn().mockReturnValue({ width: 100 }),
     fillText: vi.fn(),
     clearRect: vi.fn(),
+    fillRect: vi.fn(),
   };
 }
 
@@ -115,8 +117,8 @@ describe('parseTypography', () => {
     const config = parseTypography(undefined, workWidth);
 
     expect(config.fontFamily).toBe('sans-serif');
-    expect(config.fontWeight).toBe('400');
-    expect(config.fontSize).toBe(80); // 1000 * 0.08
+    expect(config.fontWeight).toBe('700'); // Matches legacy dfltWeight
+    expect(config.fontSize).toBe(70); // 1000 * 0.07 (legacy LH)
     expect(config.letterSpacing).toBe('');
     expect(config.textTransform).toBe('none');
     expect(config.alignment).toBe('center');
@@ -156,7 +158,7 @@ describe('parseTypography', () => {
     const config = parseTypography(type, workWidth);
 
     expect(config.fontFamily).toBe('Helvetica');
-    expect(config.fontWeight).toBe('400'); // Default
+    expect(config.fontWeight).toBe('700'); // Default (matches legacy dfltWeight)
     expect(config.alignment).toBe('center'); // Default
   });
 

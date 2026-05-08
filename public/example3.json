@@ -1,8 +1,28 @@
 {
-  "dimensions": [800, 308],
+  "dimensions": [1350, 516],
   "preload": [
     "/show-imgs/pimcos/belts/patterns/belt_view-1_shadow.avif?ver=5.4.6",
     "/show-imgs/pimcos/belts/patterns/generic_mask.avif?ver=5.4.6"
+  ],
+  "fonts": [
+    {
+      "family": "Helvetica",
+      "faces": [
+        {
+          "url": "/fonts/helvetica.woff2",
+          "weight": "400",
+          "style": "normal"
+        }
+      ]
+    },
+    {
+      "family": "AlternateGothicPro-No1",
+      "faces": [
+        {
+          "url": "/fonts/379F3E_1_0.woff2"
+        }
+      ]
+    }
   ],
   "pimcos": [
     {
@@ -70,7 +90,7 @@
         "id": "clo7oVPd1cv982",
         "disabled": false
       },
-      "color": "rgb(226,64,0)",
+      "color": "rgb(64,86,214)",
       "hlalpha1": 0.42,
       "hlalpha2": 0.72,
       "hlblend1": "soft-light",
@@ -89,16 +109,20 @@
           "uvmeshratio": 27
         },
         "content": "THIS IS SOME TEXT",
-        "effect": "embroidery",
+        "effect": "hotstamp",
         "type": {
           "fontfamily": "\"Helvetica\", sans-serif",
           "letterspacing": "0.01em",
           "lineheight": 0.09,
           "maxwidth": 100
+        },
+        "transform": {
+          "translation": [0, -18.5],
+          "scale": 0.9
         }
       },
       "order": 1.55,
-      "image": "/show-imgs/effects/embroidery/texture-dark.jpg?ver=5.4.6"
+      "image": "/show-imgs/effects/foil/texture.jpg?ver=5.4.6"
     },
     {
       "name": "Main Leather (Back Belt)",
@@ -187,6 +211,7 @@
           "translation": [0, 24.95],
           "scale": 0.9
         },
+        "content": "ALL AROUND THE WORLD",
         "projection": {
           "mesh": "/show-imgs/pimcos/belts/vec3d/personalization_mesh_outside.obj",
           "camera": [-1, 0.245, 0],
@@ -198,6 +223,7 @@
           "uvmeshratio": 18.3
         },
         "type": {
+          "fontfamily": "\"Helvetica\", sans-serif",
           "letterspacing": "-0.05em",
           "lineheight": 0.09,
           "maxwidth": 100
@@ -588,7 +614,7 @@
           "scale": 0.9625
         },
         "type": {
-          "fontfamily": "\"AlternateGothicPro-No1\", sans-serif",
+          "fontfamily": "\"AlternateGothicPro-No1\", \"Arial Narrow\", sans-serif",
           "alignment": "left",
           "lineheight": 0.1
         },
@@ -649,7 +675,7 @@
           "scale": 0.9625
         },
         "type": {
-          "fontfamily": "\"AlternateGothicPro-No1\", sans-serif",
+          "fontfamily": "\"AlternateGothicPro-No1\", \"Arial Narrow\", sans-serif",
           "lineheight": 0.1
         },
         "content": "34",

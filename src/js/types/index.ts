@@ -16,6 +16,8 @@ export type {
   PimcoMaskSubstitutionEffect,
   PimcoMaskSubstitutionCompiled,
   ProductImageComponent,
+  FontFaceDescriptor,
+  FontFamilyDescription,
 } from './pimco';
 
 export { isTextLayerMask, isStandardLayerMask } from './pimco';
@@ -32,6 +34,7 @@ export type {
   CapabilitiesMessage,
   ResultMessage,
   ErrorMessage,
+  PimcoEventMessage,
   SlaveToMasterMessage,
   // Master → Asset Manager
   FetchMessage,
@@ -50,6 +53,7 @@ export type {
   AssetType,
   AssetRequest,
   AssetDelivery,
+  FontFaceDeliveryDescriptors,
   RenderSegment,
   LayerDescriptor,
   TextLayerDescriptor,
@@ -66,6 +70,7 @@ export {
   isCapabilitiesMessage,
   isResultMessage,
   isErrorMessage,
+  isPimcoEventMessage,
   isFetchMessage,
   isDistributeMessage,
   isPreloadMessage,

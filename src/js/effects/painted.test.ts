@@ -112,132 +112,6 @@ describe('getPaintedEffectInfo', () => {
 });
 
 // ============================================================================
-// createExpandedEdgeMask Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('createExpandedEdgeMask', () => {
-  it.skipIf(!hasOffscreenCanvas())('should create expanded mask canvas', async () => {
-    const { createExpandedEdgeMask } = await import('./painted');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const result = createExpandedEdgeMask(mockMask, 100, 100);
-
-    expect(result.canvas.width).toBe(100);
-    expect(result.canvas.height).toBe(100);
-    expect(result.ctx).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various canvas sizes', async () => {
-    const { createExpandedEdgeMask } = await import('./painted');
-
-    const sizes = [
-      [50, 50],
-      [200, 100],
-      [100, 200],
-    ];
-
-    for (const [width, height] of sizes) {
-      const mockMask = new OffscreenCanvas(width, height);
-      const result = createExpandedEdgeMask(mockMask, width, height);
-
-      expect(result.canvas.width).toBe(width);
-      expect(result.canvas.height).toBe(height);
-    }
-  });
-});
-
-// ============================================================================
-// createPaintedEmboss Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('createPaintedEmboss', () => {
-  it.skipIf(!hasOffscreenCanvas())('should create both highlight and shadow canvases', async () => {
-    const { createPaintedEmboss, createExpandedEdgeMask } = await import('./painted');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const expandedMask = createExpandedEdgeMask(mockMask, 100, 100);
-    const result = createPaintedEmboss(expandedMask.canvas, 100, 100);
-
-    expect(result.highlight.canvas.width).toBe(100);
-    expect(result.highlight.canvas.height).toBe(100);
-    expect(result.shadow.canvas.width).toBe(100);
-    expect(result.shadow.canvas.height).toBe(100);
-    expect(result.highlight.ctx).toBeDefined();
-    expect(result.shadow.ctx).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various canvas sizes', async () => {
-    const { createPaintedEmboss, createExpandedEdgeMask } = await import('./painted');
-
-    const sizes = [
-      [50, 50],
-      [200, 100],
-      [100, 200],
-    ];
-
-    for (const [width, height] of sizes) {
-      const mockMask = new OffscreenCanvas(width, height);
-      const expandedMask = createExpandedEdgeMask(mockMask, width, height);
-      const result = createPaintedEmboss(expandedMask.canvas, width, height);
-
-      expect(result.highlight.canvas.width).toBe(width);
-      expect(result.highlight.canvas.height).toBe(height);
-      expect(result.shadow.canvas.width).toBe(width);
-      expect(result.shadow.canvas.height).toBe(height);
-    }
-  });
-});
-
-// ============================================================================
-// createInsetMask Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('createInsetMask', () => {
-  it.skipIf(!hasOffscreenCanvas())('should create inset mask canvas', async () => {
-    const { createInsetMask } = await import('./painted');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const result = createInsetMask(mockMask, 100, 100, 1.0);
-
-    expect(result.canvas.width).toBe(100);
-    expect(result.canvas.height).toBe(100);
-    expect(result.ctx).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various shrink amounts', async () => {
-    const { createInsetMask } = await import('./painted');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const shrinkAmounts = [0, 0.5, 1.0, 2.0];
-
-    for (const shrink of shrinkAmounts) {
-      const result = createInsetMask(mockMask, 100, 100, shrink);
-
-      expect(result.canvas.width).toBe(100);
-      expect(result.canvas.height).toBe(100);
-    }
-  });
-});
-
-// ============================================================================
 // applyPaintedEffect Tests (require OffscreenCanvas)
 // ============================================================================
 
@@ -259,7 +133,6 @@ describe('applyPaintedEffect', () => {
         height: 100,
         color: '#ff0000',
         alpha: 1.0,
-        blend: 'normal',
         paintedInsetShrink: 1.0,
         mask: mockMask,
         textHeight: 50,
@@ -287,14 +160,12 @@ describe('applyPaintedEffect', () => {
       height: 100,
       color: '#ff0000',
       alpha: 1.0,
-      blend: 'normal',
       paintedInsetShrink: 1.0,
       mask: mockMask,
       textHeight: 40, // Below threshold
     });
 
     expect(result.canvas).toBeDefined();
-    expect(result.ctx.globalCompositeOperation).toBe('source-over');
   });
 
   it.skipIf(!hasOffscreenCanvas())('should apply embossing for large text', async () => {
@@ -313,14 +184,12 @@ describe('applyPaintedEffect', () => {
       height: 100,
       color: '#ff0000',
       alpha: 1.0,
-      blend: 'normal',
       paintedInsetShrink: 1.0,
       mask: mockMask,
       textHeight: 50, // Above threshold
     });
 
     expect(result.canvas).toBeDefined();
-    expect(result.ctx.globalCompositeOperation).toBe('source-over');
   });
 
   it.skipIf(!hasOffscreenCanvas())('should handle texture when provided', async () => {
@@ -348,7 +217,6 @@ describe('applyPaintedEffect', () => {
       height: 100,
       color: '#ff0000',
       alpha: 1.0,
-      blend: 'normal',
       paintedInsetShrink: 1.0,
       mask: mockMask,
       texture: textureBitmap,
@@ -356,34 +224,6 @@ describe('applyPaintedEffect', () => {
     });
 
     expect(result.canvas).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various blend modes', async () => {
-    const { applyPaintedEffect } = await import('./painted');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const blendModes = ['normal', 'multiply', 'screen', 'overlay'] as const;
-
-    for (const blend of blendModes) {
-      const result = applyPaintedEffect({
-        width: 100,
-        height: 100,
-        color: '#ff0000',
-        alpha: 1.0,
-        blend,
-        paintedInsetShrink: 1.0,
-        mask: mockMask,
-        textHeight: 50,
-      });
-
-      expect(result.canvas).toBeDefined();
-    }
   });
 
   it.skipIf(!hasOffscreenCanvas())('should handle various alpha values', async () => {
@@ -404,14 +244,12 @@ describe('applyPaintedEffect', () => {
         height: 100,
         color: '#ff0000',
         alpha,
-        blend: 'normal',
         paintedInsetShrink: 1.0,
         mask: mockMask,
         textHeight: 50,
       });
 
       expect(result.canvas).toBeDefined();
-      expect(result.ctx.globalCompositeOperation).toBe('source-over');
     }
   });
 
@@ -433,7 +271,6 @@ describe('applyPaintedEffect', () => {
         height: 100,
         color: '#ff0000',
         alpha: 1.0,
-        blend: 'normal',
         paintedInsetShrink,
         mask: mockMask,
         textHeight: 50,
@@ -461,7 +298,6 @@ describe('applyPaintedEffect', () => {
         height: 100,
         color,
         alpha: 1.0,
-        blend: 'normal',
         paintedInsetShrink: 1.0,
         mask: mockMask,
         textHeight: 50,

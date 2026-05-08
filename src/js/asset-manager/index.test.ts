@@ -370,7 +370,7 @@ describe('AssetManager', () => {
       mockCreateImageBitmap.mockResolvedValue(mockBitmap);
 
       const fetchMsg: FetchMessage = {
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [
           { id: 1, url: 'https://example.com/img1.png', assetType: 'image' },
           { id: 2, url: 'https://example.com/img2.png', assetType: 'image' },
@@ -379,7 +379,7 @@ describe('AssetManager', () => {
 
       const result = await assetManager.handleMessage(fetchMsg);
 
-      expect(result).toEqual({ type: 'fetch-complete', failed: [] });
+      expect(result).toEqual({ type: 'fetch-complete', requestId: 1, failed: [] });
       expect(assetManager.isCached(1)).toBe(true);
       expect(assetManager.isCached(2)).toBe(true);
     });
@@ -388,13 +388,13 @@ describe('AssetManager', () => {
       mockFetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found' });
 
       const fetchMsg: FetchMessage = {
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/missing.png', assetType: 'image' }],
       };
 
       const result = await assetManager.handleMessage(fetchMsg);
 
-      expect(result).toEqual({ type: 'fetch-complete', failed: [1] });
+      expect(result).toEqual({ type: 'fetch-complete', requestId: 1, failed: [1] });
       expect(assetManager.isCached(1)).toBe(false);
     });
 
@@ -406,7 +406,7 @@ describe('AssetManager', () => {
       mockCreateImageBitmap.mockResolvedValue(mockBitmap);
 
       const fetchMsg: FetchMessage = {
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/img.png', assetType: 'image' }],
       };
 
@@ -428,13 +428,13 @@ describe('AssetManager', () => {
 
       // First fetch
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/img.png', assetType: 'image' }],
       });
 
       // Second fetch with same URL but different ID
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 2, url: 'https://example.com/img.png', assetType: 'image' }],
       });
 
@@ -474,7 +474,7 @@ describe('AssetManager', () => {
       mockCreateImageBitmap.mockResolvedValue(mockBitmap);
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/img.png', assetType: 'image' }],
       });
 
@@ -491,13 +491,13 @@ describe('AssetManager', () => {
 
       // Distribute asset to slave
       const distributeMsg: DistributeMessage = {
-        type: 'distribute',
+        type: 'distribute', requestId: 1,
         deliveries: [{ slaveId: 100, assetIds: [1] }],
       };
 
       const result = await assetManager.handleMessage(distributeMsg);
 
-      expect(result).toEqual({ type: 'distribute-complete' });
+      expect(result).toEqual({ type: 'distribute-complete', requestId: 1 });
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockPort.postMessage).toHaveBeenCalled();
 
@@ -513,13 +513,13 @@ describe('AssetManager', () => {
 
     it('should handle missing slave gracefully', async () => {
       const distributeMsg: DistributeMessage = {
-        type: 'distribute',
+        type: 'distribute', requestId: 1,
         deliveries: [{ slaveId: 999, assetIds: [1] }],
       };
 
       // Should not throw
       const result = await assetManager.handleMessage(distributeMsg);
-      expect(result).toEqual({ type: 'distribute-complete' });
+      expect(result).toEqual({ type: 'distribute-complete', requestId: 1 });
     });
 
     it('should handle missing asset gracefully', async () => {
@@ -536,12 +536,12 @@ describe('AssetManager', () => {
 
       // Try to distribute non-existent asset
       const distributeMsg: DistributeMessage = {
-        type: 'distribute',
+        type: 'distribute', requestId: 1,
         deliveries: [{ slaveId: 100, assetIds: [999] }],
       };
 
       const result = await assetManager.handleMessage(distributeMsg);
-      expect(result).toEqual({ type: 'distribute-complete' });
+      expect(result).toEqual({ type: 'distribute-complete', requestId: 1 });
       // Should not have posted any message
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockPort.postMessage).not.toHaveBeenCalled();
@@ -564,7 +564,7 @@ describe('AssetManager', () => {
       // Load 5 assets
       for (let i = 1; i <= 5; i++) {
         await smallCacheManager.handleMessage({
-          type: 'fetch',
+          type: 'fetch', requestId: 1,
           assets: [{ id: i, url: `https://example.com/img${String(i)}.png`, assetType: 'image' }],
         });
       }
@@ -589,7 +589,7 @@ describe('AssetManager', () => {
 
       // Load image
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/img.png', assetType: 'image' }],
       });
 
@@ -611,7 +611,7 @@ describe('AssetManager', () => {
       mockCreateImageBitmap.mockResolvedValue(mockBitmap);
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 42, url: 'https://example.com/special.png', assetType: 'image' }],
       });
 
@@ -627,7 +627,7 @@ describe('AssetManager', () => {
       mockCreateImageBitmap.mockResolvedValue(mockBitmap);
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/img.png', assetType: 'image' }],
       });
 
@@ -664,7 +664,7 @@ describe('AssetManager', () => {
 
       // Start a fetch
       const fetchPromise = assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/slow.png', assetType: 'image' }],
       });
 
@@ -684,7 +684,7 @@ describe('AssetManager', () => {
       mockCreateImageBitmap.mockResolvedValue(mockBitmap);
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/img.png', assetType: 'image' }],
       });
 
@@ -707,7 +707,7 @@ describe('AssetManager', () => {
       });
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/font.woff2', assetType: 'font' }],
       });
 
@@ -725,7 +725,7 @@ describe('AssetManager', () => {
       });
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/model.obj', assetType: 'mesh' }],
       });
 
@@ -745,7 +745,7 @@ describe('AssetManager', () => {
       });
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/font.woff2', assetType: 'font' }],
       });
 
@@ -762,7 +762,7 @@ describe('AssetManager', () => {
 
       // First distribution - should send
       await assetManager.handleMessage({
-        type: 'distribute',
+        type: 'distribute', requestId: 1,
         deliveries: [{ slaveId: 100, assetIds: [1] }],
       });
 
@@ -771,7 +771,7 @@ describe('AssetManager', () => {
 
       // Second distribution of same font to same slave - should NOT send again
       await assetManager.handleMessage({
-        type: 'distribute',
+        type: 'distribute', requestId: 1,
         deliveries: [{ slaveId: 100, assetIds: [1] }],
       });
 
@@ -788,7 +788,7 @@ describe('AssetManager', () => {
       });
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/font.woff2', assetType: 'font' }],
       });
 
@@ -810,7 +810,7 @@ describe('AssetManager', () => {
 
       // Distribute same font to both slaves
       await assetManager.handleMessage({
-        type: 'distribute',
+        type: 'distribute', requestId: 1,
         deliveries: [
           { slaveId: 100, assetIds: [1] },
           { slaveId: 101, assetIds: [1] },
@@ -833,7 +833,7 @@ describe('AssetManager', () => {
       mockCreateImageBitmap.mockResolvedValue(mockBitmap);
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/img.png', assetType: 'image' }],
       });
 
@@ -850,13 +850,13 @@ describe('AssetManager', () => {
 
       // First distribution
       await assetManager.handleMessage({
-        type: 'distribute',
+        type: 'distribute', requestId: 1,
         deliveries: [{ slaveId: 100, assetIds: [1] }],
       });
 
       // Second distribution of same image - should send again (images not tracked)
       await assetManager.handleMessage({
-        type: 'distribute',
+        type: 'distribute', requestId: 1,
         deliveries: [{ slaveId: 100, assetIds: [1] }],
       });
 
@@ -874,7 +874,7 @@ describe('AssetManager', () => {
       });
 
       await assetManager.handleMessage({
-        type: 'fetch',
+        type: 'fetch', requestId: 1,
         assets: [{ id: 1, url: 'https://example.com/font.woff2', assetType: 'font' }],
       });
 
@@ -887,7 +887,7 @@ describe('AssetManager', () => {
       });
 
       await assetManager.handleMessage({
-        type: 'distribute',
+        type: 'distribute', requestId: 1,
         deliveries: [{ slaveId: 100, assetIds: [1] }],
       });
 

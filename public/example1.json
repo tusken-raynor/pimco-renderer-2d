@@ -6,6 +6,18 @@
     "/show-imgs/pimcos/gloves/patterns/pattern-6_thumb_mask_full.avif?ver=0.2.13",
     "/show-imgs/pimcos/gloves/patterns/pattern-6_thumb_highlight.avif?ver=0.2.13"
   ],
+  "fonts": [
+    {
+      "family": "Brush Script",
+      "faces": [
+        {
+          "url": "/fonts/brush-script.woff2",
+          "weight": "400",
+          "style": "normal"
+        }
+      ]
+    }
+  ],
   "pimcos": [
     {
       "id": "modelbase",

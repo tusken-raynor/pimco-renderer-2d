@@ -3,7 +3,6 @@ import {
   extractNormalParams,
   scaleToResolution,
   getValidLightDirections,
-  getNormalEffectInfo,
 } from './normal';
 import { isOffscreenCanvasSupported } from '../utils/canvas';
 import type { PimcoMaskSubstitutionCompiled } from '../types/pimco';
@@ -210,144 +209,6 @@ describe('getValidLightDirections', () => {
 });
 
 // ============================================================================
-// getNormalEffectInfo Tests
-// ============================================================================
-
-describe('getNormalEffectInfo', () => {
-  it('should return provided parameters', () => {
-    const info = getNormalEffectInfo(5, 2.0, 'SE');
-    expect(info.roundness).toBe(5);
-    expect(info.intensity).toBe(2.0);
-    expect(info.lightDirection).toBe('SE');
-  });
-
-  it('should return default values', () => {
-    const info = getNormalEffectInfo(0, 1.0, 'N');
-    expect(info.defaultRoundness).toBe(0);
-    expect(info.defaultIntensity).toBe(1.0);
-    expect(info.defaultLightDirection).toBe('N');
-  });
-});
-
-// ============================================================================
-// applyRoundnessBlur Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('applyRoundnessBlur', () => {
-  it.skipIf(!hasOffscreenCanvas())('should return copy of source when roundness is 0', async () => {
-    const { applyRoundnessBlur } = await import('./normal');
-
-    const sourceCanvas = new OffscreenCanvas(100, 100);
-    const ctx = getOffscreenContext(sourceCanvas);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(25, 25, 50, 50);
-
-    const result = applyRoundnessBlur(sourceCanvas, 0);
-    expect(result.canvas.width).toBe(100);
-    expect(result.canvas.height).toBe(100);
-    expect(result.offsetX).toBe(0);
-    expect(result.offsetY).toBe(0);
-  });
-
-  it.skipIf(!hasOffscreenCanvas())(
-    'should expand canvas dimensions for positive roundness',
-    async () => {
-      const { applyRoundnessBlur } = await import('./normal');
-
-      const sourceCanvas = new OffscreenCanvas(100, 100);
-      const ctx = getOffscreenContext(sourceCanvas);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(25, 25, 50, 50);
-
-      const roundness = 10;
-      const result = applyRoundnessBlur(sourceCanvas, roundness);
-
-      // Canvas should be expanded by 2 * (roundness * 2) = 4 * roundness
-      const expectedMargin = roundness * 2;
-      expect(result.canvas.width).toBe(100 + expectedMargin * 2);
-      expect(result.canvas.height).toBe(100 + expectedMargin * 2);
-    }
-  );
-
-  it.skipIf(!hasOffscreenCanvas())(
-    'should return correct offset for positive roundness',
-    async () => {
-      const { applyRoundnessBlur } = await import('./normal');
-
-      const sourceCanvas = new OffscreenCanvas(100, 100);
-      const ctx = getOffscreenContext(sourceCanvas);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(25, 25, 50, 50);
-
-      const roundness = 15;
-      const result = applyRoundnessBlur(sourceCanvas, roundness);
-
-      const expectedMargin = roundness * 2;
-      expect(result.offsetX).toBe(expectedMargin);
-      expect(result.offsetY).toBe(expectedMargin);
-    }
-  );
-});
-
-// ============================================================================
-// createColoredTextContent Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('createColoredTextContent', () => {
-  it.skipIf(!hasOffscreenCanvas())('should create canvas with correct dimensions', async () => {
-    const { createColoredTextContent } = await import('./normal');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = getOffscreenContext(mockMask);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(25, 25, 50, 50);
-
-    const result = createColoredTextContent(mockMask, 100, 100, '#ff0000', 1.0, 'normal');
-
-    expect(result.canvas.width).toBe(100);
-    expect(result.canvas.height).toBe(100);
-    expect(result.ctx).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should reset composite operation to source-over', async () => {
-    const { createColoredTextContent } = await import('./normal');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = getOffscreenContext(mockMask);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(25, 25, 50, 50);
-
-    const result = createColoredTextContent(mockMask, 100, 100, '#ff0000', 1.0, 'multiply');
-
-    expect(result.ctx.globalCompositeOperation).toBe('source-over');
-  });
-});
-
-// ============================================================================
-// createNormalMapInput Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('createNormalMapInput', () => {
-  it.skipIf(!hasOffscreenCanvas())(
-    'should create canvas with black background and correct dimensions',
-    async () => {
-      const { createNormalMapInput } = await import('./normal');
-
-      const textContent = new OffscreenCanvas(100, 100);
-      const ctx = getOffscreenContext(textContent);
-      ctx.fillStyle = '#ff0000';
-      ctx.fillRect(25, 25, 50, 50);
-
-      const result = createNormalMapInput(textContent, 100, 100);
-
-      expect(result.canvas.width).toBe(100);
-      expect(result.canvas.height).toBe(100);
-      expect(result.ctx).toBeDefined();
-    }
-  );
-});
-
-// ============================================================================
 // applyNormalEffect Tests (require OffscreenCanvas)
 // ============================================================================
 
@@ -367,7 +228,6 @@ describe('applyNormalEffect', () => {
         height: 100,
         color: '#ffffff',
         alpha: 1.0,
-        blend: 'normal',
         mask: mockMask,
         roundness: 0,
         intensity: 1.0,
@@ -395,7 +255,6 @@ describe('applyNormalEffect', () => {
         height: 100,
         color: '#ffffff',
         alpha: 1.0,
-        blend: 'normal',
         mask: mockMask,
         roundness: 5,
         intensity: 1.0,
@@ -424,7 +283,6 @@ describe('applyNormalEffect', () => {
         height: 100,
         color: '#ffffff',
         alpha: 1.0,
-        blend: 'normal',
         mask: mockMask,
         roundness: 0,
         intensity: 1.0,
@@ -452,7 +310,6 @@ describe('applyNormalEffect', () => {
         height: 100,
         color: '#ffffff',
         alpha: 1.0,
-        blend: 'normal',
         mask: mockMask,
         roundness: 0,
         intensity,
@@ -486,7 +343,6 @@ describe('applyNormalEffect', () => {
       height: 100,
       color: '#ffffff',
       alpha: 1.0,
-      blend: 'multiply',
       mask: mockMask,
       roundness: 0,
       intensity: 1.0,

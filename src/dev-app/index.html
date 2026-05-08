@@ -32,6 +32,19 @@
               <option value="example1.json">Example 1 (Gloves)</option>
               <option value="example2.json">Example 2</option>
               <option value="example3.json">Example 3</option>
+              <option value="example4.json">Example 4 (Engraving)</option>
+              <option value="example5.json">Example 5 (Painted)</option>
+              <option value="example6.json">Example 6 (Projection)</option>
+            </select>
+          </div>
+
+          <div class="dev-app__scenario-select">
+            <label for="scenario-select" class="dev-app__label">Fallback scenario:</label>
+            <select id="scenario-select" class="dev-app__select">
+              <option value="">Auto (probe)</option>
+              <option value="A">A — workers (full caps)</option>
+              <option value="B">B — workers std + virtual text</option>
+              <option value="C">C — virtual std + virtual text</option>
             </select>
           </div>
 
@@ -87,9 +100,62 @@
           <div id="error-display" class="dev-app__error" hidden></div>
         </section>
 
+        <section class="dev-app__debug">
+          <header class="dev-app__debug-header">
+            <h2 class="dev-app__debug-title">Mid-render snapshots</h2>
+            <button id="debug-clear-btn" class="dev-app__button dev-app__button--secondary">
+              Clear
+            </button>
+          </header>
+          <div id="debug-snapshots" class="dev-app__debug-snapshots"></div>
+        </section>
+
         <section class="dev-app__json-preview">
           <h2 class="dev-app__json-preview-title">Loaded JSON:</h2>
           <pre id="json-preview" class="dev-app__json-content">No JSON loaded</pre>
+        </section>
+
+        <section class="dev-app__targeted-snapshot">
+          <h2 class="dev-app__targeted-snapshot-title">
+            Engraving emboss highlight (layer pic6ZW25PKu2Vs)
+          </h2>
+          <p class="dev-app__targeted-snapshot-hint">
+            Subscribes to <code>pimcoRenderPart:pic6ZW25PKu2Vs:engraving-highlight</code> —
+            the post-blur emboss handle that gets composited onto the engraving fill.
+          </p>
+          <div class="dev-app__targeted-snapshot-canvas-wrap">
+            <canvas
+              id="engraving-text-canvas"
+              class="dev-app__targeted-snapshot-canvas"
+              width="1"
+              height="1"
+            ></canvas>
+          </div>
+          <div id="engraving-text-meta" class="dev-app__targeted-snapshot-meta">
+            (waiting — render Example 4 to populate)
+          </div>
+        </section>
+
+        <section class="dev-app__targeted-snapshot">
+          <h2 class="dev-app__targeted-snapshot-title">
+            Embroidery emboss highlight (layer picSN5cezSJ9HN)
+          </h2>
+          <p class="dev-app__targeted-snapshot-hint">
+            Subscribes to <code>pimcoRenderPart:picSN5cezSJ9HN:embroidery-highlight</code> —
+            the post-blur emboss handle (σ controlled by HIGHLIGHT_BLUR_SIGMA) that gets
+            composited onto the embroidered fill as a darken overlay.
+          </p>
+          <div class="dev-app__targeted-snapshot-canvas-wrap">
+            <canvas
+              id="embroidery-highlight-canvas"
+              class="dev-app__targeted-snapshot-canvas"
+              width="1"
+              height="1"
+            ></canvas>
+          </div>
+          <div id="embroidery-highlight-meta" class="dev-app__targeted-snapshot-meta">
+            (waiting — render Example 3 to populate)
+          </div>
         </section>
       </main>
 

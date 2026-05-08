@@ -6,16 +6,24 @@
  * webgl-postprocessor handles the WebGL2 boilerplate.
  *
  * Usage Pattern:
- * 1. Create/wake the WebGL buddy with myWebGLBuddy()
- * 2. Create or reuse a program via newProgram()/useProgram()
- * 3. Set uniforms and render via setUniforms().to(target)
- * 4. Clean up texture uniforms and sleep() when done
+ * 1. Initialize the singleton against a slave-owned canvas via initWebGLBuddy(canvas).
+ *    The slave owns the canvas+context so 3D mesh projection (which compiles its own
+ *    program directly against `gl`) shares it with the post-processor — keeping effect
+ *    output in GPU memory across the effect→projection boundary.
+ * 2. Get the active singleton with myWebGLBuddy()
+ * 3. Create or reuse a program via newProgram()/useProgram()
+ * 4. Set uniforms and render via setUniforms().to(target)
+ * 5. Clean up texture uniforms and sleep() when done
  */
 
 import WebGLPostProcessor, { Uniforms } from 'webgl-postprocessor';
 
-// Import shader sources using Vite's ?raw suffix
-import alphaErodeFragSrc from '@/shaders/alpha-erode.frag.glsl?raw';
+// Import shader sources using Vite's ?raw suffix.
+// erode.frag.glsl was renamed from alpha-erode.frag.glsl alongside the rasterizer
+// format flip to white-on-black-opaque. The legacy alphaErode() wrapper below
+// continues to reference the renamed file but is no longer reached at runtime —
+// the worker dispatch routes unconverted effects to no-effect.
+import alphaErodeFragSrc from '@/shaders/erode.frag.glsl?raw';
 import embossFragSrc from '@/shaders/emboss.frag.glsl?raw';
 import fuzzFragSrc from '@/shaders/fuzz.frag.glsl?raw';
 import normalMapFragSrc from '@/shaders/normal-map.frag.glsl?raw';
@@ -23,26 +31,70 @@ import colorScaleFragSrc from '@/shaders/color-scale.frag.glsl?raw';
 
 import type { Canvas2DContext, AnyCanvas } from '@/js/utils';
 
-/**
- * Singleton WebGL PostProcessor instance.
- * Lazily initialized on first use.
- */
 let webGLBuddy: WebGLPostProcessor | null = null;
+let sharedGL: WebGL2RenderingContext | null = null;
+let sharedCanvas: OffscreenCanvas | HTMLCanvasElement | null = null;
 
 /**
- * Get or create the WebGL PostProcessor singleton.
- * Returns null if WebGL2 is not supported.
+ * Initialize the singleton WebGLPostProcessor against a slave-owned canvas.
+ * Idempotent: returns the existing buddy if already initialized. The supplied
+ * canvas is the surface effects render to (via setResolution + to/toFramebuffer)
+ * and that 3D projection draws to (via raw gl calls on the shared context).
  *
- * @returns The WebGL PostProcessor instance, or null if unsupported
+ * @param canvas - Slave-owned OffscreenCanvas (worker) or HTMLCanvasElement (virtual slave)
+ * @returns The buddy, or null if WebGL2 is unavailable / context creation failed
  */
-export function myWebGLBuddy(): WebGLPostProcessor | null {
+export function initWebGLBuddy(
+  canvas: OffscreenCanvas | HTMLCanvasElement
+): WebGLPostProcessor | null {
+  if (webGLBuddy) {
+    return webGLBuddy;
+  }
   if (!WebGLPostProcessor.isWebGL2Supported()) {
     return null;
   }
-
-  webGLBuddy ??= new WebGLPostProcessor();
-
+  // Match the webgl-postprocessor lib's own context convention
+  // (`premultipliedAlpha: false`). The compose shaders write straight-alpha
+  // RGBA; a `premultipliedAlpha: true` canvas would cause `drawImage` from
+  // this canvas to a 2D context to mis-interpret those pixels (effectively
+  // un-premultiplying straight values → over-bright colors).
+  const gl = canvas.getContext('webgl2', {
+    alpha: true,
+    premultipliedAlpha: false,
+  }) as WebGL2RenderingContext | null;
+  if (!gl) {
+    return null;
+  }
+  sharedCanvas = canvas;
+  sharedGL = gl;
+  webGLBuddy = new WebGLPostProcessor({ gl });
   return webGLBuddy;
+}
+
+/**
+ * Get the active WebGLPostProcessor singleton.
+ * Returns null when initWebGLBuddy() has not yet been called or WebGL2 is unavailable.
+ */
+export function myWebGLBuddy(): WebGLPostProcessor | null {
+  return webGLBuddy;
+}
+
+/**
+ * Get the shared WebGL2 context owned by the slave and shared with the post-processor.
+ * 3D projection compiles its own program against this context so effect-output
+ * GPUTextureHandles can be sampled directly without a CPU round-trip.
+ */
+export function getSharedGL(): WebGL2RenderingContext | null {
+  return sharedGL;
+}
+
+/**
+ * Get the shared canvas backing the WebGL2 context. This is the surface the
+ * post-processor renders to and that projection draws into before its result
+ * is copied onto the slave's 2D output canvas.
+ */
+export function getSharedGLCanvas(): OffscreenCanvas | HTMLCanvasElement | null {
+  return sharedCanvas;
 }
 
 /**
@@ -63,6 +115,8 @@ export function destroyWebGLBuddy(): void {
     }
     webGLBuddy = null;
   }
+  sharedGL = null;
+  sharedCanvas = null;
 }
 
 /**
@@ -636,7 +690,10 @@ function boundCoordinates(
 
 export default {
   // WebGL effects
+  initWebGLBuddy,
   myWebGLBuddy,
+  getSharedGL,
+  getSharedGLCanvas,
   destroyWebGLBuddy,
   isWebGL2EffectsAvailable,
   alphaErode,

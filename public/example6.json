@@ -1,0 +1,51 @@
+{
+  "dimensions": [800, 800],
+  "fonts": [
+    {
+      "family": "Helvetica",
+      "faces": [
+        {
+          "url": "/fonts/helvetica.woff2",
+          "weight": "400",
+          "style": "normal"
+        }
+      ]
+    }
+  ],
+  "pimcos": [
+    {
+      "id": "background",
+      "name": "Background fill",
+      "mode": "color",
+      "color": "rgb(220,220,230)",
+      "alpha": 1,
+      "blend": "normal",
+      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2NgYGD4DwABBAEAcCBlCwAAAABJRU5ErkJggg==",
+      "mask": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P8//8/AwAI/AL+pYssTAAAAABJRU5ErkJggg==",
+      "order": 0
+    },
+    {
+      "id": "projected-text",
+      "name": "Projected text on curved plane",
+      "mode": "color",
+      "color": "rgb(40,80,200)",
+      "alpha": 1,
+      "blend": "normal",
+      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2NgYGD4DwABBAEAcCBlCwAAAABJRU5ErkJggg==",
+      "mask": {
+        "effect": "engraving",
+        "type": {
+          "fontfamily": "\"Helvetica\", sans-serif",
+          "maxwidth": 0.7
+        },
+        "content": "PROJECTION TEST",
+        "projection": {
+          "mesh": "/meshes/curved-plane.obj",
+          "camera": [0, 0, 1.5],
+          "fov": 60
+        }
+      },
+      "order": 1
+    }
+  ]
+}

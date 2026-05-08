@@ -104,52 +104,6 @@ describe('getFoilEffectInfo', () => {
 });
 
 // ============================================================================
-// createFoilEmboss Tests (require OffscreenCanvas)
-// ============================================================================
-
-describe('createFoilEmboss', () => {
-  it.skipIf(!hasOffscreenCanvas())('should create both highlight and shadow canvases', async () => {
-    const { createFoilEmboss } = await import('./foil');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const result = createFoilEmboss(mockMask, 100, 100);
-
-    expect(result.highlight.canvas.width).toBe(100);
-    expect(result.highlight.canvas.height).toBe(100);
-    expect(result.shadow.canvas.width).toBe(100);
-    expect(result.shadow.canvas.height).toBe(100);
-    expect(result.highlight.ctx).toBeDefined();
-    expect(result.shadow.ctx).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various canvas sizes', async () => {
-    const { createFoilEmboss } = await import('./foil');
-
-    const sizes = [
-      [50, 50],
-      [200, 100],
-      [100, 200],
-    ];
-
-    for (const [width, height] of sizes) {
-      const mockMask = new OffscreenCanvas(width, height);
-      const result = createFoilEmboss(mockMask, width, height);
-
-      expect(result.highlight.canvas.width).toBe(width);
-      expect(result.highlight.canvas.height).toBe(height);
-      expect(result.shadow.canvas.width).toBe(width);
-      expect(result.shadow.canvas.height).toBe(height);
-    }
-  });
-});
-
-// ============================================================================
 // applyFoilEffect Tests (require OffscreenCanvas)
 // ============================================================================
 
@@ -171,7 +125,6 @@ describe('applyFoilEffect', () => {
         height: 100,
         color: '#ffd700',
         alpha: 1.0,
-        blend: 'normal',
         alphaErosionRadius: 1,
         mask: mockMask,
         textHeight: 30, // Below threshold
@@ -201,7 +154,6 @@ describe('applyFoilEffect', () => {
         height: 100,
         color: '#ffd700',
         alpha: 1.0,
-        blend: 'normal',
         alphaErosionRadius: 1,
         mask: mockMask,
         textHeight: 50, // Above threshold
@@ -229,7 +181,6 @@ describe('applyFoilEffect', () => {
       height: 100,
       color: '#ffd700',
       alpha: 1.0,
-      blend: 'normal',
       alphaErosionRadius: 0,
       mask: mockMask,
       textHeight: 30,
@@ -266,7 +217,6 @@ describe('applyFoilEffect', () => {
       height: 100,
       color: '#ffd700',
       alpha: 1.0,
-      blend: 'normal',
       alphaErosionRadius: 1,
       mask: mockMask,
       texture: textureBitmap,
@@ -274,34 +224,6 @@ describe('applyFoilEffect', () => {
     });
 
     expect(result.canvas).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various blend modes', async () => {
-    const { applyFoilEffect } = await import('./foil');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const blendModes = ['normal', 'multiply', 'screen', 'overlay'] as const;
-
-    for (const blend of blendModes) {
-      const result = applyFoilEffect({
-        width: 100,
-        height: 100,
-        color: '#ffd700',
-        alpha: 1.0,
-        blend,
-        alphaErosionRadius: 1,
-        mask: mockMask,
-        textHeight: 50,
-      });
-
-      expect(result.canvas).toBeDefined();
-    }
   });
 
   it.skipIf(!hasOffscreenCanvas())('should handle various alpha values', async () => {
@@ -322,14 +244,12 @@ describe('applyFoilEffect', () => {
         height: 100,
         color: '#ffd700',
         alpha,
-        blend: 'normal',
         alphaErosionRadius: 1,
         mask: mockMask,
         textHeight: 50,
       });
 
       expect(result.canvas).toBeDefined();
-      expect(result.ctx.globalCompositeOperation).toBe('source-over');
     }
   });
 });

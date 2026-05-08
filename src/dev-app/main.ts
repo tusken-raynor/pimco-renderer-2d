@@ -11,12 +11,13 @@
  * - Console logging for debugging
  */
 
-import type { ProductImageComponent } from '../js/types';
-import { RenderMaster } from '../js/renderer';
+import type { ProductImageComponent, FontFamilyDescription } from '../js/types';
+import { RenderMaster, type PimcoLayerEvent } from '../js/renderer';
 
 // DOM Elements
 const jsonUploadInput = document.getElementById('json-upload') as HTMLInputElement;
 const exampleSelect = document.getElementById('example-select') as HTMLSelectElement;
+const scenarioSelect = document.getElementById('scenario-select') as HTMLSelectElement;
 const canvasWidthInput = document.getElementById('canvas-width') as HTMLInputElement;
 const canvasHeightInput = document.getElementById('canvas-height') as HTMLInputElement;
 const renderBtn = document.getElementById('render-btn') as HTMLButtonElement;
@@ -27,11 +28,40 @@ const layerCountDisplay = document.getElementById('layer-count') as HTMLSpanElem
 const statusMessage = document.getElementById('status-message') as HTMLDivElement;
 const errorDisplay = document.getElementById('error-display') as HTMLDivElement;
 const jsonPreview = document.getElementById('json-preview') as HTMLPreElement;
+const debugSnapshotsContainer = document.getElementById('debug-snapshots') as HTMLDivElement;
+const debugClearBtn = document.getElementById('debug-clear-btn') as HTMLButtonElement;
+const engravingTextCanvas = document.getElementById('engraving-text-canvas') as HTMLCanvasElement;
+const engravingTextMeta = document.getElementById('engraving-text-meta') as HTMLDivElement;
+const embroideryHighlightCanvas = document.getElementById(
+  'embroidery-highlight-canvas'
+) as HTMLCanvasElement;
+const embroideryHighlightMeta = document.getElementById(
+  'embroidery-highlight-meta'
+) as HTMLDivElement;
 
 // State
 let currentLayers: ProductImageComponent[] | null = null;
 let renderMaster: RenderMaster | null = null;
 let isRendering = false;
+
+/**
+ * Font families the dev app has been told about (via loaded JSON). Keyed by
+ * family name so re-loading the same family overwrites earlier registrations.
+ *
+ * Font registrations live on the `RenderMaster` instance — destroying the
+ * master (via `resetRenderMaster()` on scenario change) wipes them. We keep
+ * our own copy here so the next master can be re-populated via
+ * `ensureFontsLoaded()`.
+ */
+const loadedFontFamilies = new Map<string, FontFamilyDescription>();
+
+/**
+ * Tracks which family-name has been loaded onto which master, so we can call
+ * `master.loadFontFamily` exactly once per (master, family) pair. The
+ * RenderMaster value is reset whenever the master is destroyed; an entry's
+ * value matching `renderMaster` means "already loaded on the current master".
+ */
+const loadedOnMaster = new Map<string, RenderMaster>();
 
 /**
  * Set status message with optional type for styling.
@@ -107,12 +137,14 @@ function updateCanvasDimensions(): void {
 
 /**
  * Apply dimensions from JSON to the canvas size inputs and update the canvas.
+ *
+ * Does NOT recreate the RenderMaster — `render(layers, width, height)` accepts
+ * dimensions per-call, so the master persists across canvas resizes.
  */
 function applyDimensions(dimensions: [number, number]): void {
   canvasWidthInput.value = String(dimensions[0]);
   canvasHeightInput.value = String(dimensions[1]);
   updateCanvasDimensions();
-  resetRenderMaster();
 }
 
 /**
@@ -124,6 +156,7 @@ function parseExampleData(data: unknown): {
   layers: ProductImageComponent[];
   dimensions: [number, number] | null;
   preload: string[] | null;
+  fonts: FontFamilyDescription[] | null;
 } {
   // New wrapper format
   if (
@@ -145,11 +178,16 @@ function parseExampleData(data: unknown): {
         ? (wrapper.preload as string[])
         : null;
 
-    return { layers, dimensions, preload };
+    const fonts =
+      Array.isArray(wrapper.fonts) && wrapper.fonts.length > 0
+        ? (wrapper.fonts as FontFamilyDescription[])
+        : null;
+
+    return { layers, dimensions, preload, fonts };
   }
 
   // Legacy bare array format
-  return { layers: parseLayerData(data), dimensions: null, preload: null };
+  return { layers: parseLayerData(data), dimensions: null, preload: null, fonts: null };
 }
 
 /**
@@ -225,6 +263,19 @@ async function loadFromFile(file: File): Promise<void> {
       void master.preload(result.preload);
     }
 
+    if (result.fonts) {
+      // eslint-disable-next-line no-console
+      console.log(`[DevApp] Loading ${String(result.fonts.length)} font families`);
+      // Update the dev-app cache so the families re-register on every fresh
+      // master (scenario change). Then ensureFontsLoaded does the actual
+      // master.loadFontFamily work, deduped per (master, family).
+      for (const f of result.fonts) {
+        loadedFontFamilies.set(f.family, f);
+      }
+      ensureRenderMaster();
+      await ensureFontsLoaded();
+    }
+
     updateJsonPreview(currentLayers);
     updateRenderButtonState();
     setStatus(`Loaded ${String(currentLayers.length)} layers from ${file.name}`, 'success');
@@ -271,6 +322,19 @@ async function loadFromExample(filename: string): Promise<void> {
       void master.preload(result.preload);
     }
 
+    if (result.fonts) {
+      // eslint-disable-next-line no-console
+      console.log(`[DevApp] Loading ${String(result.fonts.length)} font families`);
+      // Update the dev-app cache so the families re-register on every fresh
+      // master (scenario change). Then ensureFontsLoaded does the actual
+      // master.loadFontFamily work, deduped per (master, family).
+      for (const f of result.fonts) {
+        loadedFontFamilies.set(f.family, f);
+      }
+      ensureRenderMaster();
+      await ensureFontsLoaded();
+    }
+
     updateJsonPreview(currentLayers);
     updateRenderButtonState();
     setStatus(`Loaded ${String(currentLayers.length)} layers from ${filename}`, 'success');
@@ -303,23 +367,178 @@ function resetRenderMaster(): void {
   if (renderMaster) {
     renderMaster.destroy();
     renderMaster = null;
+    // The destroyed master's loaded-fonts state is now invalid; subsequent
+    // ensureFontsLoaded() calls will re-load every cached family onto the
+    // next master. Cache itself (`loadedFontFamilies`) is preserved.
+    loadedOnMaster.clear();
     // eslint-disable-next-line no-console
     console.log('[DevApp] RenderMaster destroyed for reset');
   }
 }
 
 /**
- * Initialize or get the RenderMaster instance.
+ * Ensure every cached font family is loaded on the current master, exactly
+ * once per (master, family) pair. Cheap on the warm path: same master + same
+ * cache → empty work list. Returns when every required `loadFontFamily`
+ * promise has resolved (failures are logged and the family is left
+ * unregistered so text falls back to a system font).
+ *
+ * Must be called after the master has been created (ensureRenderMaster).
+ */
+async function ensureFontsLoaded(): Promise<void> {
+  if (!renderMaster) return;
+  const master = renderMaster;
+  const tasks: Promise<void>[] = [];
+  for (const [family, desc] of loadedFontFamilies) {
+    if (loadedOnMaster.get(family) === master) continue;
+    // Mark as loaded BEFORE awaiting so concurrent calls don't double-fire.
+    loadedOnMaster.set(family, master);
+    tasks.push(
+      master.loadFontFamily(desc).catch((err: unknown) => {
+        console.warn(`[DevApp] Failed to load font family '${family}':`, err);
+        // Roll back so a future call can retry.
+        if (loadedOnMaster.get(family) === master) {
+          loadedOnMaster.delete(family);
+        }
+      })
+    );
+  }
+  if (tasks.length > 0) {
+    await Promise.all(tasks);
+  }
+}
+
+/**
+ * Append a tile (canvas + caption) to the debug strip for a pimco lifecycle
+ * event. Each tile owns a small canvas drawn at the bitmap's native size,
+ * plus a caption with the topic label, dimensions, and any meta JSON.
+ */
+function appendPimcoEventTile(label: string, event: PimcoLayerEvent): void {
+  const { pimcoId, bitmap, meta } = event;
+  const tile = document.createElement('div');
+  tile.className = 'dev-app__debug-snapshot';
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'dev-app__debug-snapshot-canvas';
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    // Sync use only — the master closes the bitmap after dispatch finishes.
+    ctx.drawImage(bitmap, 0, 0);
+  }
+
+  const caption = document.createElement('div');
+  caption.className = 'dev-app__debug-snapshot-meta';
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'dev-app__debug-snapshot-kind';
+  labelSpan.textContent = label;
+  caption.appendChild(labelSpan);
+
+  caption.appendChild(document.createTextNode(` ${String(bitmap.width)}×${String(bitmap.height)}`));
+  caption.appendChild(document.createElement('br'));
+  caption.appendChild(document.createTextNode(`layer: ${pimcoId}`));
+  if (meta) {
+    caption.appendChild(document.createElement('br'));
+    caption.appendChild(document.createTextNode(JSON.stringify(meta)));
+  }
+
+  tile.appendChild(canvas);
+  tile.appendChild(caption);
+  debugSnapshotsContainer.appendChild(tile);
+}
+
+function clearDebugSnapshots(): void {
+  debugSnapshotsContainer.replaceChildren();
+}
+
+/**
+ * Draw an engraving-pipeline intermediate (currently the post-blur highlight
+ * handle) into the targeted snapshot canvas at the bottom of the page. Each
+ * render replaces the previous snapshot. The canvas resizes to the bitmap's
+ * native dimensions so we see it at 1:1 scale.
+ */
+function drawEngravingTextSnapshot(event: PimcoLayerEvent): void {
+  drawTargetedSnapshot(event, engravingTextCanvas, engravingTextMeta);
+}
+
+/** Same as drawEngravingTextSnapshot but for the embroidery-highlight topic. */
+function drawEmbroideryHighlightSnapshot(event: PimcoLayerEvent): void {
+  drawTargetedSnapshot(event, embroideryHighlightCanvas, embroideryHighlightMeta);
+}
+
+/** Shared snapshot-drawing routine — resizes the canvas to the bitmap and
+ * paints the meta line. Sync use only; the master closes the bitmap after
+ * dispatch finishes. */
+function drawTargetedSnapshot(
+  event: PimcoLayerEvent,
+  canvas: HTMLCanvasElement,
+  metaEl: HTMLDivElement
+): void {
+  const { bitmap, meta, part } = event;
+  // eslint-disable-next-line no-console
+  console.log(
+    `[DevApp] pimcoRenderPart:${event.pimcoId}:${part ?? '?'} — ${String(bitmap.width)}×${String(bitmap.height)}`,
+    meta
+  );
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.clearRect(0, 0, bitmap.width, bitmap.height);
+    ctx.drawImage(bitmap, 0, 0);
+  }
+  const dims = `${String(bitmap.width)}×${String(bitmap.height)}`;
+  const metaStr = meta ? ` — ${JSON.stringify(meta)}` : '';
+  metaEl.textContent = `${part ?? '?'} ${dims}${metaStr}`;
+}
+
+/**
+ * Initialize or get the RenderMaster instance. Subscribes to a few pimco
+ * lifecycle topics so mid-render snapshots are visible in the debug strip.
  */
 function ensureRenderMaster(): RenderMaster {
   if (!renderMaster) {
     const width = parseInt(canvasWidthInput.value, 10) || 800;
     const height = parseInt(canvasHeightInput.value, 10) || 800;
 
+    // Pull the scenario override from the dropdown (empty value = auto-probe).
+    // Only main-thread scenarios are exposed; D-F require master-in-worker.
+    const scenarioValue = scenarioSelect.value;
+    const forceScenario =
+      scenarioValue === 'A' || scenarioValue === 'B' || scenarioValue === 'C'
+        ? scenarioValue
+        : undefined;
+
     renderMaster = new RenderMaster({
       width,
       height,
+      ...(forceScenario && { forceScenario }),
+      // textSlaveCount: 0
     });
+
+    // Subscribe to text rasterizations and final per-layer outputs across all
+    // pimcos. As more parts get emitted by future effects, add more `on()`
+    // calls (or use broader wildcards).
+    renderMaster.on('pimcoRenderPart:*:text', (event) => {
+      appendPimcoEventTile('text', event);
+    });
+    renderMaster.on('pimcoRender:*', (event) => {
+      appendPimcoEventTile('render', event);
+    });
+
+    // Targeted hook: dump the engraving layer's post-blur emboss highlight
+    // (the alpha-encoded edge map that gets composited onto the engraving
+    // fill) so we can debug the embossing/shadowing visibility issue. Per-
+    // layer subscription (no wildcard) — only triggers for this one pimco.
+    renderMaster.on(
+      'pimcoRenderPart:pic6ZW25PKu2Vs:engraving-highlight',
+      drawEngravingTextSnapshot
+    );
+    renderMaster.on(
+      'pimcoRenderPart:picSN5cezSJ9HN:embroidery-highlight',
+      drawEmbroideryHighlightSnapshot
+    );
 
     const capabilities = renderMaster.getCapabilities();
     // eslint-disable-next-line no-console
@@ -329,6 +548,10 @@ function ensureRenderMaster(): RenderMaster {
       webgl2: capabilities.webgl2,
       slaveCount: renderMaster.getSlaveCount(),
     });
+    // Note: cached fonts are NOT auto-loaded here. Callers (load flows, the
+    // render path) explicitly await `ensureFontsLoaded()` after creating
+    // the master, which deduplicates per (master, family) and handles
+    // both fresh-master rebuild and incremental cache additions correctly.
   }
   return renderMaster;
 }
@@ -365,6 +588,7 @@ async function renderLayers(): Promise<void> {
   setStatus('Rendering...', 'loading');
   renderBtn.disabled = true;
   isRendering = true;
+  clearDebugSnapshots();
 
   const startTime = performance.now();
 
@@ -374,8 +598,14 @@ async function renderLayers(): Promise<void> {
     const width = renderCanvas.width;
     const height = renderCanvas.height;
 
-    // Get or create RenderMaster
+    // Get or create RenderMaster, then ensure every cached font family is
+    // registered on it. On the warm path this is a single lookup that finds
+    // every family already loaded and does nothing. After a scenario reset
+    // it actually re-registers the families on the new master, so text
+    // layers see the right `requiredFontIds` instead of falling back to
+    // system fonts.
     const master = ensureRenderMaster();
+    await ensureFontsLoaded();
 
     // Render layers
     const bitmap = await master.render(currentLayers, width, height);
@@ -438,12 +668,19 @@ exampleSelect.addEventListener('change', (event) => {
   }
 });
 
+// Canvas size changes don't reset the master — `render(layers, w, h)` accepts
+// dimensions per-call, so the existing master (and its font registry, asset
+// cache, slave pool) keeps working at any size.
 canvasWidthInput.addEventListener('change', () => {
   updateCanvasDimensions();
-  resetRenderMaster();
 });
 canvasHeightInput.addEventListener('change', () => {
   updateCanvasDimensions();
+});
+
+scenarioSelect.addEventListener('change', () => {
+  // Flipping the scenario destroys the in-flight master so the next render
+  // picks up the new option. The setting is read on master construction.
   resetRenderMaster();
 });
 
@@ -454,6 +691,10 @@ renderBtn.addEventListener('click', () => {
 clearBtn.addEventListener('click', () => {
   clearCanvas();
   setStatus('Canvas cleared');
+});
+
+debugClearBtn.addEventListener('click', () => {
+  clearDebugSnapshots();
 });
 
 // Initialize

@@ -1,13 +1,20 @@
 /**
- * No-Effect Pipeline
+ * No-Effect Pipeline (Canvas2D)
  *
- * The simplest effect pipeline for text layers with no special effects.
+ * The fallback path for text layers with no specific effect, plus the
+ * universal fallback when WebGL2 isn't available. Stays within vanilla
+ * Canvas2D capabilities — no shaders, no pixel manipulation.
+ *
  * Pipeline:
- * 1. Tile texture (if provided)
- * 2. Color multiply
- * 3. Apply mask (destination-in composite)
- *
- * This effect is used when mask.effect is undefined/null or not recognized.
+ *   1. Tile texture across the mask-fitted canvas (or fill white if no
+ *      texture is provided — gives the multiply blend a uniform white base
+ *      to tint).
+ *   2. Multiply-blend the layer color over the texture/white at globalAlpha.
+ *   3. destination-in against the rasterized text shape so only the text
+ *      region survives. The rasterizer produces alpha-encoded masks (text
+ *      coverage stored in the alpha channel via Canvas2D's natural
+ *      `fillText` behavior on a transparent canvas), so destination-in
+ *      gates the canvas correctly without any conversion step.
  */
 
 import type { TextLayerDescriptor } from '../types/messages';
@@ -95,43 +102,58 @@ export function blendModeToCompositeOp(blend: BlendMode | undefined): GlobalComp
 }
 
 /**
- * Apply the no-effect pipeline to create a styled text layer.
+ * Apply the no-effect pipeline to produce a tinted, mask-gated text canvas.
+ *
+ * Runs at the **mask's own dimensions** (text-fitted), matching every
+ * migrated GPU effect. `applyTransformAndDraw` downstream positions this
+ * small canvas onto the master canvas via the layer transform.
  *
  * Pipeline:
- * 1. Create a canvas at specified dimensions
- * 2. Tile the texture (if provided), or fill with white
- * 3. Apply color with blend mode and alpha
- * 4. Apply mask using destination-in composite
- *
- * @param params - Effect parameters
- * @returns Result with canvas and context
+ *   1. Tile the texture (if provided), or fill with white.
+ *   2. Multiply-blend the color over the base at `alpha` opacity.
+ *   3. destination-in against the alpha-encoded mask.
  */
 export function applyNoEffect(params: NoEffectParams): NoEffectResult {
-  const { width, height, color, alpha, blend, texture, mask } = params;
+  const { color, alpha, blend, texture, mask } = params;
 
-  // Create the draw canvas
-  const { canvas, ctx } = createCanvasWithContext(width, height);
+  const w = mask.width;
+  const h = mask.height;
+  const { canvas, ctx } = createCanvasWithContext(w, h);
 
-  // Step 1: Tile texture (if provided)
+  // Step 1: Tile texture, or fill white if no texture is provided. The
+  // multiply blend in step 2 needs a non-transparent base or it collapses
+  // to source-over; a uniform white base keeps the tint reading correctly.
   if (texture) {
-    const tiled = tile(texture, width, height);
+    const tiled = tile(texture, w, h);
     if (tiled) {
       ctx.drawImage(tiled, 0, 0);
     }
+  } else {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
   }
 
-  // Step 2: Apply color with blend mode and alpha
+  // Step 2: Multiply-blend the layer color over the base.
   ctx.fillStyle = color;
   ctx.globalAlpha = alpha;
   ctx.globalCompositeOperation = blend === 'normal' ? 'multiply' : blendModeToCompositeOp(blend);
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, w, h);
 
-  // Step 3: Apply mask (destination-in composite)
+  // Step 3: destination-in keys off the source's alpha channel. This path
+  // REQUIRES the worker to have rasterized with the rasterizer's
+  // `transparentBackground: true` option — that variant fills no
+  // background and produces alpha-encoded text (anti-aliasing in `.a`)
+  // exactly because Canvas2D's `fillText` on a fresh canvas leaves
+  // everything outside the glyph fully transparent. If a caller hands us
+  // the default white-on-black-OPAQUE mask used by GPU effects (alpha = 1
+  // throughout), this drawImage becomes a no-op and the entire tinted
+  // base will leak through with no text shape cut out — see the
+  // `routesToNoEffect` predicate in the worker that keeps the formats
+  // matched to their consumers.
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'destination-in';
   ctx.drawImage(mask, 0, 0);
 
-  // Reset context state
   ctx.globalCompositeOperation = 'source-over';
 
   return { canvas, ctx };
@@ -179,14 +201,14 @@ export function processNoEffectLayer(
 }
 
 /**
- * Apply color fill to an existing canvas with mask.
- * This is a simpler version when no texture is needed.
+ * Apply color fill to an existing canvas with mask. Same shape as the tail
+ * of `applyNoEffect` (multiply-blend color, destination-in alpha-encoded
+ * mask) — a convenience for callers that already have a base canvas and
+ * just want to tint + gate by a text shape.
  *
- * @param ctx - Canvas context with existing content
- * @param color - Fill color
- * @param alpha - Fill alpha (0-1)
- * @param blend - Blend mode
- * @param mask - Mask to apply
+ * The mask MUST be alpha-encoded (rasterizer's `transparentBackground:
+ * true` variant). A white-on-black-OPAQUE mask would make the
+ * destination-in step a no-op — see `applyNoEffect` for the same caveat.
  */
 export function applyColorAndMask(
   ctx: Canvas2DContext,
@@ -198,17 +220,14 @@ export function applyColorAndMask(
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
 
-  // Apply color with blend
   ctx.fillStyle = color;
   ctx.globalAlpha = alpha;
   ctx.globalCompositeOperation = blend === 'normal' ? 'multiply' : blendModeToCompositeOp(blend);
   ctx.fillRect(0, 0, width, height);
 
-  // Apply mask
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'destination-in';
   ctx.drawImage(mask, 0, 0);
 
-  // Reset
   ctx.globalCompositeOperation = 'source-over';
 }

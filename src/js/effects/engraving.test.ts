@@ -231,45 +231,13 @@ describe('getEngravingFillColor', () => {
 });
 
 // ============================================================================
-// createEngravingEmboss Tests (require OffscreenCanvas)
+// Note: createEngravingEmboss was removed when engraving was converted to the
+// GPU compose pipeline. The emboss highlight is now produced by an internal
+// renderEngravingHighlight() helper that runs as part of applyEngravingEffect
+// when WebGL2 is available; it has no public surface to test directly. The
+// engraving compose shader's behavior is exercised via applyEngravingEffect
+// integration tests (gated on OffscreenCanvas + WebGL2).
 // ============================================================================
-
-describe('createEngravingEmboss', () => {
-  it.skipIf(!hasOffscreenCanvas())('should create canvas with correct dimensions', async () => {
-    const { createEngravingEmboss } = await import('./engraving');
-
-    const mockMask = new OffscreenCanvas(100, 100);
-    const ctx = mockMask.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(25, 25, 50, 50);
-    }
-
-    const result = createEngravingEmboss(mockMask, 100, 100);
-
-    expect(result.canvas.width).toBe(100);
-    expect(result.canvas.height).toBe(100);
-    expect(result.ctx).toBeDefined();
-  });
-
-  it.skipIf(!hasOffscreenCanvas())('should handle various canvas sizes', async () => {
-    const { createEngravingEmboss } = await import('./engraving');
-
-    const sizes = [
-      [50, 50],
-      [200, 100],
-      [100, 200],
-    ];
-
-    for (const [width, height] of sizes) {
-      const mockMask = new OffscreenCanvas(width, height);
-      const result = createEngravingEmboss(mockMask, width, height);
-
-      expect(result.canvas.width).toBe(width);
-      expect(result.canvas.height).toBe(height);
-    }
-  });
-});
 
 // ============================================================================
 // applyEngravingEffect Tests (require OffscreenCanvas)
@@ -288,7 +256,7 @@ describe('applyEngravingEffect', () => {
         ctx.fillRect(25, 25, 50, 50);
       }
 
-      const result = applyEngravingEffect({
+      const result = await applyEngravingEffect({
         width: 100,
         height: 100,
         color: '#333333',
@@ -314,7 +282,7 @@ describe('applyEngravingEffect', () => {
     }
 
     // textHeight <= 43.5 should skip embossing
-    const result = applyEngravingEffect({
+    const result = await applyEngravingEffect({
       width: 100,
       height: 100,
       color: '#333333',
@@ -338,7 +306,7 @@ describe('applyEngravingEffect', () => {
     }
 
     // textHeight > 43.5 should apply embossing
-    const result = applyEngravingEffect({
+    const result = await applyEngravingEffect({
       width: 100,
       height: 100,
       color: '#333333',
@@ -361,7 +329,7 @@ describe('applyEngravingEffect', () => {
       ctx.fillRect(25, 25, 50, 50);
     }
 
-    const result = applyEngravingEffect({
+    const result = await applyEngravingEffect({
       width: 100,
       height: 100,
       color: '#333333',
@@ -387,7 +355,7 @@ describe('applyEngravingEffect', () => {
     const alphaValues = [0.1, 0.5, 1.0];
 
     for (const alpha of alphaValues) {
-      const result = applyEngravingEffect({
+      const result = await applyEngravingEffect({
         width: 100,
         height: 100,
         color: '#333333',
@@ -429,7 +397,7 @@ describe('processEngravingEffectLayer', () => {
       maskData: {},
     };
 
-    const result = processEngravingEffectLayer(layer, 100, 100, mockMask, 50);
+    const result = await processEngravingEffectLayer(layer, 100, 100, mockMask, 50);
 
     expect(result).not.toBeNull();
     if (result) {
@@ -462,7 +430,7 @@ describe('processEngravingEffectLayer', () => {
       },
     };
 
-    const result = processEngravingEffectLayer(layer, 100, 100, mockMask, 50);
+    const result = await processEngravingEffectLayer(layer, 100, 100, mockMask, 50);
 
     expect(result).not.toBeNull();
   });

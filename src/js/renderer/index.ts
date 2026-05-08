@@ -36,18 +36,23 @@ import type {
   SlaveToMasterMessage,
   AssetManagerToMasterMessage,
   PimcoMaskSubstitutionCompiled,
+  FontFamilyDescription,
+  FontFaceDescriptor,
+  FontFaceDeliveryDescriptors,
 } from '../types';
 import {
   isReadyMessage,
   isCapabilitiesMessage,
   isResultMessage,
   isErrorMessage,
+  isPimcoEventMessage,
   isFetchCompleteMessage,
   isDistributeCompleteMessage,
 } from '../types';
 import { isStandardLayerMask, isTextLayerMask } from '../types/pimco';
 import { classifyLayers, type ClassificationResult } from './layer-classifier';
 import { probeCapabilities } from './capability-probe';
+import { buildEventTopic, matchEventTopic } from './event-topics';
 import { MasterCompositor, type ComposedLayer, closeSegments } from './master-compositor';
 import { SoftwareCompositor } from './software-compositor';
 import { RenderError, AbortError, WorkerError, wrapError } from '../errors';
@@ -58,6 +63,34 @@ import { destroyWebGLBuddy } from '../effects';
 import AssetManagerWorkerUrl from '../../workers/asset-manager.worker.ts?worker&url';
 import RenderSlaveWorkerUrl from '../../workers/render-slave.worker.ts?worker&url';
 import TextRenderSlaveWorkerUrl from '../../workers/text-render-slave.worker.ts?worker&url';
+
+/**
+ * Lifecycle event payload dispatched to subscribers of `pimcoRender:*` and
+ * `pimcoRenderPart:*:*` topics.
+ *
+ * The bitmap was created in the slave via createImageBitmap (a copy) and
+ * transferred to the master, so listeners may draw it freely; the original
+ * pipeline state is unaffected. Listeners are responsible for calling
+ * `bitmap.close()` when done if memory matters.
+ */
+export interface PimcoLayerEvent {
+  /** The pimco layer's id. */
+  pimcoId: string;
+  /** Snapshot bitmap. */
+  bitmap: ImageBitmap;
+  /**
+   * Sub-part name when this is a `pimcoRenderPart` event (e.g. 'text',
+   * 'engraving-emboss'). Absent for `pimcoRender` (full-layer) events.
+   */
+  part?: string;
+  /** Free-form metadata supplied by the slave (e.g. dimensions, params). */
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * Listener callback invoked once per matched event.
+ */
+export type PimcoLayerEventListener = (event: PimcoLayerEvent) => void;
 
 /**
  * Options for RenderMaster initialization.
@@ -73,6 +106,20 @@ export interface RenderMasterOptions {
   textSlaveCount?: number;
   /** Optional MessagePort for when master runs in worker (scenarios D-F) */
   mainThreadPort?: MessagePort;
+  /**
+   * Override the auto-detected fallback scenario (A–F). The probed
+   * `offscreenCanvas` / `webgl2` flags are still recorded for reporting, but
+   * slave spawning + composition routing follow the forced scenario.
+   *
+   * Intended for development / testing the virtual-slave paths on browsers
+   * where capability detection naturally always lands in scenario A. Use the
+   * dev app's "Scenario" dropdown to flip between configurations.
+   *
+   * Forcing 'D'–'F' from a main-thread context is currently not supported
+   * (those require the master to run in a worker); the override falls back
+   * to the probed scenario in that case with a console warning.
+   */
+  forceScenario?: FallbackScenario;
 }
 
 /**
@@ -136,6 +183,60 @@ interface AssetMapping {
 }
 
 /**
+ * One face of a registered font family. Held by the master so each render
+ * can resolve a `mask.type.fontfamily` CSS list to the asset IDs that need
+ * shipping to the relevant text slaves.
+ */
+interface FontFaceEntry {
+  assetId: number;
+  url: string;
+  descriptors: FontFaceDeliveryDescriptors;
+}
+
+/**
+ * Parse a CSS-style font family list (e.g. `"Helvetica", "Arial", sans-serif`)
+ * into an ordered list of trimmed family names. Generic families are kept in
+ * place — the resolver picks the first family that has been registered, so a
+ * generic that happens to appear before a registered family will still defer
+ * to it as long as a generic isn't itself registered.
+ */
+export function parseFontFamilyList(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+  return value
+    .split(',')
+    .map((token) => token.trim().replace(/^["']|["']$/g, '').trim())
+    .filter((token) => token.length > 0);
+}
+
+/**
+ * Emit a single console warning if any two faces in this batch share the
+ * same (weight, style) pair. The browser uses last-added wins, which is
+ * deterministic but usually a sign the caller made a mistake.
+ */
+function seenWeightStylePairsWarning(
+  family: string,
+  faces: readonly FontFaceDescriptor[]
+): void {
+  const seen = new Set<string>();
+  const dups: string[] = [];
+  for (const f of faces) {
+    const key = `${String(f.weight ?? '400')}/${f.style ?? 'normal'}`;
+    if (seen.has(key)) {
+      dups.push(key);
+    } else {
+      seen.add(key);
+    }
+  }
+  if (dups.length > 0) {
+    console.warn(
+      `loadFontFamily('${family}'): duplicate weight/style face(s): ${dups.join(', ')} (last-added wins)`
+    );
+  }
+}
+
+/**
  * Pending render state.
  */
 interface PendingRender {
@@ -183,6 +284,14 @@ export class RenderMaster {
   /** Asset ID mapping */
   private assetMapping: AssetMapping;
 
+  /**
+   * Registered font families, snapshot-visible to in-flight renders. Each
+   * call to `loadFontFamily()` adds entries here only after every face has
+   * been fetched into the asset manager — that prevents a face's asset ID
+   * from being shipped to a slave before the bytes exist.
+   */
+  private fontFamilies = new Map<string, FontFaceEntry[]>();
+
   /** Current pending render */
   private pendingRender: PendingRender | null = null;
 
@@ -206,6 +315,28 @@ export class RenderMaster {
   /** Next slave ID counter */
   private nextSlaveId = 1;
 
+  /**
+   * Counter for asset-manager request correlation IDs. The master can have
+   * multiple concurrent fetch / distribute calls in flight (e.g. parallel
+   * `loadFontFamily` calls). Each request gets a unique ID via this counter,
+   * and the response handler only resolves when the response's `requestId`
+   * matches — without correlation, the first-arriving response would
+   * resolve every waiting handler regardless of which actual fetch
+   * completed, causing distribute to race ahead of in-flight fetches and
+   * fail with "Asset N not in cache" warnings.
+   */
+  private nextAssetRequestId = 1;
+
+  /**
+   * Active topic subscriptions for pimco lifecycle events. Each topic is the
+   * subscription string the caller passed to `on()` — possibly containing `*`
+   * wildcards. When the map is non-empty, the master signals slaves (via
+   * BatchMessage.emitLifecycle) to emit PimcoEventMessages; arrived events
+   * have a topic constructed from their stage/pimcoId/part fields and are
+   * dispatched to every subscriber whose pattern matches that topic.
+   */
+  private eventSubscribers = new Map<string, Set<PimcoLayerEventListener>>();
+
   constructor(options: RenderMasterOptions = {}) {
     this.defaultWidth = options.width ?? 1024;
     this.defaultHeight = options.height ?? 1024;
@@ -221,8 +352,27 @@ export class RenderMaster {
       idToUrl: new Map(),
     };
 
-    // Detect capabilities immediately
-    this.capabilities = probeCapabilities();
+    // Detect capabilities immediately. When `forceScenario` overrides the
+    // probed scenario (used by the dev app to exercise virtual-slave paths),
+    // we keep the probed offscreenCanvas/webgl2 flags so anything that gates
+    // on them still behaves correctly — only the spawn/routing decision
+    // follows the forced scenario.
+    const probed = probeCapabilities();
+    if (options.forceScenario && probed.scenario !== options.forceScenario) {
+      const main = options.forceScenario === 'A' || options.forceScenario === 'B' || options.forceScenario === 'C';
+      const probedIsMain = probed.scenario === 'A' || probed.scenario === 'B' || probed.scenario === 'C';
+      if (main !== probedIsMain) {
+        console.warn(
+          `forceScenario=${options.forceScenario} crosses the main-thread/worker boundary ` +
+            `(probed=${probed.scenario}); ignoring override.`
+        );
+        this.capabilities = probed;
+      } else {
+        this.capabilities = { ...probed, scenario: options.forceScenario };
+      }
+    } else {
+      this.capabilities = probed;
+    }
 
     // Start initialization
     this.initPromise = this.initialize();
@@ -369,7 +519,7 @@ export class RenderMaster {
       const assetChannel = new MessageChannel();
 
       const slaveState: SlaveState = {
-        worker: virtualSlave as unknown as SlaveInstance,
+        worker: virtualSlave,
         id: slaveId,
         type: 'standard',
         isVirtual: true,
@@ -506,7 +656,7 @@ export class RenderMaster {
       const assetChannel = new MessageChannel();
 
       const slaveState: SlaveState = {
-        worker: virtualSlave as unknown as SlaveInstance,
+        worker: virtualSlave,
         id: slaveId,
         type: 'text',
         isVirtual: true,
@@ -569,7 +719,7 @@ export class RenderMaster {
   private handleAssetManagerMessage(message: AssetManagerToMasterMessage): void {
     // Currently used for fetch-complete and distribute-complete
     // These are handled via awaited message patterns
-    if (isErrorMessage(message as unknown)) {
+    if (isErrorMessage(message)) {
       const errorMsg = message as unknown as ErrorMessage;
       console.error('Asset Manager error:', errorMsg.message);
     }
@@ -602,6 +752,92 @@ export class RenderMaster {
       }
       return;
     }
+
+    if (isPimcoEventMessage(message)) {
+      const topic = buildEventTopic(message.stage, message.pimcoId, message.part);
+      const payload: PimcoLayerEvent = {
+        pimcoId: message.pimcoId,
+        bitmap: message.bitmap,
+        ...(message.part !== undefined && { part: message.part }),
+        ...(message.meta !== undefined && { meta: message.meta }),
+      };
+      this.dispatchPimcoEvent(topic, payload);
+      return;
+    }
+  }
+
+  /**
+   * Subscribe to pimco lifecycle events. Returns an unsubscribe function.
+   *
+   * Topic format:
+   *   - `pimcoRender:{pimcoId}` — emitted once per layer with its final
+   *     isolated bitmap (after effect, transform, and post-mask).
+   *   - `pimcoRenderPart:{pimcoId}:{partName}` — emitted per intermediate
+   *     stage. `partName` is effect-specific (e.g. `text` for the rasterized
+   *     text mask; later effects add their own part names).
+   *
+   * `*` matches any single segment, so e.g. `pimcoRenderPart:*:text` fires
+   * for every layer's rasterized-text snapshot. Topic segments are split by
+   * `:`; segment counts must match exactly (no multi-segment wildcards).
+   *
+   * Listeners are invoked synchronously per arrived event. A throwing
+   * listener is caught and logged; it does not affect other listeners or the
+   * render itself.
+   *
+   * Bitmap lifetime: the `event.bitmap` field is owned by the master and is
+   * closed after all matching listeners have run synchronously. Listeners
+   * should draw / read from it synchronously inside the handler. If a
+   * listener needs to retain the bitmap asynchronously, it must clone it
+   * synchronously inside the handler via `createImageBitmap(event.bitmap)` —
+   * the resulting promise's bitmap is independent of the master's copy.
+   * Listeners must NOT call `event.bitmap.close()` themselves.
+   */
+  on(eventName: string, listener: PimcoLayerEventListener): () => void {
+    let listeners = this.eventSubscribers.get(eventName);
+    if (!listeners) {
+      listeners = new Set();
+      this.eventSubscribers.set(eventName, listeners);
+    }
+    listeners.add(listener);
+    return () => {
+      const set = this.eventSubscribers.get(eventName);
+      if (!set) {
+        return;
+      }
+      set.delete(listener);
+      if (set.size === 0) {
+        this.eventSubscribers.delete(eventName);
+      }
+    };
+  }
+
+  /**
+   * Snapshot of the currently-registered subscription patterns. Sent to slaves
+   * with each BatchMessage so they can gate per-emission via topicHasSubscriber.
+   * Returned as a plain string[] for cheap structured-clone transfer.
+   */
+  private activeSubscriptionPatterns(): string[] {
+    return Array.from(this.eventSubscribers.keys());
+  }
+
+  private dispatchPimcoEvent(topic: string, payload: PimcoLayerEvent): void {
+    for (const [pattern, listeners] of this.eventSubscribers) {
+      if (!matchEventTopic(pattern, topic)) {
+        continue;
+      }
+      for (const listener of listeners) {
+        try {
+          listener(payload);
+        } catch (err) {
+          console.error(`[RenderMaster] subscriber for "${pattern}" threw:`, err);
+        }
+      }
+    }
+    // The bitmap was created in the slave via createImageBitmap and transferred
+    // here. After all sync listeners have used it, release it so the GPU
+    // texture can be reclaimed. Listeners that need async retention must
+    // clone via createImageBitmap synchronously inside their handler.
+    payload.bitmap.close();
   }
 
   /**
@@ -681,6 +917,21 @@ export class RenderMaster {
       }
     };
 
+    const addMeshRequest = (url: string | undefined): void => {
+      if (url && !seen.has(url)) {
+        seen.add(url);
+        if (this.assetMapping.urlToId.has(url)) {
+          return;
+        }
+        const id = this.getAssetId(url);
+        requests.push({
+          id,
+          url,
+          assetType: 'mesh',
+        });
+      }
+    };
+
     for (const layer of layers) {
       addImageRequest(layer.image);
 
@@ -691,6 +942,8 @@ export class RenderMaster {
       } else if (isTextLayerMask(layer.mask)) {
         // Text layer: extract postmask URL if present
         addImageRequest(layer.mask.postmask);
+        // And the projection mesh URL if the layer projects onto a 3D surface.
+        addMeshRequest(layer.mask.projection?.mesh);
       }
 
       addImageRequest(layer.texture);
@@ -789,7 +1042,9 @@ export class RenderMaster {
       assetIds.postmask = this.getAssetId(maskData.postmask);
     }
 
-    // Note: Font asset ID handling would be added when font URL extraction is implemented
+    if (maskData.projection?.mesh) {
+      assetIds.mesh = this.getAssetId(maskData.projection.mesh);
+    }
 
     const descriptor: TextLayerDescriptor = {
       id: layer.id,
@@ -820,16 +1075,22 @@ export class RenderMaster {
       return [];
     }
 
+    const requestId = this.nextAssetRequestId++;
+
     return new Promise<number[]>((resolve) => {
       const handler = (event: MessageEvent<AssetManagerToMasterMessage>): void => {
-        if (isFetchCompleteMessage(event.data)) {
+        // Only resolve when the response's requestId matches OUR request.
+        // Without this correlation, concurrent fetch calls would all resolve
+        // on the first fetch-complete to arrive — even though most of their
+        // fetches are still in flight.
+        if (isFetchCompleteMessage(event.data) && event.data.requestId === requestId) {
           assetManager.removeEventListener('message', handler);
           resolve(event.data.failed);
         }
       };
 
       assetManager.addEventListener('message', handler);
-      assetManager.postMessage({ type: 'fetch', assets: requests });
+      assetManager.postMessage({ type: 'fetch', requestId, assets: requests });
     });
   }
 
@@ -842,16 +1103,22 @@ export class RenderMaster {
       return;
     }
 
+    const requestId = this.nextAssetRequestId++;
+
     return new Promise<void>((resolve) => {
       const handler = (event: MessageEvent<AssetManagerToMasterMessage>): void => {
-        if (isDistributeCompleteMessage(event.data)) {
+        // Match by requestId — same rationale as fetchAssets above.
+        if (
+          isDistributeCompleteMessage(event.data) &&
+          event.data.requestId === requestId
+        ) {
           assetManager.removeEventListener('message', handler);
           resolve();
         }
       };
 
       assetManager.addEventListener('message', handler);
-      assetManager.postMessage({ type: 'distribute', deliveries });
+      assetManager.postMessage({ type: 'distribute', requestId, deliveries });
     });
   }
 
@@ -992,15 +1259,29 @@ export class RenderMaster {
   }
 
   /**
-   * Collect asset IDs needed by each text slave.
+   * Collect asset IDs needed by each text slave. Includes image-typed
+   * assets directly referenced by the layer descriptors PLUS any font face
+   * asset IDs resolved from each layer's `fontfamily` against the registry,
+   * PLUS any projection mesh asset IDs. Returns the per-slave full asset list
+   * and parallel per-slave font/mesh ID lists — the font and mesh subsets are
+   * sent on the BatchMessage as `requiredFontIds` / `requiredMeshIds` so the
+   * slave's batch coordinator gates on font load + mesh parse completion.
    */
   private collectTextSlaveAssetIds(
     distribution: Map<number, { descriptors: TextLayerDescriptor[]; indices: number[] }>
-  ): Map<number, number[]> {
+  ): {
+    slaveAssets: Map<number, number[]>;
+    slaveFontIds: Map<number, number[]>;
+    slaveMeshIds: Map<number, number[]>;
+  } {
     const slaveAssets = new Map<number, number[]>();
+    const slaveFontIds = new Map<number, number[]>();
+    const slaveMeshIds = new Map<number, number[]>();
 
     for (const [slaveId, { descriptors }] of distribution) {
       const assetIds = new Set<number>();
+      const fontIds = new Set<number>();
+      const meshIds = new Set<number>();
 
       for (const descriptor of descriptors) {
         assetIds.add(descriptor.assetIds.image);
@@ -1010,15 +1291,26 @@ export class RenderMaster {
         if (descriptor.assetIds.postmask !== undefined) {
           assetIds.add(descriptor.assetIds.postmask);
         }
-        if (descriptor.assetIds.font !== undefined) {
-          assetIds.add(descriptor.assetIds.font);
+        if (descriptor.assetIds.mesh !== undefined && descriptor.assetIds.mesh >= 0) {
+          assetIds.add(descriptor.assetIds.mesh);
+          meshIds.add(descriptor.assetIds.mesh);
+        }
+
+        const resolved = this.resolveFamilyFaceIds(descriptor.maskData.type?.fontfamily);
+        for (const id of resolved) {
+          if (id >= 0) {
+            assetIds.add(id);
+            fontIds.add(id);
+          }
         }
       }
 
       slaveAssets.set(slaveId, Array.from(assetIds));
+      slaveFontIds.set(slaveId, Array.from(fontIds));
+      slaveMeshIds.set(slaveId, Array.from(meshIds));
     }
 
-    return slaveAssets;
+    return { slaveAssets, slaveFontIds, slaveMeshIds };
   }
 
   /**
@@ -1089,7 +1381,11 @@ export class RenderMaster {
 
     // Collect asset IDs for each slave
     const slaveAssetIds = this.collectSlaveAssetIds(distribution);
-    const textSlaveAssetIds = this.collectTextSlaveAssetIds(textDistribution);
+    const {
+      slaveAssets: textSlaveAssetIds,
+      slaveFontIds: textSlaveFontIds,
+      slaveMeshIds: textSlaveMeshIds,
+    } = this.collectTextSlaveAssetIds(textDistribution);
 
     // Distribute assets to all slaves (standard and text)
     const deliveries: AssetDelivery[] = [];
@@ -1166,13 +1462,16 @@ export class RenderMaster {
 
       slavePromises.push(slavePromise);
 
-      // Send batch to slave with original indices for ordering
+      // Send batch to slave with original indices for ordering. The active
+      // event subscription patterns travel with each batch so the slave can
+      // gate per-emission (skip the createImageBitmap when nothing matches).
       slave.worker.postMessage({
         type: 'batch',
         layers: slaveData.descriptors,
         indices: slaveData.indices,
         width: renderWidth,
         height: renderHeight,
+        eventSubscriptions: this.activeSubscriptionPatterns(),
       });
     }
 
@@ -1196,13 +1495,22 @@ export class RenderMaster {
 
       slavePromises.push(slavePromise);
 
-      // Send batch to text slave (text slaves expect TextLayerDescriptor array)
+      // Send batch to text slave (text slaves expect TextLayerDescriptor array).
+      // Patterns sent each batch — see the standard-slave dispatch above.
+      // requiredFontIds gates the slave's batch coordinator on FontFace.load
+      // resolution so layout uses real font metrics, not the fallback face.
+      // requiredMeshIds gates on parsed mesh availability for projection layers.
+      const fontIds = textSlaveFontIds.get(textSlave.id) ?? [];
+      const meshIds = textSlaveMeshIds.get(textSlave.id) ?? [];
       textSlave.worker.postMessage({
         type: 'batch',
         layers: slaveData.descriptors,
         indices: slaveData.indices,
         width: renderWidth,
         height: renderHeight,
+        eventSubscriptions: this.activeSubscriptionPatterns(),
+        requiredFontIds: fontIds,
+        requiredMeshIds: meshIds,
       });
     }
 
@@ -1336,6 +1644,121 @@ export class RenderMaster {
     if (requests.length > 0) {
       await this.fetchAssets(requests);
     }
+  }
+
+  /**
+   * Register a font family with the renderer. Each face is fetched as its
+   * own asset; the asset manager indexes them by family + descriptors and
+   * ships them to text slaves on every render's distribute step. The
+   * promise resolves once every face has been fetched into the asset
+   * manager's cache (or marked failed). After it resolves, the family is
+   * visible to subsequent `render()` calls; the in-flight render does not
+   * pick up newly registered families.
+   *
+   * Calling with a family name that's already registered appends faces
+   * (useful for adding a new weight after the fact).
+   */
+  async loadFontFamily(description: FontFamilyDescription): Promise<void> {
+    await this.ensureInitialized();
+
+    const family = description.family.trim();
+    if (family.length === 0) {
+      throw new RenderError('FontFamilyDescription.family must be a non-empty string');
+    }
+
+    if (description.faces.length === 0) {
+      console.warn(`loadFontFamily('${family}'): no faces provided`);
+      return;
+    }
+
+    // Warn (don't reject) on duplicate weight×style within this batch.
+    seenWeightStylePairsWarning(family, description.faces);
+
+    const requests: AssetRequest[] = [];
+    const pendingEntries: { entry: FontFaceEntry; existingId?: number }[] = [];
+
+    for (const face of description.faces) {
+      const descriptors: FontFaceDeliveryDescriptors = {};
+      if (face.weight !== undefined) {descriptors.weight = face.weight;}
+      if (face.style !== undefined) {descriptors.style = face.style;}
+      if (face.stretch !== undefined) {descriptors.stretch = face.stretch;}
+      if (face.unicodeRange !== undefined) {descriptors.unicodeRange = face.unicodeRange;}
+
+      const existingId = this.assetMapping.urlToId.get(face.url);
+      if (existingId === -1) {
+        // Previously failed; skip.
+        console.warn(
+          `loadFontFamily('${family}'): URL previously failed, skipping: ${face.url}`
+        );
+        continue;
+      }
+
+      const id = this.getAssetId(face.url);
+      const entry: FontFaceEntry = { assetId: id, url: face.url, descriptors };
+
+      if (existingId === undefined) {
+        // First time we've seen this URL — actually fetch it.
+        const req: AssetRequest = {
+          id,
+          url: face.url,
+          assetType: 'font',
+          fontFamily: family,
+        };
+        if (Object.keys(descriptors).length > 0) {
+          req.fontDescriptors = descriptors;
+        }
+        requests.push(req);
+      }
+
+      pendingEntries.push({ entry });
+    }
+
+    if (requests.length > 0) {
+      const failed = await this.fetchAssets(requests);
+      if (failed.length > 0) {
+        const failedUrls = failed.map((id) => this.assetMapping.idToUrl.get(id) ?? String(id));
+        console.warn(`loadFontFamily('${family}'): face(s) failed to load:`, failedUrls);
+        for (const id of failed) {
+          const url = this.assetMapping.idToUrl.get(id);
+          if (url) {
+            this.assetMapping.urlToId.set(url, -1);
+          }
+        }
+      }
+    }
+
+    // Commit successfully-fetched faces to the visible registry. Faces whose
+    // ID is now -1 (failed) are excluded — render-time resolution checks the
+    // urlToId map for -1 and treats as not-registered.
+    const faces = this.fontFamilies.get(family) ?? [];
+    for (const { entry } of pendingEntries) {
+      const currentId = this.assetMapping.urlToId.get(entry.url);
+      if (currentId === undefined || currentId === -1) {
+        continue;
+      }
+      faces.push(entry);
+    }
+    if (faces.length > 0) {
+      this.fontFamilies.set(family, faces);
+    }
+  }
+
+  /**
+   * Resolve a `mask.type.fontfamily` CSS list to the set of font asset IDs
+   * the slave needs to have loaded before rasterizing this layer. Walks the
+   * list in order and returns every face of the first family found in
+   * `fontFamilies`. Returns an empty array if none of the listed families
+   * are registered (the slave will fall back to system fonts).
+   */
+  private resolveFamilyFaceIds(fontfamily: string | undefined): number[] {
+    const candidates = parseFontFamilyList(fontfamily);
+    for (const name of candidates) {
+      const faces = this.fontFamilies.get(name);
+      if (faces && faces.length > 0) {
+        return faces.map((f) => f.assetId);
+      }
+    }
+    return [];
   }
 
   /**
