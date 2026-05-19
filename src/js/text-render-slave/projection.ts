@@ -58,6 +58,15 @@ interface ProjectionLocations {
 let locations: ProjectionLocations | null = null;
 
 /**
+ * The GL context the cached `locations`, `aniso`, and `meshResources` belong
+ * to. When `initProjection` sees the buddy's `gl` differ from this, the buddy
+ * was destroyed and rebuilt (e.g., RenderMaster reset) — all three caches
+ * reference the dead context and must be cleared before re-init. The dead
+ * context's GPU resources go with it, so we drop the map without deleting.
+ */
+let cachedGL: WebGL2RenderingContext | null = null;
+
+/**
  * Cached `EXT_texture_filter_anisotropic` extension state. Probed once at
  * `initProjection`. When the extension is unavailable (rare on desktop, more
  * common on old mobile), `ext` stays null and the projection falls back to
@@ -105,6 +114,13 @@ export function initProjection(): boolean {
   const buddy = myWebGLBuddy();
   const gl = getSharedGL();
   if (!buddy || !gl) return false;
+
+  if (cachedGL && cachedGL !== gl) {
+    locations = null;
+    aniso = null;
+    meshResources.clear();
+  }
+  cachedGL = gl;
 
   if (!buddy.hasProgram(PROJECTION_PROGRAM)) {
     buddy.newProgram(PROJECTION_PROGRAM, {
@@ -442,6 +458,7 @@ export function destroyProjection(): void {
   }
   meshResources.clear();
   locations = null;
+  cachedGL = null;
 }
 
 // Re-export for tests that want to verify the cache is empty / populated

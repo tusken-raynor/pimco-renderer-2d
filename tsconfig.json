@@ -40,5 +40,5 @@
       "@/js/*": ["src/js/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "dev-app", "tests"]
 }

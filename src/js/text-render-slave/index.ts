@@ -161,8 +161,29 @@ export class TextRenderSlave {
     return fontFace
       .load()
       .then((loaded) => {
-        if (typeof self !== 'undefined' && 'fonts' in self) {
-          (self as unknown as { fonts: FontFaceSet }).fonts.add(loaded);
+        // Add the loaded face to the right FontFaceSet so canvas2d's font
+        // resolver can find it. The set differs by environment:
+        //   - Main thread (virtual text slave): `document.fonts` is the
+        //     authoritative FontFaceSet. Both HTMLCanvasElement and any
+        //     OffscreenCanvas created on the main thread consult it.
+        //   - Workers (real text-render-slave worker): `document` doesn't
+        //     exist; `self.fonts` is the WorkerGlobalScope's FontFaceSet,
+        //     used by the worker's OffscreenCanvas 2D context.
+        // We check `document` first because it's the correct set for the
+        // main thread regardless of whether `window.fonts` happens to also
+        // exist as some browser-specific extension.
+        // Without the document branch the FontFace loads successfully but
+        // is invisible to the rasterizer, and text falls back to a system
+        // font — which is what made the virtual-slave scenarios B/C render
+        // the wrong font.
+        let fontFaceSet: FontFaceSet | null = null;
+        if (typeof document !== 'undefined' && document.fonts) {
+          fontFaceSet = document.fonts;
+        } else if (typeof self !== 'undefined' && 'fonts' in self) {
+          fontFaceSet = (self as unknown as { fonts: FontFaceSet }).fonts;
+        }
+        if (fontFaceSet) {
+          fontFaceSet.add(loaded);
         }
         entry.loaded = true;
       })

@@ -59,7 +59,12 @@ import { RenderError, AbortError, WorkerError, wrapError } from '../errors';
 import { VirtualStandardSlave, VirtualTextSlave } from '../virtual-slaves';
 import { destroyWebGLBuddy } from '../effects';
 
-// Worker URLs - Vite handles the bundling
+// Worker URLs — `?worker&url` is the Vite-native pattern for getting a worker
+// chunk URL during dev/Vite-build. For the tsup library build, `tsup.config.ts`
+// installs an esbuild plugin that rewrites this query to
+// `new URL('./workers/<name>.worker.js', import.meta.url)`, resolving against
+// the published `dist/PimcoRenderer.js` at runtime. Either way, the value here
+// is a URL string / URL object that `new Worker(...)` accepts.
 import AssetManagerWorkerUrl from '../../workers/asset-manager.worker.ts?worker&url';
 import RenderSlaveWorkerUrl from '../../workers/render-slave.worker.ts?worker&url';
 import TextRenderSlaveWorkerUrl from '../../workers/text-render-slave.worker.ts?worker&url';

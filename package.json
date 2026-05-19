@@ -1,22 +1,35 @@
 {
   "name": "pimco-renderer-2d",
   "description": "Multi-threaded 2D compositing renderer for product image components",
-  "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "main": "./dist/PimcoRenderer.js",
+  "module": "./dist/PimcoRenderer.js",
+  "types": "./dist/PimcoRenderer.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/PimcoRenderer.d.ts",
+      "default": "./dist/PimcoRenderer.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
   "scripts": {
+    "build": "tsup",
+    "prepare": "npm run build",
     "dev": "vite",
-    "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "test:unit": "vitest run --dir src/js",
-    "test:integration": "vitest run --dir src/tests/integration",
-    "test:e2e": "playwright test src/tests/e2e",
+    "test:integration": "vitest run --dir tests/integration",
+    "test:e2e": "playwright test tests/e2e",
     "test:coverage": "vitest run --coverage --dir src/js",
-    "lint": "eslint src --ext .ts,.tsx",
-    "lint:fix": "eslint src --ext .ts,.tsx --fix",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css,md}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,md}\"",
+    "lint": "eslint src dev-app --ext .ts,.tsx",
+    "lint:fix": "eslint src dev-app --ext .ts,.tsx --fix",
+    "format": "prettier --write \"{src,dev-app,tests}/**/*.{ts,tsx,css,md}\"",
+    "format:check": "prettier --check \"{src,dev-app,tests}/**/*.{ts,tsx,css,md}\"",
     "type-check": "tsc --noEmit",
     "validate": "npm run format && npm run lint && npm run type-check && npm run test"
   },
@@ -32,6 +45,7 @@
     "globals": "^16.0.0",
     "jsdom": "^26.1.0",
     "prettier": "^3.5.3",
+    "tsup": "^8.5.1",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^7.3.1",
