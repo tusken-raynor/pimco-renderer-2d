@@ -1,11 +1,12 @@
 {
-  "dimensions": [800, 800],
+  "dimensions": [1350, 516],
+  "preload": [],
   "fonts": [
     {
-      "family": "Helvetica",
+      "family": "Nokona-Condensed",
       "faces": [
         {
-          "url": "/fonts/helvetica.woff2",
+          "url": "/fonts/Nokona-1-Condensed.woff2",
           "weight": "400",
           "style": "normal"
         }
@@ -14,38 +15,164 @@
   ],
   "pimcos": [
     {
-      "id": "background",
-      "name": "Background fill",
+      "name": "Belt Shadow",
       "mode": "color",
-      "color": "rgb(220,220,230)",
-      "alpha": 1,
-      "blend": "normal",
-      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2NgYGD4DwABBAEAcCBlCwAAAABJRU5ErkJggg==",
-      "mask": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P8//8/AwAI/AL+pYssTAAAAABJRU5ErkJggg==",
-      "order": 0
+      "alpha": 0,
+      "blend": "multiply",
+      "color": "rgb(255,255,255)",
+      "id": "pic6FmGPLwxIVt",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_view-1_shadow.avif",
+      "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif",
+      "order": -1
     },
     {
-      "id": "projected-text",
-      "name": "Projected text on curved plane",
+      "name": "Main Leather (Back Belt)",
       "mode": "color",
-      "color": "rgb(40,80,200)",
+      "alpha": 0.96,
+      "blend": "multiply",
+      "regionid": 4826215,
+      "color": "rgb(45,53,77)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.75,
+      "hlblend2": "color-burn",
+      "id": "picXw9PG69skyV",
+      "image": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_back-solid-epion.avif",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_back_mask_liner.avif",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_back-solid_highlight-epion.avif"
+    },
+    {
+      "name": "Liner Personalization",
+      "mode": "color",
       "alpha": 1,
-      "blend": "normal",
-      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2NgYGD4DwABBAEAcCBlCwAAAABJRU5ErkJggg==",
+      "blend": "multiply",
+      "regionid": 11659214,
+      "color": "rgb(232,232,232)",
+      "hlalpha1": 0.73,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.94,
+      "hlblend2": "color-burn",
+      "id": "picUqaHtPKGXkR",
       "mask": {
-        "effect": "engraving",
-        "type": {
-          "fontfamily": "\"Helvetica\", sans-serif",
-          "maxwidth": 0.7
-        },
-        "content": "PROJECTION TEST",
         "projection": {
-          "mesh": "/meshes/curved-plane.obj",
-          "camera": [0, 0, 1.5],
-          "fov": 60
+          "mesh": "/show-imgs/pimcos/belts/vec3d/personalization_mesh_inside.obj",
+          "camera": [-7, 1.32, 0],
+          "fov": 7.86,
+          "identifier": "liner-personalization-fv",
+          "transformation": [
+            1, 0, 0, 0, 0, 1.26, -0.007, 0, 0, 0.0088, 1, 0, 0, 0.01, 0, 1
+          ],
+          "uvauto": "x",
+          "uvorigin": [0.5, 0],
+          "uvmeshratio": 22.2222
+        },
+        "content": "NAME",
+        "type": {
+          "fontfamily": "\"Nokona-Condensed\", sans-serif",
+          "letterspacing": "0.01em",
+          "lineheight": 0.09,
+          "maxwidth": 1,
+          "fontweight": 100
         }
       },
-      "order": 1
+      "order": 1.55,
+      "image": ""
+    },
+    {
+      "name": "Main Leather (Front Belt)",
+      "mode": "color",
+      "alpha": 0.96,
+      "blend": "multiply",
+      "regionid": 12077473,
+      "color": "rgb(45,53,77)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.75,
+      "hlblend2": "color-burn",
+      "id": "picPJNl6JZR7k1",
+      "image": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_back-solid-epion.avif",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_back_mask_front.avif",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_back-solid_highlight-epion.avif",
+      "order": 2
+    },
+    {
+      "name": "Flash Leather",
+      "mode": "color",
+      "alpha": 0.7,
+      "blend": "multiply",
+      "regionid": 16441177,
+      "color": "rgb(83,171,240)",
+      "hlalpha1": 1,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.1,
+      "hlblend2": "color-burn",
+      "id": "pickAmhJhhAqxh",
+      "image": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_front_base-epion.avif",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_front_mask_full.avif",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_front_highlight-epion.avif",
+      "order": 2.1
+    },
+    {
+      "name": "Tip Clasp",
+      "mode": "color",
+      "alpha": 0,
+      "blend": "multiply",
+      "color": "rgb(255,255,255)",
+      "id": "pics735IOZSSbM",
+      "image": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_front-clasp.avif",
+      "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif",
+      "order": 2.5
+    },
+    {
+      "name": "Logo",
+      "mode": "color",
+      "alpha": 0,
+      "blend": "multiply",
+      "id": "picFdMxtfJWXSP",
+      "image": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_logo-white.avif",
+      "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif",
+      "order": 3
+    },
+    {
+      "name": "Buckle",
+      "mode": "color",
+      "alpha": 0,
+      "blend": "overlay",
+      "regionid": 7829718,
+      "color": "rgba(0,0,0,0)",
+      "id": "picOTdjzdkvNYv",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_buckle-classic-silver.avif",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_buckle_mask.avif",
+      "order": 3
+    },
+    {
+      "name": "Logo Diamond",
+      "mode": "color",
+      "alpha": 0,
+      "blend": "overlay",
+      "regionid": 9055059,
+      "color": "rgba(0,0,0,0)",
+      "id": "picd9y7ulk8blU",
+      "image": "/show-imgs/pimcos/belts/patterns/belt-epion_v1_logo-diamond-silver.avif",
+      "mask": "/show-imgs/pimcos/belts/patterns/generic_mask.avif",
+      "order": 3.5
+    },
+    {
+      "name": "Keeper",
+      "mode": "color",
+      "alpha": 1,
+      "blend": "multiply",
+      "regionid": 15184316,
+      "color": "rgb(241,241,241)",
+      "hlalpha1": 0.73,
+      "hlblend1": "soft-light",
+      "hlalpha2": 0.94,
+      "hlblend2": "color-burn",
+      "id": "picZPoczNMmwan",
+      "image": "/show-imgs/pimcos/belts/patterns/belt_v1_keeper-double_base-gloss.avif",
+      "mask": "/show-imgs/pimcos/belts/patterns/belt_v1_keeper-double_mask.avif",
+      "hlimage1": "/show-imgs/pimcos/belts/patterns/belt_v1_keeper-double_highlight-gloss.avif",
+      "order": 4
     }
   ]
 }

@@ -12,7 +12,7 @@
  * its apply<X>Effect() function.
  */
 
-import WebGLPostProcessor from 'webgl-postprocessor';
+import WebGLPostProcessor, { Uniforms } from 'webgl-postprocessor';
 
 import erodeFragSrc from '@/shaders/erode.frag.glsl?raw';
 import embossFragSrc from '@/shaders/emboss.frag.glsl?raw';
@@ -198,6 +198,46 @@ export function ensureBuiltinPrograms(buddy: WebGLPostProcessor): void {
   for (const name of Object.keys(BUILTIN_SHADER_SOURCES)) {
     ensureProgram(buddy, name, BUILTIN_SHADER_SOURCES[name]);
   }
+}
+
+/**
+ * Upload a 2D image source (Canvas or ImageBitmap) to a GPU handle whose
+ * orientation matches the handles GPU effects produce — so downstream
+ * projection (which compensates for the lib-default Y-flip) renders the
+ * source upright.
+ *
+ * Used by the no-effect projection path: no-effect runs as Canvas2D (the
+ * codebase's no-WebGL2 fallback), but if `mask.projection` is set AND WebGL2
+ * is available, the resulting flat canvas needs to live on the GPU as a
+ * sampleable texture for the projection draw.
+ *
+ * Vert choice: uses `PROGRAMS.passthrough`'s default registration (lib's
+ * default Y-flipping vert), NOT FBO_VERTEX_SRC. GPU effects' terminal compose
+ * passes also use the lib default vert when emitting their handle, so the
+ * handle's FBO storage ends up Y-mirrored relative to the source canvas's
+ * row order. Projection's vert (`projection.vert.glsl`) bakes in
+ * `fragUV.y = 1.0 - fragUV.y` to undo that mirror. Matching that convention
+ * here means projection renders our promoted canvas upright. Using
+ * FBO_VERTEX_SRC instead leaves the handle un-mirrored and projection's
+ * flip inverts it — text comes out upside-down.
+ */
+export function uploadCanvasToHandle(
+  buddy: WebGLPostProcessor,
+  source: AnyCanvas | ImageBitmap,
+  width: number,
+  height: number
+): GPUTextureHandle {
+  ensureProgram(
+    buddy,
+    PROGRAMS.passthrough,
+    BUILTIN_SHADER_SOURCES[PROGRAMS.passthrough]
+  );
+  buddy.useProgram(PROGRAMS.passthrough);
+  buddy.setResolution(width, height);
+  buddy.setUniforms({
+    uInput: { type: Uniforms.TEXTURE2D, value: source },
+  });
+  return buddy.toFramebuffer(width, height);
 }
 
 /**

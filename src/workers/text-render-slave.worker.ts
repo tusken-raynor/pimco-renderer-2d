@@ -56,7 +56,8 @@ import { processFoilEffectLayer } from '../js/effects/foil';
 import { processPaintedEffectLayer } from '../js/effects/painted';
 import { processShadowEffectLayer } from '../js/effects/shadow';
 import { processNormalEffectLayer } from '../js/effects/normal';
-import { initWebGLBuddy } from '../js/effects';
+import { initWebGLBuddy, myWebGLBuddy } from '../js/effects';
+import { uploadCanvasToHandle } from '../js/effects/effect-utils';
 import { applyProjection, initProjection } from '../js/text-render-slave/projection';
 import type { GPUTextureHandle } from 'webgl-postprocessor';
 
@@ -469,10 +470,23 @@ async function applyEffectAsHandle(
       return processNormalEffectLayer(layer, width, height, rasterizedMask, texture, {
         kind: 'handle',
       });
-    default:
-      // No-effect / unknown — handle mode unsupported; caller falls back to
-      // the canvas path which routes through processNoEffectLayer.
-      return null;
+    default: {
+      // No-effect / unknown effect. The no-effect path is intentionally pure
+      // Canvas2D so it can run on devices without WebGL2 — but when WebGL2 IS
+      // available AND `mask.projection` is set, we still want the layer to
+      // pass through the GPU projection draw. We're inside `applyEffectAsHandle`
+      // which is only called from the willProject branch, so getting here
+      // means the caller wants a handle. Run the Canvas2D pipeline as usual,
+      // then upload the resulting canvas to a chain-internal FBO so projection
+      // can sample it like any effect-output handle. Without this promotion
+      // the willProject branch dropped projection silently and the layer
+      // rendered flat.
+      const canvas = processNoEffectLayer(layer, width, height, rasterizedMask, texture);
+      if (!canvas) return null;
+      const buddy = myWebGLBuddy();
+      if (!buddy) return null;
+      return uploadCanvasToHandle(buddy, canvas, canvas.width, canvas.height);
+    }
   }
 }
 

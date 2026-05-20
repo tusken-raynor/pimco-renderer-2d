@@ -514,7 +514,7 @@ function ensureRenderMaster(): RenderMaster {
       width,
       height,
       ...(forceScenario && { forceScenario }),
-      textSlaveCount: 0
+      // textSlaveCount: 0
     });
 
     // Subscribe to text rasterizations and final per-layer outputs across all
