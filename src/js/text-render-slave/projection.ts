@@ -32,6 +32,12 @@ import { Uniforms, type GPUTextureHandle } from 'webgl-postprocessor';
 
 import type { PimcoMaskSubstitutionProjection } from '../types/pimco';
 import { getSharedGL, getSharedGLCanvas, myWebGLBuddy } from '../effects';
+import {
+  BUILTIN_SHADER_SOURCES,
+  FBO_VERTEX_SRC,
+  PROGRAMS,
+  ensureProgram,
+} from '../effects/effect-utils';
 
 import projectionVertSrc from '@/shaders/projection.vert.glsl?raw';
 import projectionFragSrc from '@/shaders/projection.frag.glsl?raw';
@@ -128,6 +134,19 @@ export function initProjection(): boolean {
       fragmentSrc: projectionFragSrc,
     });
   }
+
+  // Premultiply pre-pass program. Registered with FBO_VERTEX_SRC (no Y-flip)
+  // so the resulting handle's storage orientation matches its input — effect
+  // compose handles and `uploadCanvasToHandle` outputs both carry exactly one
+  // Y-flip relative to canvas/source, and the projection vert's
+  // `fragUV.y = 1.0 - fragUV.y` compensates for that. A flipping vert here
+  // would add a second flip and break that compensation.
+  ensureProgram(
+    buddy,
+    PROGRAMS.premultiply,
+    BUILTIN_SHADER_SOURCES[PROGRAMS.premultiply],
+    FBO_VERTEX_SRC
+  );
 
   if (locations) return true;
 
@@ -300,19 +319,35 @@ export function applyProjection(
   const prevCanvasW = canvas.width;
   const prevCanvasH = canvas.height;
 
+  // ---- 0. Premultiply the source handle. Filtering and mipmap generation in
+  //      premultiplied space give correct edge values; doing them on a
+  //      straight-alpha source produces a dark halo around text because
+  //      transparent neighbour texels (RGB=0) drag the averaged RGB down.
+  //      The projection frag un-premultiplies at output so the glCanvas
+  //      (premultipliedAlpha:false) stays consistent for the final drawImage.
+  //      This pre-pass writes its own FBO via PROGRAMS.premultiply registered
+  //      with FBO_VERTEX_SRC, so the output handle keeps the same Y-flip
+  //      count as the input — see initProjection for the orientation rationale.
+  buddy.useProgram(PROGRAMS.premultiply);
+  buddy.setResolution(sourceHandle.width, sourceHandle.height);
+  buddy.setUniforms({
+    uInput: { type: Uniforms.TEXTURE2D, value: sourceHandle },
+  });
+  const premultiplied = buddy.toFramebuffer(sourceHandle.width, sourceHandle.height);
+
   try {
     // ---- 1. Switch program. `bindDataForNewProgram` (run by the post-processor
     //      inside useProgram) will harmlessly unbind any prior effect samplers
     //      whose names don't exist in our projection program.
     buddy.useProgram(PROJECTION_PROGRAM);
 
-    // ---- 2. Bind the GPUTextureHandle to our `tex` sampler. This is the ONLY
-    //      post-processor method we use per-call — it's the only path to the
-    //      handle's underlying WebGLTexture (the fboTextureHandles map is
+    // ---- 2. Bind the premultiplied handle to our `tex` sampler. This is the
+    //      ONLY post-processor method we use per-call — it's the only path to
+    //      the handle's underlying WebGLTexture (the fboTextureHandles map is
     //      private). The handle's useCount goes to 1; cleanup is a final
     //      `unsetTextureUniforms('tex')` in the finally block.
     buddy.setUniforms({
-      tex: { type: Uniforms.TEXTURE2D, value: sourceHandle },
+      tex: { type: Uniforms.TEXTURE2D, value: premultiplied },
     });
 
     // ---- 2a. Add mipmaps + anisotropic filtering to the FBO texture so
@@ -425,6 +460,9 @@ export function applyProjection(
     // ---- 10. Restore state. Ensure cleanup runs even if a step above threw.
     // Release the handle binding so the FBO texture can recycle.
     buddy.unsetTextureUniforms('tex');
+    // Release the premultiply pre-pass handle (useCount → 0). The post-processor
+    // recycles the underlying FBO texture for future passes once this drops.
+    buddy.consumeTextureHandle(premultiplied);
 
     if (prevDepthTest) gl.enable(gl.DEPTH_TEST);
     else gl.disable(gl.DEPTH_TEST);

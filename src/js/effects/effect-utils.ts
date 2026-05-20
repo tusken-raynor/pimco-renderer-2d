@@ -21,6 +21,7 @@ import fuzzFragSrc from '@/shaders/fuzz.frag.glsl?raw';
 import normalMapFragSrc from '@/shaders/normal-map.frag.glsl?raw';
 import colorScaleFragSrc from '@/shaders/color-scale.frag.glsl?raw';
 import passthroughFragSrc from '@/shaders/passthrough.frag.glsl?raw';
+import premultiplyFragSrc from '@/shaders/premultiply.frag.glsl?raw';
 
 import type { GPUTextureHandle } from 'webgl-postprocessor';
 import type { AnyCanvas } from '../utils/canvas';
@@ -100,6 +101,7 @@ export const PROGRAMS = {
   normalMap: 'pimco_normal_map',
   colorScale: 'pimco_color_scale',
   passthrough: 'pimco_passthrough',
+  premultiply: 'pimco_premultiply',
 } as const;
 
 /** Built-in fragment shader sources, keyed by program name. */
@@ -111,6 +113,7 @@ export const BUILTIN_SHADER_SOURCES: Record<string, string> = {
   [PROGRAMS.normalMap]: normalMapFragSrc,
   [PROGRAMS.colorScale]: colorScaleFragSrc,
   [PROGRAMS.passthrough]: passthroughFragSrc,
+  [PROGRAMS.premultiply]: premultiplyFragSrc,
 };
 
 /**

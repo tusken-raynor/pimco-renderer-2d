@@ -176,7 +176,7 @@ describe('constants', () => {
   });
 
   it('PROGRAMS exposes all built-in primitive names', () => {
-    expect(Object.keys(PROGRAMS)).toHaveLength(7);
+    expect(Object.keys(PROGRAMS)).toHaveLength(8);
     expect(PROGRAMS.erode).toBeTruthy();
     expect(PROGRAMS.emboss).toBeTruthy();
     expect(PROGRAMS.blur).toBeTruthy();
@@ -184,6 +184,7 @@ describe('constants', () => {
     expect(PROGRAMS.normalMap).toBeTruthy();
     expect(PROGRAMS.colorScale).toBeTruthy();
     expect(PROGRAMS.passthrough).toBeTruthy();
+    expect(PROGRAMS.premultiply).toBeTruthy();
   });
 
   it('BUILTIN_SHADER_SOURCES has a non-empty string source for every PROGRAMS entry', () => {
