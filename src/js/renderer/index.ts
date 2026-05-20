@@ -1322,6 +1322,13 @@ export class RenderMaster {
    * Render layers to produce a composited ImageBitmap.
    * Automatically aborts any in-progress render.
    *
+   * The input is deep-cloned via `structuredClone` before use, so callers may
+   * freely pass framework-reactive objects (Vue refs, MobX observables, etc.)
+   * without unwrapping. Layer descriptors cross worker boundaries via
+   * `postMessage`, which rejects proxies and other non-cloneable values; the
+   * defensive clone here trades a few microseconds per render for immunity
+   * from that class of bug.
+   *
    * @param layers - Array of ProductImageComponent layers (sorted by order)
    * @param width - Output width (default: constructor width or 1024)
    * @param height - Output height (default: constructor height or 1024)
@@ -1333,6 +1340,8 @@ export class RenderMaster {
     height?: number
   ): Promise<ImageBitmap> {
     await this.ensureInitialized();
+
+    layers = structuredClone(layers);
 
     const renderWidth = width ?? this.defaultWidth;
     const renderHeight = height ?? this.defaultHeight;
