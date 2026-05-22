@@ -242,6 +242,55 @@ function seenWeightStylePairsWarning(
 }
 
 /**
+ * Pull every useful field out of a worker ErrorEvent. `event.message` is often
+ * empty when a module worker fails to load (CORS, 404, syntax error, top-level
+ * exception in worker scope) — but `event.error`, `filename`, `lineno`, and
+ * `colno` may still carry the actual cause. Returns a composed message string
+ * plus a structured context the caller can attach to a thrown error.
+ */
+function describeWorkerErrorEvent(event: ErrorEvent | Event): {
+  message: string;
+  cause: Error | undefined;
+  context: Record<string, unknown>;
+} {
+  if (!(event instanceof ErrorEvent)) {
+    return {
+      message: `Worker fired non-ErrorEvent of type "${event.type}" (likely a module load failure — check the worker URL, network tab, and devtools console for the underlying error)`,
+      cause: undefined,
+      context: { eventType: event.type },
+    };
+  }
+
+  const cause = event.error instanceof Error ? event.error : undefined;
+  const parts: string[] = [];
+  if (event.message) parts.push(event.message);
+  if (cause && cause.message && cause.message !== event.message) {
+    parts.push(`(${cause.name}: ${cause.message})`);
+  }
+  if (event.filename) {
+    const loc = [event.filename, event.lineno, event.colno].filter(Boolean).join(':');
+    parts.push(`at ${loc}`);
+  }
+  if (parts.length === 0) {
+    parts.push(
+      'Worker fired ErrorEvent with no message, error object, or filename. This usually means a cross-origin worker script or a module load failure — check the devtools console for the underlying error.'
+    );
+  }
+
+  return {
+    message: parts.join(' '),
+    cause,
+    context: {
+      eventMessage: event.message,
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      stack: cause?.stack,
+    },
+  };
+}
+
+/**
  * Pending render state.
  */
 interface PendingRender {
@@ -622,7 +671,26 @@ export class RenderMaster {
 
         worker.onerror = (event: ErrorEvent) => {
           clearTimeout(timeout);
-          reject(new WorkerError(event.message || 'Text slave worker error', slaveId));
+          const { message, cause, context } = describeWorkerErrorEvent(event);
+          console.error(
+            `[text-slave ${slaveId}] worker.onerror:`,
+            message,
+            event.error ?? '(no Error object on ErrorEvent)'
+          );
+          reject(
+            new WorkerError(`Text slave ${slaveId}: ${message}`, slaveId, context, cause)
+          );
+        };
+
+        worker.onmessageerror = (event: MessageEvent) => {
+          clearTimeout(timeout);
+          console.error(`[text-slave ${slaveId}] worker.onmessageerror:`, event);
+          reject(
+            new WorkerError(
+              `Text slave ${slaveId}: postMessage deserialization failed (messageerror) — a transferred value could not be cloned into the worker`,
+              slaveId
+            )
+          );
         };
       });
 
