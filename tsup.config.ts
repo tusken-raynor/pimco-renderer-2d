@@ -67,5 +67,12 @@ export default defineConfig({
   splitting: false,
   treeshake: true,
   tsconfig: 'tsconfig.build.json',
+  // Inline these runtime deps. The worker chunks are served to consumers as
+  // static .js files via `new URL('./workers/...', import.meta.url)`, so their
+  // imports are NOT processed by the consumer's bundler — any bare specifier
+  // left in a worker file becomes an unresolvable-module error at construction
+  // time (with an empty ErrorEvent, no message). Bundling them in is the only
+  // way to make the published workers self-contained.
+  noExternal: ['gl-matrix', 'webgl-postprocessor'],
   esbuildPlugins: [workerUrlPlugin, rawImportPlugin],
 });
